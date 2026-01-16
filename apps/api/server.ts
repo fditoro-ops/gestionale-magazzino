@@ -1,10 +1,13 @@
 import express from "express";
 import movementsRouter from "./src/routes/movements.js";
+import stockRouter from "./src/routes/stock.js";
+
 
 const app = express();
 app.use(express.json());
 app.use("/movements", movementsRouter);
-  
+app.use("/stock", stockRouter);
+
 
 // Endpoint di salute (fondamentale)
 app.get("/health", (req, res) => {
