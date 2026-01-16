@@ -4,7 +4,9 @@ export function calculateStock(movements: Movement[]) {
   const stock: Record<string, number> = {};
 
   for (const m of movements) {
-    if (!stock[m.sku] || m.type === "INVENTORY") {
+    // se è la prima volta che vediamo lo SKU
+    // oppure è un INVENTORY, inizializziamo/resettiamo
+    if (!(m.sku in stock) || m.type === "INVENTORY") {
       stock[m.sku] = 0;
     }
 
@@ -12,12 +14,15 @@ export function calculateStock(movements: Movement[]) {
       case "IN":
         stock[m.sku] += m.quantity;
         break;
+
       case "OUT":
         stock[m.sku] -= m.quantity;
         break;
+
       case "ADJUST":
         stock[m.sku] += m.quantity;
         break;
+
       case "INVENTORY":
         stock[m.sku] = m.quantity;
         break;
@@ -26,3 +31,4 @@ export function calculateStock(movements: Movement[]) {
 
   return stock;
 }
+
