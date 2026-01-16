@@ -1,6 +1,6 @@
 import express from "express";
-import movementsRouter from "./src/routes/movements.js";
-import stockRouter from "./src/routes/stock.js";
+import movementsRouter from "./routes/movements.js";
+import stockRouter from "./routes/stock.js";
 
 
 const app = express();
