@@ -1,3 +1,6 @@
 import type { Movement } from "../types/movement.js";
+import { loadMovements } from "./movements.store.js";
 
-export const movements: Movement[] = [];
+// 🔐 fonte unica dei dati
+export const movements: Movement[] = loadMovements();
+    

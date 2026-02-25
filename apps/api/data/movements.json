@@ -1,0 +1,191 @@
+[
+  {
+    "id": "3c8a3b92-f400-42c2-b5f8-b8e01cd21901",
+    "sku": "TEST",
+    "quantity": 10,
+    "type": "IN",
+    "date": "2026-01-19T05:47:46.692Z"
+  },
+  {
+    "id": "f064de07-1cd9-4d37-baf5-69d79e1554df",
+    "sku": "BRONTO",
+    "quantity": 2,
+    "type": "IN",
+    "date": "2026-01-19T05:47:53.833Z"
+  },
+  {
+    "id": "1ae147d9-11c0-4f81-b732-c69732c517e5",
+    "sku": "TEST",
+    "quantity": 11,
+    "type": "OUT",
+    "date": "2026-01-19T05:57:08.764Z"
+  },
+  {
+    "id": "962cd09e-5544-42d4-9f8d-b27a09d57211",
+    "sku": "TEST",
+    "quantity": 11,
+    "type": "OUT",
+    "date": "2026-01-19T06:02:20.398Z"
+  },
+  {
+    "id": "d0ffdd59-55a4-495e-b4fd-e78d2aa47f9b",
+    "sku": "TEST",
+    "quantity": 11,
+    "type": "OUT",
+    "date": "2026-01-19T06:02:57.138Z"
+  },
+  {
+    "id": "b0e972df-df72-4230-9353-56625aa8afd3",
+    "sku": "TEST",
+    "quantity": 11,
+    "type": "OUT",
+    "date": "2026-01-19T06:05:47.273Z"
+  },
+  {
+    "id": "7dd84f67-6df6-4f2c-9e18-0c798f1088d9",
+    "sku": "TEST",
+    "quantity": 50,
+    "type": "IN",
+    "date": "2026-01-20T16:23:03.123Z"
+  },
+  {
+    "id": "402328f0-6ba0-4df8-875a-f49bb4ea5c80",
+    "sku": "TEST",
+    "quantity": 3,
+    "type": "OUT",
+    "reason": "VENDITA",
+    "date": "2026-01-20T16:23:16.715Z"
+  },
+  {
+    "id": "9b1a574d-1506-4214-a7a1-a2215e4a907d",
+    "sku": "TEST",
+    "quantity": 5,
+    "type": "ADJUST",
+    "reason": "RETTIFICA",
+    "date": "2026-01-20T16:33:30.071Z"
+  },
+  {
+    "id": "4ff6b842-f8e3-4548-a174-dfea0a9f64c2",
+    "sku": "TEST",
+    "quantity": 10,
+    "type": "OUT",
+    "reason": "VENDITA",
+    "date": "2026-01-21T15:59:09.855Z",
+    "note": "WOW"
+  },
+  {
+    "id": "22349511-e4cc-43b8-a513-46169e32ad25",
+    "sku": "TEST",
+    "quantity": 5,
+    "type": "IN",
+    "date": "2026-01-23T18:31:51.619Z"
+  },
+  {
+    "id": "7aa22925-ebbe-4db9-adf4-cec708cecac2",
+    "sku": "TEST",
+    "quantity": 50,
+    "type": "INVENTORY",
+    "reason": "INVENTARIO",
+    "date": "2026-01-23T18:37:02.342Z"
+  },
+  {
+    "id": "44d4c768-0e6f-4f37-8d5b-42cccb19f81b",
+    "sku": "TEST",
+    "quantity": 1,
+    "type": "IN",
+    "date": "2026-01-27T14:28:11.252Z"
+  },
+  {
+    "id": "916ac4ea-e1e7-404d-bf4f-c177414d94dd",
+    "sku": "TEST",
+    "quantity": 2,
+    "type": "OUT",
+    "reason": "VENDITA",
+    "date": "2026-01-27T14:57:16.615Z"
+  },
+  {
+    "id": "49304187-951e-4c53-ae6e-952eb8ece418",
+    "sku": "TEST",
+    "quantity": 7,
+    "type": "INVENTORY",
+    "reason": "INVENTARIO",
+    "date": "2026-01-27T14:59:45.909Z"
+  },
+  {
+    "id": "8db84e79-eb2e-470f-9a45-925f5756d133",
+    "sku": "TEST",
+    "quantity": 20,
+    "type": "INVENTORY",
+    "reason": "INVENTARIO",
+    "date": "2026-01-27T15:12:01.671Z"
+  },
+  {
+    "id": "7963c633-1c49-48b9-80ea-f2a5406841f6",
+    "sku": "TEST",
+    "quantity": 7,
+    "type": "INVENTORY",
+    "reason": "INVENTARIO",
+    "date": "2026-01-27T15:23:20.108Z"
+  },
+  {
+    "id": "5bdda8c1-3922-43dc-9555-41a97c224ef6",
+    "sku": "TEST",
+    "quantity": 10,
+    "type": "IN",
+    "date": "2026-02-07T15:01:14.919Z"
+  },
+  {
+    "id": "d5d878f9-7681-48c3-8695-98bc9cb6136c",
+    "sku": "SKU001",
+    "quantity": 6,
+    "type": "IN",
+    "reason": "RICEZIONE_ORDINE",
+    "date": "2026-02-10T10:24:58.148Z",
+    "note": "ORD:ord_418a44f3-c25e-4c99-a7ab-78e91b07cb89"
+  },
+  {
+    "id": "745fc7d4-c7e8-4972-b534-a09fb70540c8",
+    "sku": "SKU001",
+    "quantity": 6,
+    "type": "IN",
+    "reason": "RICEZIONE_ORDINE",
+    "date": "2026-02-10T10:46:27.114Z",
+    "note": "ORD:ord_6c43fa26-7707-4dbc-ba98-4611e48a9807 | ricezione test"
+  },
+  {
+    "id": "1a8bf4e9-6cdd-4003-9b60-28b9bccec845",
+    "sku": "SKU-AAA",
+    "quantity": 1,
+    "type": "IN",
+    "reason": "RICEZIONE_ORDINE",
+    "date": "2026-02-10T13:21:02.088Z",
+    "note": "ORD:ord_6d373df7-b905-48af-8014-e98c865a9c30"
+  },
+  {
+    "id": "1ca45809-bbc4-4702-b756-df77d3205ba5",
+    "sku": "SKU001",
+    "quantity": 6,
+    "type": "IN",
+    "reason": "RICEZIONE_ORDINE",
+    "date": "2026-02-10T13:42:34.416Z",
+    "note": "ORD:ord_d4c59367-d18f-440e-981e-3a88d5136cbf"
+  },
+  {
+    "id": "ac6f1631-0e54-4310-81db-91e8f97adcba",
+    "sku": "SKU001",
+    "quantity": 1,
+    "type": "IN",
+    "reason": "RICEZIONE_ORDINE",
+    "date": "2026-02-16T14:59:20.566Z",
+    "note": "ORD:ord_9c891ec4-1e01-4530-beba-aaf6973c170f"
+  },
+  {
+    "id": "6aa39a77-a194-4acf-9860-6df1feffe657",
+    "sku": "SKU001",
+    "quantity": 1,
+    "type": "IN",
+    "reason": "RICEZIONE_ORDINE",
+    "date": "2026-02-16T14:59:41.285Z",
+    "note": "ORD:ord_9c891ec4-1e01-4530-beba-aaf6973c170f"
+  }
+]

@@ -1,0 +1,114 @@
+[
+  {
+    "orderId": "ord_418a44f3-c25e-4c99-a7ab-78e91b07cb89",
+    "supplier": "DORECA",
+    "status": "RECEIVED",
+    "createdAt": "2026-02-08T18:18:54.049Z",
+    "sentAt": null,
+    "receivedAt": "2026-02-10T10:24:58.148Z",
+    "notes": "TEST ORDINE 1",
+    "lines": [
+      {
+        "sku": "SKU001",
+        "qtyOrderedConf": 1,
+        "qtyReceivedConf": 0
+      }
+    ]
+  },
+  {
+    "orderId": "ord_d4c59367-d18f-440e-981e-3a88d5136cbf",
+    "supplier": "DORECA",
+    "status": "RECEIVED",
+    "createdAt": "2026-02-10T10:30:09.428Z",
+    "sentAt": null,
+    "receivedAt": "2026-02-10T13:42:34.416Z",
+    "notes": "TEST ORDINE 1",
+    "lines": [
+      {
+        "sku": "SKU001",
+        "qtyOrderedConf": 1,
+        "qtyReceivedConf": 0
+      }
+    ]
+  },
+  {
+    "orderId": "ord_063559bb-eba4-43d2-b781-8bdceba1e39a",
+    "supplier": "DORECA",
+    "status": "DRAFT",
+    "createdAt": "2026-02-10T10:30:18.030Z",
+    "sentAt": null,
+    "receivedAt": null,
+    "notes": "TEST ORDINE UI",
+    "lines": [
+      {
+        "sku": "SKU001",
+        "qtyOrderedConf": 1,
+        "qtyReceivedConf": 0
+      }
+    ]
+  },
+  {
+    "orderId": "ord_6c43fa26-7707-4dbc-ba98-4611e48a9807",
+    "supplier": "DORECA",
+    "status": "RECEIVED",
+    "createdAt": "2026-02-10T10:41:02.450Z",
+    "sentAt": null,
+    "receivedAt": "2026-02-10T10:46:27.114Z",
+    "notes": "TEST ORDINE 2",
+    "lines": [
+      {
+        "sku": "SKU001",
+        "qtyOrderedConf": 1,
+        "qtyReceivedConf": 0
+      }
+    ]
+  },
+  {
+    "orderId": "ord_6d373df7-b905-48af-8014-e98c865a9c30",
+    "supplier": "DORECA",
+    "status": "RECEIVED",
+    "createdAt": "2026-02-10T13:20:42.363Z",
+    "sentAt": null,
+    "receivedAt": "2026-02-10T13:21:02.088Z",
+    "notes": null,
+    "lines": [
+      {
+        "sku": "SKU-AAA",
+        "qtyOrderedConf": 1,
+        "qtyReceivedConf": 1
+      }
+    ]
+  },
+  {
+    "orderId": "ord_e656d47c-9520-4fee-a130-cf4a7008dddd",
+    "supplier": "DORECA",
+    "status": "DRAFT",
+    "createdAt": "2026-02-13T16:19:06.758Z",
+    "sentAt": null,
+    "receivedAt": null,
+    "notes": null,
+    "lines": [
+      {
+        "sku": "SKU001",
+        "qtyOrderedConf": 1,
+        "qtyReceivedConf": 0
+      }
+    ]
+  },
+  {
+    "orderId": "ord_9c891ec4-1e01-4530-beba-aaf6973c170f",
+    "supplier": "DORECA",
+    "status": "RECEIVED",
+    "createdAt": "2026-02-16T13:20:10.814Z",
+    "sentAt": null,
+    "receivedAt": "2026-02-16T14:59:41.285Z",
+    "notes": "test",
+    "lines": [
+      {
+        "sku": "SKU001",
+        "qtyOrderedConf": 1,
+        "qtyReceivedConf": 0
+      }
+    ]
+  }
+]
