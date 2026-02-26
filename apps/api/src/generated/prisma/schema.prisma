@@ -1,0 +1,30 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Item {
+  id        String   @id @default(cuid())
+  sku       String   @unique
+  name      String
+  supplier  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Movement {
+  id     String   @id @default(cuid())
+  sku    String
+  type   String
+  qty    Float
+  reason String?
+  at     DateTime @default(now())
+
+  @@index([sku])
+  @@index([at])
+}
