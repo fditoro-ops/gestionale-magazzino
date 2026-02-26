@@ -10,26 +10,19 @@ import itemsRouter from "./routes/items.js";
 import ordersRouter from "./routes/orders.js";
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT ?? 3001);
 
-// =====================================================
-// CORS
-// =====================================================
+// --- CORS ---
 app.use(
   cors({
-    origin:
-      process.env.NODE_ENV === "production"
-        ? true
-        : "http://localhost:5173",
+    origin: process.env.NODE_ENV === "production" ? true : "http://localhost:5173",
     credentials: true,
   })
 );
 
 app.use(express.json());
 
-// =====================================================
-// HEALTH CHECK (sempre libero)
-// =====================================================
+// --- Health (libero) ---
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
@@ -38,66 +31,51 @@ app.get("/health", (_req, res) => {
   });
 });
 
-// =====================================================
-// BASIC AUTH (staging / produzione opzionale)
-// =====================================================
-const basicAuthEnabled =
-  (process.env.BASIC_AUTH_ENABLED ?? "")
-    .trim()
-    .toLowerCase() === "true";
+// --- Basic Auth (PRIMA di routes e static) ---
+const basicAuthEnabled = process.env.BASIC_AUTH_ENABLED === "true";
+const user = process.env.BASIC_AUTH_USER ?? "";
+const pass = process.env.BASIC_AUTH_PASS ?? "";
 
-const basicAuthUser = (process.env.BASIC_AUTH_USER ?? "").trim();
-const basicAuthPass = (process.env.BASIC_AUTH_PASS ?? "").trim();
-
-// Log utili nei log Render
 console.log("🔐 BASIC_AUTH_ENABLED =", basicAuthEnabled);
-console.log("🔐 BASIC_AUTH_USER set =", Boolean(basicAuthUser));
-console.log("🔐 BASIC_AUTH_PASS set =", Boolean(basicAuthPass));
+console.log("🔐 BASIC_AUTH_USER set =", Boolean(user));
+console.log("🔐 BASIC_AUTH_PASS set =", Boolean(pass));
 
 if (basicAuthEnabled) {
-  if (!basicAuthUser || !basicAuthPass) {
-    console.warn(
-      "⚠️ BASIC_AUTH_ENABLED=true ma mancano BASIC_AUTH_USER/PASS"
-    );
+  if (!user || !pass) {
+    console.warn("⚠️ BASIC_AUTH_ENABLED=true ma mancano BASIC_AUTH_USER/PASS");
   } else {
-    const authMiddleware = basicAuth({
-      users: { [basicAuthUser]: basicAuthPass },
+    const auth = basicAuth({
+      users: { [user]: pass },
       challenge: true,
       realm: "Core (staging)",
     });
 
-    // Applica auth a TUTTO tranne /health
     app.use((req, res, next) => {
-      if (req.path === "/health") {
-        return next();
-      }
-      return authMiddleware(req, res, next);
+      // lascia libero health
+      if (req.path === "/health") return next();
+      return auth(req, res, next);
     });
 
     console.log("🔐 Basic Auth ATTIVA");
   }
 } else {
-  console.log("🔓 Basic Auth DISABILITATA");
+  console.log("🔓 Basic Auth DISATTIVA");
 }
 
-// =====================================================
-// API ROUTES
-// =====================================================
+// --- API routes ---
 app.use("/items", itemsRouter);
 app.use("/movements", movementsRouter);
 app.use("/stock-v2", stockV2Router);
 app.use("/orders", ordersRouter);
 
-// =====================================================
-// STATIC FRONTEND (solo prod/staging)
-// =====================================================
+// --- Static frontend in produzione/staging ---
 if (process.env.NODE_ENV !== "development") {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
 
-  // Da apps/api/dist/src/server.js → apps/web/dist
-  const webPath = path.resolve(__dirname, "../../web/dist");
-
+  // __dirname = apps/api/dist/src
+  // ../../../web/dist => apps/web/dist ✅
+  const webPath = path.resolve(__dirname, "../../../web/dist");
   console.log("📦 Static path:", webPath);
 
   app.use(express.static(webPath));
@@ -107,9 +85,6 @@ if (process.env.NODE_ENV !== "development") {
   });
 }
 
-// =====================================================
-// START SERVER
-// =====================================================
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Server attivo sulla porta ${PORT}`);
 });
