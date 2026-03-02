@@ -50,19 +50,14 @@ export default function App() {
 
   /* ---------- LOAD ---------- */
   const reload = () => {
-    fetch("http://localhost:3001/movements")
+    fetch("/movements")
       .then((r) => r.json())
       .then((data) => setMovements(Array.isArray(data) ? data : []))
       .catch(console.error);
 
-    fetch("http://localhost:3001/stock-v2")
+    fetch("/stock-v2")
       .then((r) => r.json())
       .then((data) => {
-        // supportiamo tutte le forme possibili:
-        // - array diretto
-        // - { rows: [...] }
-        // - { warehouse: [...] }
-        // - { data: [...] }
         const rows = Array.isArray(data)
           ? data
           : Array.isArray((data as any)?.rows)
@@ -76,7 +71,7 @@ export default function App() {
       })
       .catch(console.error);
 
-    fetch("http://localhost:3001/items")
+    fetch("/items")
       .then((r) => r.json())
       .then((data) => setItems(Array.isArray(data) ? data : []))
       .catch(console.error);
@@ -91,51 +86,55 @@ export default function App() {
 
   /* ---------- UI ---------- */
   return (
-    <AppLayout
-      tab={tab}
-      onTabChange={setTab}
-      onReload={reload}
-      mode={mode}
-      onModeChange={setMode}
-    >
-      {tab === "dashboard" && (
-        <div style={{ padding: 16 }}>
-          <h2 style={{ marginTop: 0 }}>Dashboard</h2>
-          <p style={{ margin: 0, color: "#627D98" }}>Coming soon…</p>
-        </div>
-      )}
-
-      {tab === "movements" && (
-        <div style={{ display: "grid", gap: 16 }}>
-          <NewMovementForm
-            onSuccess={reload}
-            availableBySku={availableBySku}
-            defaultSku={draftSku}
-            packSizeBySku={packSizeBySku}
-          />
-          <MovementsList movements={movements} />
-        </div>
-      )}
-
-      {tab === "warehouse" && (
-        <WarehouseTable
-          rows={Array.isArray(warehouse) ? warehouse : []}
-          onPickSku={(sku) => {
-            setDraftSku(sku);
-            setTab("movements");
-          }}
-        />
-      )}
-
-      {tab === "items" && <ItemsAdmin />}
-
-      {/* ✅ ORDERS: pagina vera */}
-      {tab === "orders" && (
-        <OrdersPage
-          items={Array.isArray(items) ? items : []}
+    <div className="app-bg">
+      <div className="app-bg-content min-h-screen">
+        <AppLayout
+          tab={tab}
+          onTabChange={setTab}
           onReload={reload}
-        />
-      )}
-    </AppLayout>
+          mode={mode}
+          onModeChange={setMode}
+        >
+          {tab === "dashboard" && (
+            <div className="p-4">
+              <h2 className="mt-0">Dashboard</h2>
+              <p className="m-0 text-slate-500">Coming soon…</p>
+            </div>
+          )}
+
+          {tab === "movements" && (
+            <div className="grid gap-4">
+              <NewMovementForm
+                onSuccess={reload}
+                availableBySku={availableBySku}
+                defaultSku={draftSku}
+                packSizeBySku={packSizeBySku}
+              />
+              <MovementsList movements={movements} />
+            </div>
+          )}
+
+          {tab === "warehouse" && (
+            <WarehouseTable
+              rows={Array.isArray(warehouse) ? warehouse : []}
+              onPickSku={(sku) => {
+                setDraftSku(sku);
+                setTab("movements");
+              }}
+            />
+          )}
+
+          {tab === "items" && <ItemsAdmin />}
+
+          {/* ✅ ORDERS: pagina vera */}
+          {tab === "orders" && (
+            <OrdersPage
+              items={Array.isArray(items) ? items : []}
+              onReload={reload}
+            />
+          )}
+        </AppLayout>
+      </div>
+    </div>
   );
 }

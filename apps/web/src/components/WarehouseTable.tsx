@@ -4,15 +4,9 @@ type WarehouseRow = {
   itemId: string;
   sku: string;
   name: string;
-
   stockBt: number;
-
-  // ✅ v2: soglia in CL
   minStockCl?: number;
-
   underMin: boolean;
-
-  // (opzionali, se vuoi mostrarli dopo)
   categoryId?: string;
   supplier?: string;
 };
@@ -44,7 +38,6 @@ export default function WarehouseTable({
       r = r.filter((x) => x.underMin);
     }
 
-    // Ordine: sotto scorta in alto, poi per nome
     return [...r].sort((a, b) => {
       if (a.underMin !== b.underMin) return a.underMin ? -1 : 1;
       return a.name.localeCompare(b.name);
@@ -52,73 +45,50 @@ export default function WarehouseTable({
   }, [rows, q, onlyUnderMin]);
 
   return (
-    <div style={{ display: "grid", gap: 12 }}>
+    <div className="grid gap-4">
       {/* Toolbar */}
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <h2 style={{ margin: 0 }}>Magazzino</h2>
-          <span style={{ fontSize: 12, color: "#667" }}>
-            {filtered.length} righe
-          </span>
-        </div>
+      <div className="panel-glass p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-baseline gap-3">
+            <h2 className="text-base font-semibold text-gray-900 m-0">
+              Magazzino
+            </h2>
+            <span className="text-xs text-gray-500">
+              {filtered.length} righe
+            </span>
+          </div>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Cerca SKU o nome..."
-            style={{
-              width: 260,
-              padding: "10px 12px",
-              borderRadius: 10,
-              border: "1px solid #d6dbe6",
-            }}
-          />
-
-          <label
-            style={{
-              display: "flex",
-              gap: 8,
-              alignItems: "center",
-              fontSize: 14,
-              userSelect: "none",
-            }}
-          >
+          <div className="flex flex-wrap items-center gap-3">
             <input
-              type="checkbox"
-              checked={onlyUnderMin}
-              onChange={(e) => setOnlyUnderMin(e.target.checked)}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Cerca SKU o nome..."
+              className="h-10 w-72 max-w-full rounded-lg border border-gray-200 bg-white/80 backdrop-blur-sm px-3 text-sm outline-none focus:ring-2 focus:ring-teal-600/30"
             />
-            Solo sotto scorta
-          </label>
+
+            <label className="flex items-center gap-2 text-sm text-gray-700 select-none">
+              <input
+                type="checkbox"
+                checked={onlyUnderMin}
+                onChange={(e) => setOnlyUnderMin(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              Solo sotto scorta
+            </label>
+          </div>
         </div>
       </div>
 
       {/* Table */}
-      <div
-        style={{
-          border: "1px solid #e5e7eb",
-          borderRadius: 14,
-          overflow: "hidden",
-          background: "white",
-        }}
-      >
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "#f9fafb" }}>
-              <Th>SKU</Th>
-              <Th>Nome</Th>
-              <Th style={{ textAlign: "right" }}>Stock (BT)</Th>
-              <Th style={{ textAlign: "right" }}>Min (CL)</Th>
-              <Th>Stato</Th>
+      <div className="rounded-2xl border border-white/40 bg-white/70 backdrop-blur-md overflow-hidden shadow-sm">
+        <table className="table">
+          <thead className="bg-white/50 backdrop-blur-sm text-xs uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="th">SKU</th>
+              <th className="th">Nome</th>
+              <th className="th text-right">Stock (BT)</th>
+              <th className="th text-right">Min (CL)</th>
+              <th className="th">Stato</th>
             </tr>
           </thead>
 
@@ -127,123 +97,48 @@ export default function WarehouseTable({
               <tr
                 key={r.itemId}
                 onClick={() => onPickSku?.(r.sku)}
-                style={{
-                  cursor: onPickSku ? "pointer" : "default",
-                  borderTop: "1px solid #eef2f7",
-                }}
+                className={`transition-colors ${
+                  r.underMin ? "bg-red-50/30" : ""
+                } hover:bg-white/40 ${onPickSku ? "cursor-pointer" : ""}`}
               >
-                <Td>
-                  <span style={{ fontWeight: 700 }}>{r.sku}</span>
-                </Td>
-                <Td>{r.name}</Td>
+                <td className="td">
+                  <span className="font-semibold text-gray-900">{r.sku}</span>
+                </td>
 
-                <Td style={{ textAlign: "right", fontWeight: 700 }}>
+                <td className="td">{r.name}</td>
+
+                <td className="td text-right font-semibold tabular-nums text-gray-800">
                   {r.stockBt}
-                </Td>
+                </td>
 
-                <Td style={{ textAlign: "right" }}>
+                <td className="td text-right tabular-nums text-gray-700">
                   {typeof r.minStockCl === "number" ? r.minStockCl : "-"}
-                </Td>
+                </td>
 
-                <Td>
+                <td className="td">
                   {r.underMin ? (
-                    <Badge tone="danger">Sotto scorta</Badge>
+                    <span className="pill pill-bad">Sotto scorta</span>
                   ) : (
-                    <Badge tone="ok">OK</Badge>
+                    <span className="pill pill-ok">OK</span>
                   )}
-                </Td>
+                </td>
               </tr>
             ))}
 
             {filtered.length === 0 && (
               <tr>
-                <Td colSpan={5} style={{ padding: 16, color: "#667" }}>
+                <td className="td py-6 text-gray-500" colSpan={5}>
                   Nessun risultato.
-                </Td>
+                </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      <div style={{ fontSize: 12, color: "#667" }}>
+      <div className="text-xs text-gray-500">
         Tip: clicca una riga per precompilare lo SKU nei movimenti.
       </div>
     </div>
-  );
-}
-
-function Th({
-  children,
-  style,
-}: {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <th
-      style={{
-        padding: "12px 12px",
-        textAlign: "left",
-        fontSize: 12,
-        color: "#667",
-        letterSpacing: 0.2,
-        ...style,
-      }}
-    >
-      {children}
-    </th>
-  );
-}
-
-function Td({
-  children,
-  style,
-  colSpan,
-}: {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-  colSpan?: number;
-}) {
-  return (
-    <td
-      colSpan={colSpan}
-      style={{
-        padding: "12px 12px",
-        fontSize: 14,
-        ...style,
-      }}
-    >
-      {children}
-    </td>
-  );
-}
-
-function Badge({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone: "ok" | "danger";
-}) {
-  const styles =
-    tone === "danger"
-      ? { background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B" }
-      : { background: "#ECFDF5", border: "1px solid #BBF7D0", color: "#065F46" };
-
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        padding: "6px 10px",
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 700,
-        ...styles,
-      }}
-    >
-      {children}
-    </span>
   );
 }

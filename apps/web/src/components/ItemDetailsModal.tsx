@@ -1,68 +1,48 @@
-import { useMemo, useState } from "react";
-
-/* ---------------- TYPES (copiati da ItemsAdmin) ---------------- */
-
-export type StockKind = "UNIT" | "VOLUME_CONTAINER";
-export type Supplier = "DORECA" | "ALPORI" | "VARI";
+import { useEffect, useMemo, useState } from "react";
+import { X, Power, ChevronDown } from "lucide-react";
 
 export type Item = {
-  itemId: string;
+  itemId?: string;
   sku: string;
-  name: string;
-  categoryId: string;
-  active: boolean;
+  name?: string;
+  brand?: string | null;
 
-  stockKind: StockKind;
-  baseUnit: "CL";
+  categoryId?: string | null;
+  supplier?: string | null;
 
-  unitToCl: number | null;
-  containerSizeCl: number | null;
-  containerLabel: string | null;
+  stockKind?: "UNIT" | "VOLUME_CONTAINER";
+  unitToCl?: number | null;
 
-  minStockCl: number;
+  containerSizeCl?: number | null;
+  containerLabel?: string | null;
 
-  brand: string | null;
-  packSize: number | null;
+  minStockCl?: number | null;
+  packSize?: number | null;
 
-  supplier: Supplier;
+  lastCostCents?: number | null;
+  costCurrency?: string | null;
 
-  imageUrl: string | null;
-  lastCostCents: number | null;
-  costCurrency: string;
+  imageUrl?: string | null;
+  active?: boolean;
 };
 
-const CATEGORIES = [
-  { id: "bevande", label: "BEVANDE" },
-  { id: "vino", label: "VINO" },
-  { id: "birra", label: "BIRRA" },
-  { id: "amari", label: "AMARI" },
-  { id: "distillati_altri", label: "ALTRI DISTILLATI" },
-  { id: "gin", label: "GIN" },
-  { id: "vodka", label: "VODKA" },
-  { id: "whiskey", label: "WHISKEY" },
-  { id: "rhum", label: "RHUM" },
-  { id: "tequila", label: "TEQUILA" },
-] as const;
-
-const SUPPLIERS = [
-  { id: "DORECA", label: "DORECA" },
-  { id: "ALPORI", label: "ALPORI" },
-  { id: "VARI", label: "VARI" },
-] as const;
-
-const CATEGORY_IDS = CATEGORIES.map((c) => c.id) as readonly string[];
-
-function normalizeCategoryId(raw: any): (typeof CATEGORIES)[number]["id"] {
-  const s = (raw ?? "").toString();
-  return (CATEGORY_IDS as readonly string[]).includes(s) ? (s as any) : "bevande";
-}
-
 function centsToEuroString(cents: number | null | undefined) {
-  if (cents == null) return "";
-  return (cents / 100).toFixed(2).replace(".", ",");
+  if (typeof cents !== "number" || !Number.isFinite(cents)) return "";
+  const v = cents / 100;
+  return v.toFixed(2).replace(".", ",");
 }
 
-/* ---------------- PROPS ---------------- */
+function euroToCents(s: string): number | null {
+  if (!s.trim()) return null;
+  const n = Number(s.replace(",", "."));
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n * 100);
+}
+
+function isHttpUrl(s: string) {
+  if (!s.trim()) return true;
+  return /^https?:\/\/.+/i.test(s);
+}
 
 export default function ItemDetailsModal({
   open,
@@ -75,390 +55,333 @@ export default function ItemDetailsModal({
   item: Item | null;
   onClose: () => void;
   onSavePatch: (sku: string, patch: any) => Promise<void>;
-  loading: boolean;
+  loading?: boolean;
 }) {
-  const [editMode, setEditMode] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // draft solo per i campi editabili
-  const [draft, setDraft] = useState<{
-    name: string;
-    categoryId: string;
-    supplier: Supplier;
-    active: boolean;
-    minStockCl: number;
+  const [name, setName] = useState("");
+  const [brand, setBrand] = useState("");
+  const [supplier, setSupplier] = useState<string>("VARI");
+  const [categoryId, setCategoryId] = useState("");
 
-    // opzionali (se vuoi abilitarli dopo)
-    stockKind?: StockKind;
-    unitToCl?: number | null;
-    containerSizeCl?: number | null;
-    containerLabel?: string | null;
-    packSize?: number | null;
-    brand?: string | null;
-  }>({
-    name: "",
-    categoryId: "bevande",
-    supplier: "VARI",
-    active: true,
-    minStockCl: 0,
-  });
+  const [packSize, setPackSize] = useState<string>("");
+  const [stockKind, setStockKind] = useState<"UNIT" | "VOLUME_CONTAINER">("UNIT");
+  const [unitToCl, setUnitToCl] = useState<number>(33);
 
-  // quando cambia item, resettiamo modalità e draft
-  useMemo(() => {
-    if (!item) return;
-    setEditMode(false);
+  const [containerSizeCl, setContainerSizeCl] = useState<number>(70);
+  const [containerLabel, setContainerLabel] = useState<string>("Bottiglia");
+
+  const [minStockCl, setMinStockCl] = useState<number>(0);
+  const [lastCostEuro, setLastCostEuro] = useState<string>("");
+
+  const [imageUrl, setImageUrl] = useState<string>("");
+  const [active, setActive] = useState<boolean>(true);
+
+  const sku = item?.sku ?? "";
+
+  const previewUrl = useMemo(() => {
+    const u = imageUrl.trim();
+    return isHttpUrl(u) && u ? u : "";
+  }, [imageUrl]);
+
+  useEffect(() => {
+    if (!open || !item) return;
+
     setErr(null);
-    setDraft({
-      name: item.name ?? "",
-      categoryId: normalizeCategoryId(item.categoryId),
-      supplier: (item.supplier ?? "VARI") as Supplier,
-      active: !!item.active,
-      minStockCl: Number(item.minStockCl ?? 0),
 
-      // (non editabili per ora, ma li teniamo pronti)
-      stockKind: item.stockKind,
-      unitToCl: item.unitToCl ?? null,
-      containerSizeCl: item.containerSizeCl ?? null,
-      containerLabel: item.containerLabel ?? null,
-      packSize: item.packSize ?? null,
-      brand: item.brand ?? null,
-    });
-  }, [item?.sku]); // eslint-disable-line react-hooks/exhaustive-deps
+    setName(item.name ?? "");
+    setBrand(item.brand ?? "");
+    setSupplier((item.supplier ?? "VARI") as string);
+    setCategoryId(item.categoryId ?? "");
 
-  const categoryLabel = useMemo(() => {
-    if (!item) return "";
-    return CATEGORIES.find((c) => c.id === item.categoryId)?.label ?? item.categoryId;
-  }, [item]);
+    setPackSize(
+      typeof item.packSize === "number" && item.packSize > 0 ? String(item.packSize) : ""
+    );
+
+    setStockKind((item.stockKind ?? "UNIT") as any);
+    setUnitToCl(Number(item.unitToCl ?? 33));
+
+    setContainerSizeCl(Number(item.containerSizeCl ?? 70));
+    setContainerLabel(item.containerLabel ?? "Bottiglia");
+
+    setMinStockCl(Number(item.minStockCl ?? 0));
+    setLastCostEuro(centsToEuroString(item.lastCostCents));
+
+    setImageUrl(item.imageUrl ?? "");
+    setActive(Boolean(item.active ?? true));
+  }, [open, item]);
 
   if (!open || !item) return null;
 
   async function handleSave() {
     setErr(null);
 
-    // ✅ whitelist campi consentiti
-    const patch: any = {
-      name: draft.name.trim(),
-      categoryId: normalizeCategoryId(draft.categoryId),
-      supplier: draft.supplier,
-      active: !!draft.active,
-      minStockCl: Number(draft.minStockCl) || 0,
-    };
-
-    if (!patch.name) {
-      setErr("Il nome è obbligatorio");
+    if (!name.trim()) {
+      setErr("Nome articolo obbligatorio.");
+      return;
+    }
+    if (!isHttpUrl(imageUrl)) {
+      setErr("URL immagine non valido (deve iniziare con http/https).");
       return;
     }
 
+    const patch: any = {
+      name: name.trim(),
+      brand: brand.trim() || null,
+      supplier: supplier || "VARI",
+      categoryId: categoryId.trim() || null,
+      packSize: packSize.trim() ? Number(packSize) : null,
+
+      stockKind,
+      minStockCl: Number(minStockCl ?? 0),
+
+      lastCostCents: euroToCents(lastCostEuro),
+      costCurrency: "EUR",
+
+      imageUrl: imageUrl.trim() || null,
+      active,
+    };
+
+    if (stockKind === "UNIT") {
+      patch.unitToCl = Number(unitToCl ?? 0);
+      patch.containerSizeCl = null;
+      patch.containerLabel = null;
+    } else {
+      patch.unitToCl = null;
+      patch.containerSizeCl = Number(containerSizeCl ?? 0);
+      patch.containerLabel = containerLabel.trim() || "Bottiglia";
+    }
+
     try {
-      if (!item) return;
       await onSavePatch(item.sku, patch);
-      setEditMode(false);
+      onClose();
     } catch (e: any) {
-      setErr(e?.message || "Errore salvataggio");
+      setErr(e?.message ?? "Errore salvataggio");
     }
   }
 
+  const labelCls = "text-xs font-medium text-gray-600";
+  const helpCls = "text-xs text-gray-500";
+
+  // ✅ stessa altezza OVUNQUE
+  const inputCls =
+    "w-full h-9 rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-900 shadow-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-teal-600/20";
+
+  // ✅ select “vero” ma identico all’input (freccia custom)
+  const selectCls =
+    "w-full h-9 rounded-lg border border-gray-200 bg-white px-2.5 pr-8 text-sm text-gray-900 shadow-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-teal-600/20 appearance-none";
+
   return (
-    <div style={backdrop} onMouseDown={onClose}>
-      <div style={modal} onMouseDown={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div style={header}>
-          <div style={{ display: "grid", gap: 4 }}>
-            <div style={{ fontWeight: 900, fontSize: 18 }}>
-              {item.sku} · {item.name}
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/25" onClick={onClose} />
+
+      <div className="absolute inset-0 flex items-start justify-center p-4 sm:p-6">
+        <div
+          className="w-[min(920px,calc(100vw-32px))] rounded-2xl bg-white border border-gray-200 shadow-xl overflow-hidden"
+          role="dialog"
+          aria-modal="true"
+        >
+          {/* header */}
+          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-200 bg-white">
+            <div>
+              <div className="text-base font-semibold text-gray-900">
+                Dettaglio articolo
+              </div>
+              <div className="text-xs text-gray-500">{sku}</div>
             </div>
-            <div style={{ fontSize: 12, color: "#667" }}>
-              {categoryLabel} · {item.supplier} · {item.active ? "ATTIVO" : "NON ATTIVO"}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActive((v) => !v)}
+                className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold ${
+                  active
+                    ? "border-green-200 bg-green-50 text-green-700"
+                    : "border-amber-200 bg-amber-50 text-amber-700"
+                }`}
+                title="Attivo/Disattivo"
+              >
+                <Power className="h-4 w-4" />
+                {active ? "Attivo" : "Disattivo"}
+              </button>
+
+              <button
+                type="button"
+                className="btn-square"
+                onClick={onClose}
+                title="Chiudi"
+              >
+                <X className="icon-18" />
+              </button>
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {!editMode ? (
-              <button style={btnPrimary} onClick={() => setEditMode(true)}>
-                Modifica
-              </button>
-            ) : (
-              <>
-                <button style={btnPrimary} onClick={handleSave} disabled={loading}>
-                  Salva
-                </button>
-                <button
-                  style={btnGhost}
-                  onClick={() => {
-                    // reset draft a valori item
-                    setEditMode(false);
-                    setErr(null);
-                    setDraft({
-                      name: item.name ?? "",
-                      categoryId: normalizeCategoryId(item.categoryId),
-                      supplier: (item.supplier ?? "VARI") as Supplier,
-                      active: !!item.active,
-                      minStockCl: Number(item.minStockCl ?? 0),
-
-                      stockKind: item.stockKind,
-                      unitToCl: item.unitToCl ?? null,
-                      containerSizeCl: item.containerSizeCl ?? null,
-                      containerLabel: item.containerLabel ?? null,
-                      packSize: item.packSize ?? null,
-                      brand: item.brand ?? null,
-                    });
-                  }}
-                  disabled={loading}
-                >
-                  Annulla
-                </button>
-              </>
+          {/* BODY */}
+          <div className="p-5">
+            {err && (
+              <div className="mb-3 text-sm text-red-600">{err}</div>
             )}
 
-            <button style={btnGhost} onClick={onClose} disabled={loading}>
-              Chiudi
-            </button>
-          </div>
-        </div>
-
-        {err && <div style={{ color: "#b42318", fontWeight: 700 }}>{err}</div>}
-
-        {/* Contenuto */}
-        <div style={{ display: "grid", gap: 14 }}>
-          {/* SEZIONE: campi editabili (solo in editMode) */}
-          <div style={section}>
-            <div style={sectionTitle}>Campi gestibili</div>
-
-            <div style={grid2}>
-              <label style={field}>
-                <div style={label}>Nome</div>
+            <div className="grid grid-cols-12 gap-x-6 gap-y-4 items-start">
+              {/* Nome articolo */}
+              <div className="col-span-12 md:col-span-6 min-w-0 grid gap-1">
+                <label className={labelCls}>Nome articolo</label>
                 <input
-                  style={inp}
-                  value={draft.name}
-                  onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-                  disabled={!editMode || loading}
+                  className={inputCls}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                 />
-              </label>
+              </div>
 
-              <label style={field}>
-                <div style={label}>Categoria</div>
-                <select
-                  style={inp}
-                  value={draft.categoryId}
-                  onChange={(e) => setDraft((d) => ({ ...d, categoryId: e.target.value }))}
-                  disabled={!editMode || loading}
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label style={field}>
-                <div style={label}>Fornitore</div>
-                <select
-                  style={inp}
-                  value={draft.supplier}
-                  onChange={(e) => setDraft((d) => ({ ...d, supplier: e.target.value as Supplier }))}
-                  disabled={!editMode || loading}
-                >
-                  {SUPPLIERS.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label style={field}>
-                <div style={label}>Attivo</div>
-                <select
-                  style={inp}
-                  value={draft.active ? "SI" : "NO"}
-                  onChange={(e) => setDraft((d) => ({ ...d, active: e.target.value === "SI" }))}
-                  disabled={!editMode || loading}
-                >
-                  <option value="SI">SI</option>
-                  <option value="NO">NO</option>
-                </select>
-              </label>
-
-              <label style={field}>
-                <div style={label}>Scorta minima (CL)</div>
+              {/* Brand */}
+              <div className="col-span-12 md:col-span-3 min-w-0 grid gap-1">
+                <label className={labelCls}>Brand</label>
                 <input
-                  style={inp}
+                  className={inputCls}
+                  placeholder="Opzionale"
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value)}
+                />
+              </div>
+
+              {/* Fornitore */}
+              <div className="col-span-12 md:col-span-3 min-w-0 grid gap-1">
+                <label className={labelCls}>Fornitore</label>
+
+                <div className="relative">
+                  <select
+                    className={selectCls}
+                    value={supplier}
+                    onChange={(e) => setSupplier(e.target.value)}
+                  >
+                    <option value="DORECA">DORECA</option>
+                    <option value="ALPORI">ALPORI</option>
+                    <option value="VARI">VARI</option>
+                  </select>
+
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                </div>
+              </div>
+
+              {/* Categoria */}
+              <div className="col-span-12 md:col-span-6 min-w-0 grid gap-1">
+                <label className={labelCls}>Categoria</label>
+                <input
+                  className={inputCls}
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                />
+                <div className={helpCls}>
+                  Per ora testo libero (poi lo colleghiamo alla select).
+                </div>
+              </div>
+
+              {/* Pezzi per cassa */}
+              <div className="col-span-12 md:col-span-2 min-w-0 grid gap-1">
+                <label className={labelCls}>Pezzi per cassa</label>
+                <input
+                  className={inputCls}
                   type="number"
-                  value={draft.minStockCl}
-                  onChange={(e) => setDraft((d) => ({ ...d, minStockCl: Number(e.target.value) }))}
-                  disabled={!editMode || loading}
+                  value={packSize}
+                  onChange={(e) => setPackSize(e.target.value)}
                 />
-              </label>
-            </div>
+              </div>
 
-            <div style={{ fontSize: 12, color: "#667" }}>
-              Nota: qui abilitiamo solo i campi concordati. Tutto il resto è read-only.
+              {/* Ultimo costo */}
+              <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
+                <label className={labelCls}>Ultimo costo (EUR)</label>
+                <input
+                  className={inputCls}
+                  placeholder="Es. 18,90"
+                  value={lastCostEuro}
+                  onChange={(e) => setLastCostEuro(e.target.value)}
+                />
+              </div>
+
+              {/* Gestione stock */}
+              <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
+                <label className={labelCls}>Gestione stock</label>
+
+                <div className="relative">
+                  <select
+                    className={selectCls}
+                    value={stockKind}
+                    onChange={(e) => setStockKind(e.target.value as any)}
+                  >
+                    <option value="UNIT">Pezzi (PZ)</option>
+                    <option value="VOLUME_CONTAINER">Volume (CL)</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                </div>
+
+                <div className={helpCls}>
+                  PZ: lattine/bottiglie. CL: bottiglie da spillare.
+                </div>
+              </div>
+
+              {/* CL per pezzo */}
+              <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
+                <label className={labelCls}>CL per pezzo</label>
+                <input
+                  className={inputCls}
+                  type="number"
+                  value={unitToCl}
+                  onChange={(e) => setUnitToCl(Number(e.target.value))}
+                />
+              </div>
+
+              {/* Scorta minima */}
+              <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
+                <label className={labelCls}>Scorta minima (CL)</label>
+                <input
+                  className={inputCls}
+                  type="number"
+                  value={minStockCl}
+                  onChange={(e) => setMinStockCl(Number(e.target.value))}
+                />
+              </div>
+
+              {/* URL immagine */}
+              <div className="col-span-12 md:col-span-7 min-w-0 grid gap-1">
+                <label className={labelCls}>URL immagine</label>
+                <input
+                  className={inputCls}
+                  placeholder="https://..."
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                />
+                <div className={helpCls}>Opzionale. Deve iniziare con http/https.</div>
+              </div>
+
+              {/* Anteprima */}
+              <div className="col-span-12 md:col-span-5 min-w-0 grid gap-1">
+                <label className={labelCls}>Anteprima</label>
+                <div className="h-[132px] rounded-xl border border-gray-200 bg-white flex items-center justify-center overflow-hidden">
+                  {previewUrl ? (
+                    <img
+                      src={previewUrl}
+                      alt="Anteprima"
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <div className="text-sm text-gray-500">Nessuna immagine</div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* SEZIONE: dettaglio completo (sempre) */}
-          <div style={section}>
-            <div style={sectionTitle}>Dettaglio completo</div>
-
-            <div style={grid3}>
-              <Kv k="SKU" v={item.sku} />
-              <Kv k="ItemId" v={item.itemId} />
-              <Kv k="Nome" v={item.name} />
-              <Kv k="Categoria" v={categoryLabel} />
-              <Kv k="Fornitore" v={item.supplier} />
-              <Kv k="Attivo" v={item.active ? "SI" : "NO"} />
-
-              <Kv k="StockKind" v={item.stockKind} />
-              <Kv k="BaseUnit" v={item.baseUnit} />
-              <Kv k="unitToCl" v={item.unitToCl ?? "—"} />
-              <Kv k="containerSizeCl" v={item.containerSizeCl ?? "—"} />
-              <Kv k="containerLabel" v={item.containerLabel ?? "—"} />
-
-              <Kv k="minStockCl" v={item.minStockCl ?? 0} />
-
-              <Kv k="brand" v={item.brand ?? "—"} />
-              <Kv k="packSize" v={item.packSize ?? "—"} />
-
-              <Kv k="lastCost" v={centsToEuroString(item.lastCostCents) || "—"} />
-              <Kv k="currency" v={item.costCurrency || "EUR"} />
-
-              <Kv k="imageUrl" v={item.imageUrl ?? "—"} />
-            </div>
+          {/* footer */}
+          <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-200 bg-white">
+            <button className="btn-ghost" onClick={onClose} disabled={loading}>
+              Annulla
+            </button>
+            <button className="btn-primary" onClick={handleSave} disabled={loading}>
+              {loading ? "Salvataggio..." : "Salva"}
+            </button>
           </div>
         </div>
       </div>
     </div>
   );
 }
-
-/* ---------------- SMALL COMPONENTS ---------------- */
-
-function Kv({ k, v }: { k: string; v: any }) {
-  return (
-    <div style={kv}>
-      <div style={kvKey}>{k}</div>
-      <div style={kvVal}>{String(v)}</div>
-    </div>
-  );
-}
-
-/* ---------------- STYLES ---------------- */
-
-const backdrop: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(10, 20, 40, 0.45)",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  padding: 18,
-  zIndex: 9999,
-};
-
-const modal: React.CSSProperties = {
-  width: "min(980px, 98vw)",
-  maxHeight: "92vh",
-  overflow: "auto",
-  background: "white",
-  borderRadius: 16,
-  border: "1px solid #e5e7eb",
-  boxShadow: "0 10px 30px rgba(0,0,0,.20)",
-  padding: 14,
-  display: "grid",
-  gap: 14,
-};
-
-const header: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  alignItems: "center",
-  flexWrap: "wrap",
-  borderBottom: "1px solid #eef2f7",
-  paddingBottom: 12,
-};
-
-const section: React.CSSProperties = {
-  border: "1px solid #e5e7eb",
-  borderRadius: 14,
-  padding: 12,
-  display: "grid",
-  gap: 10,
-};
-
-const sectionTitle: React.CSSProperties = {
-  fontWeight: 900,
-  color: "#0b1c3d",
-};
-
-const grid2: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: 10,
-};
-
-const grid3: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-  gap: 10,
-};
-
-const field: React.CSSProperties = {
-  display: "grid",
-  gap: 6,
-};
-
-const label: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 800,
-  color: "#667",
-};
-
-const inp: React.CSSProperties = {
-  padding: 10,
-  borderRadius: 10,
-  border: "1px solid #d6dbe6",
-  fontSize: 14,
-};
-
-const btnPrimary: React.CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid #0B7285",
-  background: "#0B7285",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 900,
-  width: "fit-content",
-};
-
-const btnGhost: React.CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid #d6dbe6",
-  background: "white",
-  cursor: "pointer",
-  fontWeight: 900,
-  width: "fit-content",
-};
-
-const kv: React.CSSProperties = {
-  border: "1px solid #eef2f7",
-  borderRadius: 12,
-  padding: 10,
-  display: "grid",
-  gap: 6,
-};
-
-const kvKey: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 900,
-  color: "#667",
-};
-
-const kvVal: React.CSSProperties = {
-  fontSize: 13,
-  color: "#0b1c3d",
-  wordBreak: "break-word",
-};

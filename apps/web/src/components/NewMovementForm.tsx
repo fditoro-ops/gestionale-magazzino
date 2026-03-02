@@ -21,12 +21,12 @@ const REASONS: MovementReason[] = [
 export default function NewMovementForm({
   onSuccess,
   availableBySku,
-  packSizeBySku,          // ✅ NUOVO
+  packSizeBySku,
   defaultSku,
 }: {
   onSuccess: () => void;
   availableBySku: Record<string, number>;
-  packSizeBySku: Record<string, number | null>; // ✅ NUOVO
+  packSizeBySku: Record<string, number | null>;
   defaultSku?: string;
 }) {
   const [sku, setSku] = useState("");
@@ -37,18 +37,14 @@ export default function NewMovementForm({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Precompila SKU
   useEffect(() => {
     if (defaultSku) setSku(defaultSku);
   }, [defaultSku]);
 
   const skuKey = sku.toUpperCase().trim();
   const available = skuKey ? availableBySku?.[skuKey] ?? 0 : 0;
-
-  // ✅ packSize (es. 24 per cassa COCA)
   const packSize = skuKey ? packSizeBySku?.[skuKey] ?? null : null;
 
-  // ✅ quantità reale che andrà a stock
   const effectiveQty =
     type === "IN" && packSize && packSize > 1
       ? quantity * packSize
@@ -84,7 +80,7 @@ export default function NewMovementForm({
 
     const payload: any = {
       sku: skuKey,
-      quantity: effectiveQty, // ✅ QUI AVVIENE LA MAGIA
+      quantity: effectiveQty,
       type,
       note: note || undefined,
     };
@@ -108,7 +104,6 @@ export default function NewMovementForm({
       return;
     }
 
-    // reset
     setSku("");
     setQuantity(0);
     setType("IN");
@@ -119,32 +114,36 @@ export default function NewMovementForm({
   }
 
   return (
-    <form onSubmit={submit} className="p-4 border rounded space-y-3 bg-white">
-      <h2 className="font-bold">Nuovo movimento</h2>
+  <form onSubmit={submit} className="panel-glass p-6 space-y-5">
 
+    {/* Titolo */}
+    <div className="flex items-center justify-between">
+      <h2 className="text-base font-semibold text-gray-900">
+        Nuovo movimento
+      </h2>
+
+      {skuKey && (
+        <div className="text-sm text-gray-600">
+          Disponibile: <span className="font-semibold">{available}</span>
+        </div>
+      )}
+    </div>
+
+    {/* Riga 1: SKU */}
+    <div className="max-w-md">
       <input
-        className="border p-2 w-full"
+        className="w-full h-10 rounded-lg border border-gray-200 bg-white/80 backdrop-blur-sm px-3 text-sm outline-none focus:ring-2 focus:ring-teal-600/30"
         placeholder="SKU"
         value={sku}
         onChange={(e) => setSku(e.target.value)}
         required
       />
+    </div>
 
-      {skuKey && (
-        <p className="text-sm text-gray-600">
-          Disponibile: <strong>{available}</strong>
-        </p>
-      )}
-
-      {type === "IN" && packSize && packSize > 1 && quantity > 0 && (
-        <p className="text-sm text-blue-600">
-          Carico: {quantity} × {packSize} ={" "}
-          <strong>{effectiveQty}</strong> pz
-        </p>
-      )}
-
+    {/* Riga 2: Quantità + Tipo */}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl">
       <input
-        className="border p-2 w-full"
+        className="h-10 rounded-lg border border-gray-200 bg-white/80 backdrop-blur-sm px-3 text-sm outline-none focus:ring-2 focus:ring-teal-600/30"
         type="number"
         min={1}
         placeholder="Quantità"
@@ -154,7 +153,7 @@ export default function NewMovementForm({
       />
 
       <select
-        className="border p-2 w-full"
+        className="h-10 rounded-lg border border-gray-200 bg-white/80 backdrop-blur-sm px-3 text-sm outline-none focus:ring-2 focus:ring-teal-600/30"
         value={type}
         onChange={(e) => {
           const next = e.target.value as MovementType;
@@ -165,23 +164,21 @@ export default function NewMovementForm({
         }}
       >
         <option value="IN">IN</option>
-        <option value="OUT" disabled={available <= 0}>
-          OUT
-        </option>
-        <option value="ADJUST" disabled={available <= 0}>
-          ADJUST
-        </option>
+        <option value="OUT" disabled={available <= 0}>OUT</option>
+        <option value="ADJUST" disabled={available <= 0}>ADJUST</option>
         <option value="INVENTORY">INVENTORY</option>
       </select>
 
       {needsReason && (
         <select
-          className="border p-2 w-full"
+          className="h-10 rounded-lg border border-gray-200 bg-white/80 backdrop-blur-sm px-3 text-sm outline-none focus:ring-2 focus:ring-teal-600/30"
           value={reason}
-          onChange={(e) => setReason(e.target.value as MovementReason)}
+          onChange={(e) =>
+            setReason(e.target.value as MovementReason)
+          }
           required
         >
-          <option value="">Seleziona reason</option>
+          <option value="">Reason</option>
           {REASONS.map((r) => (
             <option key={r} value={r}>
               {r}
@@ -189,26 +186,39 @@ export default function NewMovementForm({
           ))}
         </select>
       )}
+    </div>
 
+    {/* Riga 3: Nota più compatta */}
+    <div className="max-w-2xl">
       <textarea
-        className="border p-2 w-full"
+        className="w-full rounded-lg border border-gray-200 bg-white/80 backdrop-blur-sm px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-600/30"
         placeholder="Nota (opzionale)"
         value={note}
         onChange={(e) => setNote(e.target.value)}
+        rows={2}
       />
+    </div>
 
-      {error && <p className="text-red-600">{error}</p>}
+    {/* Errore */}
+    {error && (
+      <div className="rounded-lg border border-red-200/60 bg-red-50/60 px-3 py-2 text-sm text-red-700 max-w-2xl">
+        {error}
+      </div>
+    )}
 
+    {/* Bottone */}
+    <div className="pt-2">
       <button
         disabled={loading || wouldGoNegative}
-        className={`px-4 py-2 rounded text-white ${
+        className={`btn-primary ${
           loading || wouldGoNegative
-            ? "bg-gray-400"
-            : "bg-blue-600 hover:bg-blue-700"
+            ? "opacity-60 pointer-events-none"
+            : ""
         }`}
       >
         {loading ? "Salvataggio..." : "Salva"}
       </button>
-    </form>
-  );
+    </div>
+  </form>
+);
 }

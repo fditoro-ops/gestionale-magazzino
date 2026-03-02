@@ -4,6 +4,200 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-gray-50 text-gray-900;
+/* =========================
+   BASE TYPOGRAPHY
+   ========================= */
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont,
+      'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-feature-settings: "tnum";
+  }
+
+  /* IMPORTANT: il body non deve “tappare” l’aura */
+  body {
+    @apply text-gray-900 antialiased min-h-screen;
+    background: transparent;
+  }
+
+  h1 {
+    @apply text-2xl font-semibold tracking-tight text-gray-900;
+  }
+
+  h2 {
+    @apply text-xl font-semibold tracking-tight text-gray-900;
+  }
+
+  h3 {
+    @apply text-lg font-semibold text-gray-900;
+  }
+
+  p {
+    @apply text-sm leading-6 text-gray-700;
+  }
+
+  small {
+    @apply text-xs text-gray-500;
+  }
+}
+
+/* =========================
+   COMPONENT UTILITIES
+   ========================= */
+@layer components {
+  /* =========================
+     GLOBAL AURA BACKGROUND
+     Uso:
+     <div className="app-bg">
+       <div className="app-bg-content">...</div>
+     </div>
+     ========================= */
+  .app-bg {
+    @apply relative min-h-screen overflow-hidden;
+  }
+
+  .app-bg::before {
+    content: "";
+    position: fixed;           /* globale su tutte le pagine */
+    inset: -20%;               /* più grande del viewport */
+    z-index: -1;
+    pointer-events: none;
+
+    background:
+      radial-gradient(900px 600px at 15% 18%, rgba(16,185,129,.45), transparent 60%),
+      radial-gradient(900px 600px at 55% 45%, rgba(251,191,36,.35), transparent 62%),
+      radial-gradient(900px 600px at 85% 22%, rgba(56,189,248,.40), transparent 60%),
+      linear-gradient(135deg, rgba(15,23,42,.06), rgba(15,23,42,.02));
+
+    filter: blur(70px);
+    transform: translateZ(0);
+  }
+
+  .app-bg-content {
+    @apply relative z-10 min-h-screen;
+  }
+
+  /* =========================
+     PANELS / CARDS
+     ========================= */
+  /* Pannelli grandi (form/list) in modalità “glass” */
+  .panel-glass {
+    @apply rounded-xl border border-white/40 shadow-sm;
+    @apply bg-white/65 backdrop-blur-lg;
+  }
+
+  /* Variante solida (tabelle super leggibili) */
+  .panel-solid {
+    @apply rounded-xl border border-gray-200 shadow-sm bg-white;
+  }
+
+  /* Card “glass” standard */
+  .card {
+    @apply rounded-xl border border-white/40 shadow-sm;
+    @apply bg-white/65 backdrop-blur-lg;
+  }
+
+  .card-header {
+    @apply px-4 py-3 border-b border-gray-200/60 flex items-center justify-between;
+  }
+
+  .card-title {
+    @apply text-base font-semibold text-gray-900;
+  }
+
+  .card-subtitle {
+    @apply text-xs text-gray-500;
+  }
+
+  .card-body {
+    @apply p-4;
+  }
+
+  /* =========================
+     ICON BUTTONS
+     ========================= */
+  .btn-icon {
+    @apply inline-flex items-center gap-2;
+  }
+
+  .btn-square {
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-lg
+           border border-gray-300 bg-white/80 hover:bg-white transition-colors;
+    @apply backdrop-blur-sm;
+  }
+
+  .btn-square-primary {
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-lg
+           bg-teal-700 text-white hover:bg-teal-800 transition-colors;
+  }
+
+  .icon-16 { width: 16px; height: 16px; }
+  .icon-18 { width: 18px; height: 18px; }
+
+  /* =========================
+     TABLES
+     ========================= */
+  .table {
+    @apply w-full text-sm border-collapse;
+  }
+
+  .thead {
+    @apply text-xs uppercase tracking-wide text-gray-500;
+    @apply bg-white/50 backdrop-blur-sm;
+  }
+
+  .th {
+    @apply px-3 py-2 text-left font-semibold border-b border-gray-200/70;
+  }
+
+  .td {
+    @apply px-3 py-2 border-b border-gray-100/70 align-middle;
+  }
+
+  .tr-hover {
+    @apply hover:bg-white/40 transition-colors;
+  }
+
+  /* Numeric alignment */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* =========================
+     STATUS PILLS
+     ========================= */
+  .pill {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+
+  .pill-ok {
+    @apply bg-green-50/80 text-green-700;
+  }
+
+  .pill-warn {
+    @apply bg-amber-50/80 text-amber-700;
+  }
+
+  .pill-bad {
+    @apply bg-red-50/80 text-red-700;
+  }
+
+  /* =========================
+     BUTTONS
+     ========================= */
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-3 py-2 text-sm font-semibold
+           rounded-lg bg-teal-700 text-white hover:bg-teal-800 transition-colors;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center px-3 py-2 text-sm font-semibold
+           rounded-lg border border-gray-300 bg-white/80 hover:bg-white transition-colors;
+    @apply backdrop-blur-sm;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center px-3 py-2 text-sm font-semibold
+           rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors;
+  }
 }

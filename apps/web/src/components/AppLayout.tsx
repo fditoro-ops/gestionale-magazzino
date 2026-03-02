@@ -1,6 +1,7 @@
 import type React from "react";
+import MartiniLogo from "./MartiniLogo"; // ✅ aggiusta il path se serve
 
-export type TabKey = "dashboard" | "movements" | "warehouse" | "items" | "orders"; // ✅ NEW
+export type TabKey = "dashboard" | "movements" | "warehouse" | "items" | "orders";
 
 export default function AppLayout({
   tab,
@@ -22,7 +23,7 @@ export default function AppLayout({
       {/* SIDEBAR */}
       <aside style={styles.sidebar}>
         <div style={styles.brand}>
-          <div style={styles.brandLogo} />
+          <MartiniLogo size={120} />
           <div style={styles.brandText}>Core</div>
         </div>
 
@@ -52,17 +53,16 @@ export default function AppLayout({
             Articoli
           </SideItem>
 
-          {/* ✅ NEW */}
-          <SideItem
-            active={tab === "orders"}
-            onClick={() => onTabChange("orders")}
-          >
+          <SideItem active={tab === "orders"} onClick={() => onTabChange("orders")}>
             Ordini
           </SideItem>
 
           <div style={styles.navSpacer} />
 
-          <SideItem active={false} onClick={() => alert("Step dopo: Impostazioni")}>
+          <SideItem
+            active={false}
+            onClick={() => alert("Step dopo: Impostazioni")}
+          >
             Impostazioni
           </SideItem>
         </nav>
@@ -156,30 +156,36 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "260px 1fr",
     minHeight: "100vh",
-    background: "#EEF2F6",
+    background: "transparent",
   },
+
   sidebar: {
     background: "linear-gradient(180deg, #1F6B76 0%, #114E59 100%)",
     color: "white",
     padding: 18,
     boxShadow: "2px 0 18px rgba(0,0,0,0.12)",
   },
+
+  // ✅ BRAND: verticale, logo grande (SVG trasparente)
   brand: {
     display: "flex",
+    flexDirection: "column",
     alignItems: "center",
-    gap: 12,
-    padding: "10px 8px 18px 8px",
+    justifyContent: "center",
+    gap: 10,
+    padding: "18px 0 22px 0",
     borderBottom: "1px solid rgba(255,255,255,0.14)",
-    marginBottom: 14,
+    marginBottom: 18,
   },
-  brandLogo: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    background: "rgba(255,255,255,0.18)",
+
+  brandText: {
+    fontSize: 24,
+    fontWeight: 800,
+    letterSpacing: 0.5,
   },
-  brandText: { fontSize: 26, fontWeight: 800, letterSpacing: 0.3 },
+
   nav: { display: "flex", flexDirection: "column", gap: 10 },
+
   sideItem: {
     textAlign: "left",
     padding: "12px 12px",
@@ -190,20 +196,27 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontWeight: 700,
   },
+
   sideItemActive: {
     background: "rgba(255,255,255,0.18)",
     border: "1px solid rgba(255,255,255,0.22)",
   },
+
   navSpacer: { flex: 1 },
-  main: { display: "flex", flexDirection: "column" },
+
+  main: { display: "flex", flexDirection: "column", background: "transparent" },
+
   topbar: {
     display: "flex",
     alignItems: "center",
     gap: 14,
     padding: "14px 18px",
-    background: "#F7FAFC",
-    borderBottom: "1px solid #D9E2EC",
+    background: "rgba(255,255,255,0.70)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
+    borderBottom: "1px solid rgba(217,226,236,0.8)",
   },
+
   searchWrap: {
     display: "flex",
     alignItems: "center",
@@ -215,14 +228,17 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     maxWidth: 520,
   },
+
   searchIcon: { opacity: 0.55 },
   search: { border: "none", outline: "none", width: "100%", fontSize: 14 },
+
   topbarRight: {
     marginLeft: "auto",
     display: "flex",
     alignItems: "center",
     gap: 12,
   },
+
   modeWrap: {
     display: "flex",
     border: "1px solid #D9E2EC",
@@ -230,6 +246,7 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: "hidden",
     background: "white",
   },
+
   modeBtn: {
     padding: "10px 12px",
     border: "none",
@@ -238,7 +255,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     color: "#334E68",
   },
+
   modeBtnActive: { background: "#0B7285", color: "white" },
+
   reloadBtn: {
     padding: "10px 12px",
     borderRadius: 12,
@@ -247,21 +266,27 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontWeight: 700,
   },
+
   user: { display: "flex", alignItems: "center", gap: 10, paddingLeft: 6 },
   avatar: { width: 34, height: 34, borderRadius: 999, background: "#CBD5E1" },
   userName: { fontWeight: 800, fontSize: 13, color: "#243B53" },
   userSub: { fontSize: 11, color: "#627D98" },
+
   content: { padding: 18 },
+
   footer: {
     marginTop: "auto",
     padding: "10px 18px",
     fontSize: 12,
     color: "#52606D",
-    borderTop: "1px solid #D9E2EC",
-    background: "#F7FAFC",
+    borderTop: "1px solid rgba(217,226,236,0.8)",
+    background: "rgba(255,255,255,0.70)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
     display: "flex",
     alignItems: "center",
     gap: 10,
   },
+
   dot: { opacity: 0.5 },
 };
