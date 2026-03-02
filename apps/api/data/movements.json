@@ -187,5 +187,12 @@
     "reason": "RICEZIONE_ORDINE",
     "date": "2026-02-16T14:59:41.285Z",
     "note": "ORD:ord_9c891ec4-1e01-4530-beba-aaf6973c170f"
+  },
+  {
+    "id": "3dccdc51-71e7-4a1f-8c9c-4e33fa1c4c90",
+    "sku": "SKU144",
+    "quantity": 3,
+    "type": "IN",
+    "date": "2026-02-27T05:49:52.832Z"
   }
 ]

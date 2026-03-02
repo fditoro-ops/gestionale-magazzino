@@ -3,6 +3,8 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import basicAuth from "express-basic-auth";
+import fs from "fs";
+import crypto from "crypto";
 
 import movementsRouter from "./routes/movements.js";
 import stockV2Router from "./routes/stock.v2.js";
@@ -12,6 +14,8 @@ import ordersRouter from "./routes/orders.js";
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
 
+const CIC_WEBHOOK_SECRET = process.env.CIC_WEBHOOK_SECRET || "";
+
 // --- CORS ---
 app.use(
   cors({
@@ -19,7 +23,53 @@ app.use(
     credentials: true,
   })
 );
+// ✅ Webhook Cassa in Cloud: rispondi 200 anche a verifiche GET/HEAD/OPTIONS
+app.get("/webhooks/cic", (_req, res) => res.status(200).send("OK"));
+app.head("/webhooks/cic", (_req, res) => res.status(200).end());
+app.options("/webhooks/cic", (_req, res) => res.status(200).end());
+// ✅ Webhook Cassa in Cloud: DEVE stare prima di express.json()
+app.post("/webhooks/cic", express.raw({ type: "*/*" }), (req, res) => {
+  // Rispondi subito 200
+  res.status(200).send("OK");
 
+  try {
+    const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";
+    console.log("CIC RAW:", raw);
+
+    // Verifica firma (se presente)
+    const signature = (req.header("x-cn-signature") || "").trim();
+    if (CIC_WEBHOOK_SECRET && signature) {
+      const computed = crypto
+        .createHmac("sha256", CIC_WEBHOOK_SECRET)
+        .update(raw)
+        .digest("hex");
+
+      if (!timingSafeEqualHex(computed, signature)) {
+        console.error("CIC webhook: signature mismatch");
+        return;
+      }
+    }
+
+    const data = JSON.parse(raw);
+    console.log("CIC JSON:", data);
+
+    // TODO: qui dopo mappiamo items -> Movimentazione
+  } catch (err) {
+    console.error("CIC webhook error:", err);
+  }
+});
+
+function timingSafeEqualHex(a: string, b: string) {
+  try {
+    const ab = Buffer.from(a, "hex");
+    const bb = Buffer.from(b, "hex");
+    return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+  } catch {
+    return false;
+  }
+}
+
+// ✅ JSON per il resto delle API
 app.use(express.json());
 
 // --- Health (libero) ---
@@ -51,10 +101,10 @@ if (basicAuthEnabled) {
     });
 
     app.use((req, res, next) => {
-      // lascia libero health
-      if (req.path === "/health") return next();
-      return auth(req, res, next);
-    });
+  if (req.path === "/health") return next();
+  if (req.path.startsWith("/webhooks/cic")) return next();
+  return auth(req, res, next);
+});
 
     console.log("🔐 Basic Auth ATTIVA");
   }
@@ -73,16 +123,24 @@ if (process.env.NODE_ENV !== "development") {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
 
-  // __dirname = apps/api/dist/src
-  // ../../../web/dist => apps/web/dist ✅
   const webPath = path.resolve(__dirname, "../../../web/dist");
   console.log("📦 Static path:", webPath);
 
-  app.use(express.static(webPath));
+  const indexHtml = path.join(webPath, "index.html");
 
-  app.get("*", (_req, res) => {
-    res.sendFile(path.join(webPath, "index.html"));
-  });
+  if (fs.existsSync(indexHtml)) {
+    app.use(express.static(webPath));
+
+    app.get("*", (req, res, next) => {
+      const accept = req.headers.accept ?? "";
+      if (!accept.includes("text/html")) return next();
+      res.sendFile(indexHtml);
+    });
+
+    console.log("✅ Frontend static attivo");
+  } else {
+    console.warn("⚠️ Frontend build non trovato: manca", indexHtml);
+  }
 }
 
 app.listen(PORT, "0.0.0.0", () => {
