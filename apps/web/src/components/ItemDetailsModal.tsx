@@ -114,52 +114,51 @@ export default function ItemDetailsModal({
   if (!open || !item) return null;
 
   async function handleSave() {
-    setErr(null);
+  setErr(null);
 
-    if (!name.trim()) {
-      setErr("Nome articolo obbligatorio.");
-      return;
-    }
-    if (!isHttpUrl(imageUrl)) {
-      setErr("URL immagine non valido (deve iniziare con http/https).");
-      return;
-    }
+  if (!item) return; // ✅ FIX TS18047
 
-    const patch: any = {
-      name: name.trim(),
-      brand: brand.trim() || null,
-      supplier: supplier || "VARI",
-      categoryId: categoryId.trim() || null,
-      packSize: packSize.trim() ? Number(packSize) : null,
-
-      stockKind,
-      minStockCl: Number(minStockCl ?? 0),
-
-      lastCostCents: euroToCents(lastCostEuro),
-      costCurrency: "EUR",
-
-      imageUrl: imageUrl.trim() || null,
-      active,
-    };
-
-    if (stockKind === "UNIT") {
-      patch.unitToCl = Number(unitToCl ?? 0);
-      patch.containerSizeCl = null;
-      patch.containerLabel = null;
-    } else {
-      patch.unitToCl = null;
-      patch.containerSizeCl = Number(containerSizeCl ?? 0);
-      patch.containerLabel = containerLabel.trim() || "Bottiglia";
-    }
-
-    try {
-      await onSavePatch(item.sku, patch);
-      onClose();
-    } catch (e: any) {
-      setErr(e?.message ?? "Errore salvataggio");
-    }
+  if (!name.trim()) {
+    setErr("Nome articolo obbligatorio.");
+    return;
   }
 
+  if (!isHttpUrl(imageUrl)) {
+    setErr("URL immagine non valido (deve iniziare con http/https).");
+    return;
+  }
+
+  const patch: any = {
+    name: name.trim(),
+    brand: brand.trim() || null,
+    supplier: supplier || "VARI",
+    categoryId: categoryId.trim() || null,
+    packSize: packSize.trim() ? Number(packSize) : null,
+    stockKind,
+    minStockCl: Number(minStockCl ?? 0),
+    lastCostCents: euroToCents(lastCostEuro),
+    costCurrency: "EUR",
+    imageUrl: imageUrl.trim() || null,
+    active,
+  };
+
+  if (stockKind === "UNIT") {
+    patch.unitToCl = Number(unitToCl ?? 0);
+    patch.containerSizeCl = null;
+    patch.containerLabel = null;
+  } else {
+    patch.unitToCl = null;
+    patch.containerSizeCl = Number(containerSizeCl ?? 0);
+    patch.containerLabel = containerLabel.trim() || "Bottiglia";
+  }
+
+  try {
+    await onSavePatch(item.sku, patch);
+    onClose();
+  } catch (e: any) {
+    setErr(e?.message ?? "Errore salvataggio");
+  }
+}
   const labelCls = "text-xs font-medium text-gray-600";
   const helpCls = "text-xs text-gray-500";
 
