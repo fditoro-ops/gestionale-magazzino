@@ -1,3 +1,5 @@
+import express from "express";
+import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import basicAuth from "express-basic-auth";
@@ -7,10 +9,8 @@ import crypto from "crypto";
 import movementsRouter from "./routes/movements.js";
 import stockV2Router from "./routes/stock.v2.js";
 import itemsRouter from "./routes/items.js";
-import ordersRouter from "./routes/orders.js";
+import ordersRouter from "./routes/ordersRouter.js"; // <-- se da te è "./routes/orders.js" cambia questa riga
 import { applyRecipeStock } from "./services/recipeStock.service.js";
-import express from "express";
-import cors from "cors";
 
 /* =========================
    BOM (Google Sheet) Reader
@@ -48,10 +48,10 @@ async function loadBomFromSheet(): Promise<BomMap> {
   for (const r of rows) {
     const c = r?.c ?? [];
 
-    // A: ID PRODOTTO FINITO
-    // C: ID MATERIA PRIMA
-    // E: UNITA UTILIZZATA
-    // F: U.M. USCITA
+    // A: SKU PRODOTTO FINITO
+    // C: SKU INGREDIENTE
+    // E: QTA
+    // F: U.M.
     const productSku = c?.[0]?.v ? String(c[0].v).trim() : "";
     const ingredientSku = c?.[2]?.v ? String(c[2].v).trim() : "";
     const qty = Number(c?.[4]?.v ?? 0);
@@ -81,16 +81,11 @@ async function syncBom() {
 }
 
 /* =========================
-   App
+   CIC (Cassa in Cloud) Sync
    ========================= */
 
-const app = express();
-const PORT = Number(process.env.PORT ?? 3001);
-
-// --- Cassa in Cloud ---
 const CIC_WEBHOOK_SECRET = process.env.CIC_WEBHOOK_SECRET || "";
 const CIC_API_KEY = process.env.CIC_API_KEY || "";
-
 const CIC_API_BASE_URL = process.env.CIC_API_BASE_URL || "https://api.cassanova.com";
 const CIC_X_VERSION = process.env.CIC_X_VERSION || "1.0.0";
 const CIC_PRODUCTS_PATH = process.env.CIC_PRODUCTS_PATH || "/products";
@@ -178,6 +173,7 @@ async function syncCicProducts() {
         const productSku = String(p?.internalId || "");
         if (productId && productSku) map[productId] = productSku;
 
+        // mappa varianti
         const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
         for (const v of variants) {
           const variantId = String(v?.id || "");
@@ -199,7 +195,7 @@ async function syncCicProducts() {
 }
 
 function cicResolveSku(id: string) {
-  return cicIdToSkuMap[id] || id;
+  return cicIdToSkuMap[id] || id; // fallback: se non trova, lascia UUID
 }
 
 function cicExtractItems(data: any) {
@@ -226,7 +222,14 @@ function cicExtractItems(data: any) {
     })
     .filter((x: any) => x.sku && x.qty);
 }
-console.log("CIC ITEMS RAW:", items);
+
+/* =========================
+   App
+   ========================= */
+
+const app = express();
+const PORT = Number(process.env.PORT ?? 3001);
+
 /* =========================
    Middleware
    ========================= */
@@ -238,12 +241,12 @@ app.use(
   })
 );
 
-// ✅ Webhook checks
+// ✅ Webhook checks (CIC fa anche GET/HEAD/OPTIONS di verifica)
 app.get("/webhooks/cic", (_req, res) => res.status(200).send("OK"));
 app.head("/webhooks/cic", (_req, res) => res.status(200).end());
 app.options("/webhooks/cic", (_req, res) => res.status(200).end());
 
-// ✅ Webhook raw
+// ✅ Webhook raw body (firma HMAC)
 app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
   try {
     const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";
@@ -261,6 +264,7 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
       }
     }
 
+    // Solo scontrini
     if (!operation.startsWith("RECEIPT/")) {
       console.log("CIC skipped (not receipt):", operation);
       return res.status(200).send("OK");
@@ -273,14 +277,21 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
     const tenantId = process.env.TENANT_ID || "IMP001";
 
     let items = cicExtractItems(data);
+    console.log("CIC ITEMS RAW (prima):", items);
 
+    // Se ci sono UUID non risolti, prova sync e ricalcola
     const hasUnresolved = items.some((it) => String(it.sku).includes("-"));
     if (hasUnresolved) {
       console.log("ℹ️ CIC: trovati ID non risolti, provo sync prodotti…");
       await syncCicProducts();
       items = cicExtractItems(data);
+      console.log("CIC ITEMS RAW (dopo sync):", items);
+
+      const unresolved = items.filter((it) => String(it.sku).includes("-"));
+      if (unresolved.length) console.log("❗UNRESOLVED:", unresolved);
     }
 
+    // Scarico ingredienti da ricetta
     const inserted = applyRecipeStock({
       docId,
       tenantId,
@@ -297,11 +308,11 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
   }
 });
 
-// ✅ JSON for the rest
+// ✅ JSON per il resto delle API
 app.use(express.json());
 
 /* =========================
-   Debug endpoints
+   Debug / Health
    ========================= */
 
 app.get("/debug/recipes", (_req, res) => {
@@ -313,7 +324,6 @@ app.get("/debug/recipes", (_req, res) => {
   });
 });
 
-// --- Health (libero) ---
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
@@ -324,7 +334,10 @@ app.get("/health", (_req, res) => {
   });
 });
 
-// --- Basic Auth ---
+/* =========================
+   Basic Auth (protezione)
+   ========================= */
+
 const basicAuthEnabled = process.env.BASIC_AUTH_ENABLED === "true";
 const user = process.env.BASIC_AUTH_USER ?? "";
 const pass = process.env.BASIC_AUTH_PASS ?? "";
@@ -340,13 +353,19 @@ if (basicAuthEnabled && user && pass) {
   });
 }
 
-// --- API routes ---
+/* =========================
+   API routes
+   ========================= */
+
 app.use("/items", itemsRouter);
 app.use("/movements", movementsRouter);
 app.use("/stock-v2", stockV2Router);
 app.use("/orders", ordersRouter);
 
-// --- Static frontend ---
+/* =========================
+   Static frontend
+   ========================= */
+
 if (process.env.NODE_ENV !== "development") {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -365,6 +384,10 @@ if (process.env.NODE_ENV !== "development") {
   }
 }
 
+/* =========================
+   Start
+   ========================= */
+
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`✅ Server attivo sulla porta ${PORT}`);
 
@@ -376,6 +399,6 @@ app.listen(PORT, "0.0.0.0", async () => {
   const msCic = Math.max(1, CIC_PRODUCTS_SYNC_HOURS) * 60 * 60 * 1000;
   setInterval(() => syncCicProducts(), msCic);
 
-  // refresh BOM ogni 5 minuti (puoi cambiare)
+  // refresh BOM ogni 5 min
   setInterval(() => syncBom(), 5 * 60 * 1000);
 });
