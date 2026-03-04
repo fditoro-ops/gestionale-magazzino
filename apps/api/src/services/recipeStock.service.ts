@@ -22,8 +22,8 @@ export function applyRecipeStock({
   soldItems: { sku: string; qty: number }[];
   bom: BomMap;
 }) {
-  const items = loadItems([]);
-  const movements = loadMovements([]);
+  const items = loadItems();
+const movements = loadMovements();
 
   // FIX TS7006 (o commentala/eliminala se non ti serve)
   // const bySku = new Map(items.map((i: any) => [i.sku, i]));
