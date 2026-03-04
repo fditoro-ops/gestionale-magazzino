@@ -10,8 +10,8 @@ export function saveItems(items: any[]) {
 
 export function loadItems(defaultItems: any[] = []) {
   try {
-    if (!fs.existsSync(ITEMS_FILE)) return defaultItems;
-    const raw = fs.readFileSync(ITEMS_FILE, "utf-8");
+    if (!fs.existsSync(FILE)) return defaultItems;
+    const raw = fs.readFileSync(FILE, "utf-8");
     const data = JSON.parse(raw);
     return Array.isArray(data) ? data : defaultItems;
   } catch {
