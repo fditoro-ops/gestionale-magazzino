@@ -9,13 +9,13 @@ export function saveItems(items: any[]) {
   fs.writeFileSync(FILE, JSON.stringify(items, null, 2), "utf-8");
 }
 
-export function loadItems() {
+export function loadItems(defaultItems: any[] = []) {
   try {
-    if (!fs.existsSync(FILE)) return [];
+    if (!fs.existsSync(FILE)) return defaultItems;
     const raw = fs.readFileSync(FILE, "utf-8");
     const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : [];
+    return Array.isArray(data) ? data : defaultItems;
   } catch {
-    return [];
+    return defaultItems;
   }
 }
