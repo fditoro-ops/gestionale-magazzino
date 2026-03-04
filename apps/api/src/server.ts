@@ -11,6 +11,78 @@ import stockV2Router from "./routes/stock.v2.js";
 import itemsRouter from "./routes/items.js";
 import ordersRouter from "./routes/orders.js";
 
+/* =========================
+   BOM (Google Sheet) Reader
+   ========================= */
+
+type BomLine = { ingredientSku: string; qty: number; um: string };
+type BomMap = Record<string, BomLine[]>;
+
+let bomCache: BomMap = {};
+let bomLastSyncAt: string | null = null;
+let bomLastError: string | null = null;
+
+async function loadBomFromSheet(): Promise<BomMap> {
+  const sheetId = process.env.BOM_SHEET_ID;
+  const tab = process.env.BOM_SHEET_TAB || "RICETTARIO";
+  if (!sheetId) throw new Error("BOM_SHEET_ID mancante");
+
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(
+    tab
+  )}`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`BOM fetch failed ${res.status}: ${txt}`);
+  }
+
+  const text = await res.text();
+  // Google gviz response: "google.visualization.Query.setResponse(<json>);"
+  const json = JSON.parse(text.substring(47).slice(0, -2));
+  const rows = json?.table?.rows ?? [];
+
+  const recipes: BomMap = {};
+
+  for (const r of rows) {
+    const c = r?.c ?? [];
+
+    // A: ID PRODOTTO FINITO
+    // C: ID MATERIA PRIMA
+    // E: UNITA UTILIZZATA
+    // F: U.M. USCITA
+    const productSku = c?.[0]?.v ? String(c[0].v).trim() : "";
+    const ingredientSku = c?.[2]?.v ? String(c[2].v).trim() : "";
+    const qty = Number(c?.[4]?.v ?? 0);
+    const um = c?.[5]?.v ? String(c[5].v).trim().toUpperCase() : "";
+
+    if (!productSku || !ingredientSku) continue;
+    if (!qty || qty === 0) continue;
+
+    if (!recipes[productSku]) recipes[productSku] = [];
+    recipes[productSku].push({ ingredientSku, qty, um });
+  }
+
+  return recipes;
+}
+
+async function syncBom() {
+  try {
+    const recipes = await loadBomFromSheet();
+    bomCache = recipes;
+    bomLastSyncAt = new Date().toISOString();
+    bomLastError = null;
+    console.log("✅ BOM sync OK:", Object.keys(bomCache).length, "prodotti");
+  } catch (err: any) {
+    bomLastError = String(err?.message ?? err);
+    console.error("❌ BOM sync error:", bomLastError);
+  }
+}
+
+/* =========================
+   App
+   ========================= */
+
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
 
@@ -22,15 +94,12 @@ const CIC_API_BASE_URL = process.env.CIC_API_BASE_URL || "https://api.cassanova.
 const CIC_X_VERSION = process.env.CIC_X_VERSION || "1.0.0";
 const CIC_PRODUCTS_PATH = process.env.CIC_PRODUCTS_PATH || "/products";
 
-// Sync settings
 const CIC_PRODUCTS_LIMIT = Number(process.env.CIC_PRODUCTS_LIMIT || 200);
 const CIC_PRODUCTS_SYNC_HOURS = Number(process.env.CIC_PRODUCTS_SYNC_HOURS || 6);
 
-// Cache: UUID (product.id OR variant.id) -> internalId (SKU000xxx)
 let cicIdToSkuMap: Record<string, string> = {};
 let cicProductsLastSyncAt: string | null = null;
 
-// Token cache
 let cicBearerToken: string | null = null;
 let cicBearerTokenExpMs: number | null = null;
 
@@ -108,7 +177,6 @@ async function syncCicProducts() {
         const productSku = String(p?.internalId || "");
         if (productId && productSku) map[productId] = productSku;
 
-        // ✅ IMPORTANT: mappa anche le varianti (nel webhook spesso arriva idProductVariant)
         const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
         for (const v of variants) {
           const variantId = String(v?.id || "");
@@ -118,7 +186,7 @@ async function syncCicProducts() {
       }
 
       start += limit;
-      if (!products.length) break; // safety
+      if (!products.length) break;
     }
 
     cicIdToSkuMap = map;
@@ -130,71 +198,8 @@ async function syncCicProducts() {
 }
 
 function cicResolveSku(id: string) {
-  return cicIdToSkuMap[id] || id; // fallback: UUID se non risolto
+  return cicIdToSkuMap[id] || id;
 }
-
-// --- CORS ---
-app.use(
-  cors({
-    origin: process.env.NODE_ENV === "production" ? true : "http://localhost:5173",
-    credentials: true,
-  })
-);
-
-// ✅ Webhook Cassa in Cloud: rispondi 200 anche a verifiche GET/HEAD/OPTIONS
-app.get("/webhooks/cic", (_req, res) => res.status(200).send("OK"));
-app.head("/webhooks/cic", (_req, res) => res.status(200).end());
-app.options("/webhooks/cic", (_req, res) => res.status(200).end());
-
-// ✅ Webhook Cassa in Cloud (RAW BODY)
-app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
-  try {
-    const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";
-
-    const signature = (req.header("x-cn-signature") || "").trim();
-    const operation = (req.header("x-cn-operation") || "").trim();
-
-    console.log("CIC x-cn-operation:", operation);
-
-    // 🔐 Verifica firma HMAC SHA-1
-    if (CIC_WEBHOOK_SECRET && signature) {
-      const expected = crypto.createHmac("sha1", CIC_WEBHOOK_SECRET).update(raw, "utf8").digest("hex");
-      if (signature !== expected) {
-        console.error("❌ CIC signature mismatch");
-        return res.status(401).send("Invalid signature");
-      }
-    }
-
-    // ✅ Solo scontrini
-    if (!operation.startsWith("RECEIPT/")) {
-      console.log("CIC skipped (not receipt):", operation);
-      return res.status(200).send("OK");
-    }
-
-    const data = JSON.parse(raw);
-
-    const docId = "CIC-" + String(data?.document?.id || data?.id || "");
-    const items = cicExtractItems(data);
-
-    console.log("CIC DOCID:", docId);
-    console.log("CIC ITEMS (sku risolta):", items);
-
-    // Se vediamo UUID non risolti, proviamo una sync al volo (best effort)
-    const hasUnresolved = items.some((it) => it.sku.includes("-")); // UUID contiene "-"
-    if (hasUnresolved) {
-      console.log("ℹ️ CIC: trovati ID non risolti, provo sync prodotti…");
-      await syncCicProducts();
-    }
-
-    // TODO: qui scrivi Movimentazione DB-SCARICO usando it.sku = SKU000xxx
-    // Esempio idempotenza: usa docId + sku
-
-    return res.status(200).send("OK");
-  } catch (err) {
-    console.error("CIC webhook error:", err);
-    return res.status(500).send("Webhook error");
-  }
-});
 
 function cicExtractItems(data: any) {
   const rows = data?.document?.rows ?? [];
@@ -205,25 +210,100 @@ function cicExtractItems(data: any) {
       const qty = Number(r?.quantity ?? 0);
       const price = Number(r?.price ?? 0);
 
-      // Nel webhook arrivano entrambi, spesso variant è quello che vuoi
       const idVariant = String(r?.idProductVariant ?? "");
       const idProduct = String(r?.idProduct ?? "");
 
       const resolved = cicResolveSku(idVariant || idProduct);
 
       return {
-        sku: resolved,                 // ✅ SKU000xxx quando la mappa è ok
+        sku: resolved,
         qty,
         total: qty * price,
-        _idProduct: idProduct,         // debug
-        _idProductVariant: idVariant,  // debug
+        _idProduct: idProduct,
+        _idProductVariant: idVariant,
       };
     })
     .filter((x: any) => x.sku && x.qty);
 }
 
-// ✅ JSON per il resto delle API
+/* =========================
+   Middleware
+   ========================= */
+
+app.use(
+  cors({
+    origin: process.env.NODE_ENV === "production" ? true : "http://localhost:5173",
+    credentials: true,
+  })
+);
+
+// ✅ Webhook checks
+app.get("/webhooks/cic", (_req, res) => res.status(200).send("OK"));
+app.head("/webhooks/cic", (_req, res) => res.status(200).end());
+app.options("/webhooks/cic", (_req, res) => res.status(200).end());
+
+// ✅ Webhook raw
+app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
+  try {
+    const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";
+
+    const signature = (req.header("x-cn-signature") || "").trim();
+    const operation = (req.header("x-cn-operation") || "").trim();
+
+    console.log("CIC x-cn-operation:", operation);
+
+    if (CIC_WEBHOOK_SECRET && signature) {
+      const expected = crypto.createHmac("sha1", CIC_WEBHOOK_SECRET).update(raw, "utf8").digest("hex");
+      if (signature !== expected) {
+        console.error("❌ CIC signature mismatch");
+        return res.status(401).send("Invalid signature");
+      }
+    }
+
+    if (!operation.startsWith("RECEIPT/")) {
+      console.log("CIC skipped (not receipt):", operation);
+      return res.status(200).send("OK");
+    }
+
+    const data = JSON.parse(raw);
+
+    const docId = "CIC-" + String(data?.document?.id || data?.id || "");
+    const items = cicExtractItems(data);
+
+    // Se ci sono UUID non risolti, prova sync
+    const hasUnresolved = items.some((it) => String(it.sku).includes("-"));
+    if (hasUnresolved) {
+      console.log("ℹ️ CIC: trovati ID non risolti, provo sync prodotti…");
+      await syncCicProducts();
+    }
+
+    console.log("CIC DOCID:", docId);
+    console.log("CIC ITEMS (sku risolta):", items);
+
+    // 🔜 Step successivo: usare bomCache[SKU_FINITO] per generare movimenti ingredienti
+
+    return res.status(200).send("OK");
+  } catch (err) {
+    console.error("CIC webhook error:", err);
+    return res.status(500).send("Webhook error");
+  }
+});
+
+// ✅ JSON for the rest
 app.use(express.json());
+
+/* =========================
+   Debug endpoints
+   ========================= */
+
+app.get("/debug/recipes", (_req, res) => {
+  res.json({
+    recipesCount: Object.keys(bomCache).length,
+    bomLastSyncAt,
+    bomLastError,
+    sample: Object.entries(bomCache).slice(0, 5),
+  });
+});
 
 // --- Health (libero) ---
 app.get("/health", (_req, res) => {
@@ -231,27 +311,22 @@ app.get("/health", (_req, res) => {
     ok: true,
     service: "gestionale-magazzino-api",
     time: new Date().toISOString(),
-    cicProducts: {
-      mapSize: Object.keys(cicIdToSkuMap).length,
-      lastSyncAt: cicProductsLastSyncAt,
-    },
+    cicProducts: { mapSize: Object.keys(cicIdToSkuMap).length, lastSyncAt: cicProductsLastSyncAt },
+    bom: { recipesCount: Object.keys(bomCache).length, lastSyncAt: bomLastSyncAt, lastError: bomLastError },
   });
 });
 
-// --- Basic Auth (PRIMA di routes e static) ---
+// --- Basic Auth ---
 const basicAuthEnabled = process.env.BASIC_AUTH_ENABLED === "true";
 const user = process.env.BASIC_AUTH_USER ?? "";
 const pass = process.env.BASIC_AUTH_PASS ?? "";
 
 if (basicAuthEnabled && user && pass) {
-  const auth = basicAuth({
-    users: { [user]: pass },
-    challenge: true,
-    realm: "Core (staging)",
-  });
+  const auth = basicAuth({ users: { [user]: pass }, challenge: true, realm: "Core (staging)" });
 
   app.use((req, res, next) => {
     if (req.path === "/health") return next();
+    if (req.path === "/debug/recipes") return next();
     if (req.path.startsWith("/webhooks/cic")) return next();
     return auth(req, res, next);
   });
@@ -263,7 +338,7 @@ app.use("/movements", movementsRouter);
 app.use("/stock-v2", stockV2Router);
 app.use("/orders", ordersRouter);
 
-// --- Static frontend in produzione/staging ---
+// --- Static frontend ---
 if (process.env.NODE_ENV !== "development") {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -285,12 +360,14 @@ if (process.env.NODE_ENV !== "development") {
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`✅ Server attivo sulla porta ${PORT}`);
 
-  // prima sync
+  // Sync iniziali
   await syncCicProducts();
+  await syncBom();
 
-  // refresh periodico
-  const ms = Math.max(1, CIC_PRODUCTS_SYNC_HOURS) * 60 * 60 * 1000;
-  setInterval(() => {
-    syncCicProducts();
-  }, ms);
+  // refresh periodico CIC
+  const msCic = Math.max(1, CIC_PRODUCTS_SYNC_HOURS) * 60 * 60 * 1000;
+  setInterval(() => syncCicProducts(), msCic);
+
+  // refresh BOM ogni 5 minuti (puoi cambiare)
+  setInterval(() => syncBom(), 5 * 60 * 1000);
 });
