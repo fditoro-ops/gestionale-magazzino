@@ -9,6 +9,8 @@ import stockV2Router from "./routes/stock.v2.js";
 import itemsRouter from "./routes/items.js";
 import ordersRouter from "./routes/orders.js";
 import { applyRecipeStock } from "./services/recipeStock.service";
+import express from "express";
+import cors from "cors";
 
 /* =========================
    BOM (Google Sheet) Reader
@@ -288,31 +290,6 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
     });
 
     console.log("✅ SCARICHI GENERATI:", inserted);
-    return res.status(200).send("OK");
-  } catch (err) {
-    console.error("CIC webhook error:", err);
-    return res.status(500).send("Webhook error");
-  }
-});
-console.log("SCARICHI GENERATI:", inserted);
-   
-     const data = JSON.parse(raw);
-
-    const docId = "CIC-" + String(data?.document?.id || data?.id || "");
-    const items = cicExtractItems(data);
-
-    // Se ci sono UUID non risolti, prova sync
-    const hasUnresolved = items.some((it) => String(it.sku).includes("-"));
-    if (hasUnresolved) {
-      console.log("ℹ️ CIC: trovati ID non risolti, provo sync prodotti…");
-      await syncCicProducts();
-    }
-
-    console.log("CIC DOCID:", docId);
-    console.log("CIC ITEMS (sku risolta):", items);
-
-    // 🔜 Step successivo: usare bomCache[SKU_FINITO] per generare movimenti ingredienti
-
     return res.status(200).send("OK");
   } catch (err) {
     console.error("CIC webhook error:", err);
