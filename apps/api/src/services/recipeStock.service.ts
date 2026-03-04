@@ -1,5 +1,5 @@
-import { loadItems } from "../data/items.store";
-import { loadMovements, saveMovements } from "../data/movements.store";
+import { loadItems } from "../data/items.store.js";
+import { loadMovements, saveMovements } from "../data/movements.store.js";
 
 type BomLine = {
   ingredientSku: string;
