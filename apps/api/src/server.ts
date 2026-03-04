@@ -251,7 +251,6 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
 
     console.log("CIC x-cn-operation:", operation);
 
-    // 🔐 Firma
     if (CIC_WEBHOOK_SECRET && signature) {
       const expected = crypto.createHmac("sha1", CIC_WEBHOOK_SECRET).update(raw, "utf8").digest("hex");
       if (signature !== expected) {
@@ -260,30 +259,19 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
       }
     }
 
-    // ✅ Solo scontrini
     if (!operation.startsWith("RECEIPT/")) {
       console.log("CIC skipped (not receipt):", operation);
       return res.status(200).send("OK");
     }
 
-    // ✅ Parse body
     const data = JSON.parse(raw);
 
-    // ✅ docId
     const docId = "CIC-" + String(data?.document?.id || data?.id || "");
-
-    // ✅ data/ora (fallback ad adesso se non c'è)
-    const orderDate = new Date(
-      data?.document?.date || data?.document?.creationDate || Date.now()
-    );
-
-    // ✅ tenantId: per ora prendiamolo da ENV (poi lo rendiamo multi-tenant)
+    const orderDate = new Date(data?.document?.date || data?.document?.creationDate || Date.now());
     const tenantId = process.env.TENANT_ID || "IMP001";
 
-    // ✅ righe vendute (SKU già risolto se mappa ok)
     let items = cicExtractItems(data);
 
-    // Se ci sono UUID non risolti, prova sync e ri-estrai
     const hasUnresolved = items.some((it) => String(it.sku).includes("-"));
     if (hasUnresolved) {
       console.log("ℹ️ CIC: trovati ID non risolti, provo sync prodotti…");
@@ -291,27 +279,21 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
       items = cicExtractItems(data);
     }
 
-    console.log("CIC DOCID:", docId);
-    console.log("CIC ITEMS (sku risolta):", items);
-
-    // ✅ Applica ricettario (BOM)
     const inserted = applyRecipeStock({
       docId,
       tenantId,
       orderDate,
       soldItems: items.map((i: any) => ({ sku: i.sku, qty: i.qty })),
-      bom: bomCache, // <-- questa è la tua cache aggiornata da syncBom()
+      bom: bomCache,
     });
 
     console.log("✅ SCARICHI GENERATI:", inserted);
-
     return res.status(200).send("OK");
   } catch (err) {
     console.error("CIC webhook error:", err);
     return res.status(500).send("Webhook error");
   }
 });
-
 console.log("SCARICHI GENERATI:", inserted);
    
      const data = JSON.parse(raw);
