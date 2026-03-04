@@ -198,6 +198,7 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
 
   return map;
 }
+
 async function syncCicProductModes() {
   try {
     const map = await loadCicProductModesFromSheet();
@@ -215,6 +216,7 @@ async function syncCicProductModes() {
     console.error("❌ PRODOTTI_CIC sync error:", cicProductModeLastError);
   }
 }
+
 /* =========================
    SHEET write helpers
    ========================= */
@@ -275,12 +277,15 @@ async function pushCatalogToSheet(rows: CicCatalogRow[]) {
 
 const CIC_WEBHOOK_SECRET = process.env.CIC_WEBHOOK_SECRET || "";
 const CIC_API_KEY = process.env.CIC_API_KEY || "";
-const CIC_API_BASE_URL = process.env.CIC_API_BASE_URL || "https://api.cassanova.com";
+const CIC_API_BASE_URL =
+  process.env.CIC_API_BASE_URL || "https://api.cassanova.com";
 const CIC_X_VERSION = process.env.CIC_X_VERSION || "1.0.0";
 const CIC_PRODUCTS_PATH = process.env.CIC_PRODUCTS_PATH || "/products";
 
 const CIC_PRODUCTS_LIMIT = Number(process.env.CIC_PRODUCTS_LIMIT || 200);
-const CIC_PRODUCTS_SYNC_HOURS = Number(process.env.CIC_PRODUCTS_SYNC_HOURS || 6);
+const CIC_PRODUCTS_SYNC_HOURS = Number(
+  process.env.CIC_PRODUCTS_SYNC_HOURS || 6
+);
 
 let cicIdToSkuMap: Record<string, string> = {};
 let cicProductsLastSyncAt: string | null = null;
@@ -355,7 +360,9 @@ async function fetchAllCicProducts(): Promise<CicCatalogRow[]> {
 
     for (const p of products) {
       const productId = String(p?.id || "").trim();
-      const productName = String(p?.description || p?.descriptionLabel || "").trim();
+      const productName = String(
+        p?.description || p?.descriptionLabel || ""
+      ).trim();
       const productInternalId = String(p?.internalId || "").trim();
       const productExternalId = String(p?.externalId || "").trim();
 
@@ -402,7 +409,9 @@ async function fetchAllCicProducts(): Promise<CicCatalogRow[]> {
               name: variantName,
               internalId: variantInternalId,
               externalId: variantExternalId,
-              barcode: String(b?.barcode || b?.code || b?.value || b || "").trim(),
+              barcode: String(
+                b?.barcode || b?.code || b?.value || b || ""
+              ).trim(),
             });
           }
         }
@@ -488,7 +497,9 @@ async function syncCicProducts() {
           [];
 
         for (const b of pBarcodes) {
-          const code = String(b?.barcode || b?.code || b?.value || b || "").trim();
+          const code = String(
+            b?.barcode || b?.code || b?.value || b || ""
+          ).trim();
           if (code && productSku) map[code] = productSku;
         }
 
@@ -516,7 +527,9 @@ async function syncCicProducts() {
             [];
 
           for (const b of vBarcodes) {
-            const code = String(b?.barcode || b?.code || b?.value || b || "").trim();
+            const code = String(
+              b?.barcode || b?.code || b?.value || b || ""
+            ).trim();
             if (code && variantSku) map[code] = variantSku;
           }
         }
@@ -1041,10 +1054,13 @@ app.get("/debug/cic-pending-open", (_req, res) => {
     sample: rows.slice(-50),
   });
 });
+
 app.get("/debug/db", async (_req, res) => {
   try {
     const nowRes = await pool.query("SELECT NOW() as now");
-    const countRes = await pool.query("SELECT COUNT(*)::int as count FROM movements");
+    const countRes = await pool.query(
+      "SELECT COUNT(*)::int as count FROM movements"
+    );
     const sampleRes = await pool.query(`
       SELECT id, sku, quantity, type, reason, date, note, documento, tenant_id
       FROM movements
@@ -1067,6 +1083,7 @@ app.get("/debug/db", async (_req, res) => {
     });
   }
 });
+
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
