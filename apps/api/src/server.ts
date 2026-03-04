@@ -9,7 +9,7 @@ import crypto from "crypto";
 import movementsRouter from "./routes/movements.js";
 import stockV2Router from "./routes/stock.v2.js";
 import itemsRouter from "./routes/items.js";
-import ordersRouter from "./routes/ordersRouter.js"; // <-- se da te è "./routes/orders.js" cambia questa riga
+import ordersRouter from "./routes/orders.js";
 import { applyRecipeStock } from "./services/recipeStock.service.js";
 
 /* =========================
