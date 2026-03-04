@@ -1,4 +1,4 @@
-°import path from "path";
+import path from "path";
 import { fileURLToPath } from "url";
 import basicAuth from "express-basic-auth";
 import fs from "fs";
