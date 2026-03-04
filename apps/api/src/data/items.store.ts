@@ -4,8 +4,6 @@ import path from "path";
 
 const ITEMS_FILE = path.resolve(process.cwd(), "apps/api/data/items.json");
 
-console.log("ITEMS_STORE FILE =", ITEMS_FILE, "CWD =", process.cwd());
-
 export function saveItems(items: any[]) {
   fs.writeFileSync(ITEMS_FILE, JSON.stringify(items, null, 2), "utf-8");
 }
