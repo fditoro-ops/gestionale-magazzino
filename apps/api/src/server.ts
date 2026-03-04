@@ -226,7 +226,7 @@ function cicExtractItems(data: any) {
     })
     .filter((x: any) => x.sku && x.qty);
 }
-
+console.log("CIC ITEMS RAW:", items);
 /* =========================
    Middleware
    ========================= */
