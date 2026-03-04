@@ -2,17 +2,18 @@
 import fs from "fs";
 import path from "path";
 
-const FILE = path.join(process.cwd(), "data", "items.runtime.json");
-console.log("ITEMS_STORE FILE =", FILE, "CWD =", process.cwd());
+const ITEMS_FILE = path.resolve(process.cwd(), "apps/api/data/items.json");
+
+console.log("ITEMS_STORE FILE =", ITEMS_FILE, "CWD =", process.cwd());
 
 export function saveItems(items: any[]) {
-  fs.writeFileSync(FILE, JSON.stringify(items, null, 2), "utf-8");
+  fs.writeFileSync(ITEMS_FILE, JSON.stringify(items, null, 2), "utf-8");
 }
 
 export function loadItems(defaultItems: any[] = []) {
   try {
-    if (!fs.existsSync(FILE)) return defaultItems;
-    const raw = fs.readFileSync(FILE, "utf-8");
+    if (!fs.existsSync(ITEMS_FILE)) return defaultItems;
+    const raw = fs.readFileSync(ITEMS_FILE, "utf-8");
     const data = JSON.parse(raw);
     return Array.isArray(data) ? data : defaultItems;
   } catch {
