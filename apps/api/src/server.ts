@@ -8,7 +8,7 @@ import movementsRouter from "./routes/movements.js";
 import stockV2Router from "./routes/stock.v2.js";
 import itemsRouter from "./routes/items.js";
 import ordersRouter from "./routes/orders.js";
-import { applyRecipeStock } from "./services/recipeStock.service";
+import { applyRecipeStock } from "./services/recipeStock.service.js";
 import express from "express";
 import cors from "cors";
 
