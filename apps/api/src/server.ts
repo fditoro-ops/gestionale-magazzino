@@ -166,12 +166,11 @@ async function syncCicProducts() {
       }
 
       const json: any = await res.json();
-      const products: any[] = Array.isArray(json?.products) ? json.products : [];
-      totalCount = Number(json?.totalCount ?? products.length ?? 0);
+     const products: any[] = Array.isArray(json?.products) ? json.products : [];
 
-      for (const p of products) {
-  const productId = String(p?.id || "");
-
+if (products.length) {
+  console.log("CIC PRODUCT SAMPLE:", JSON.stringify(products[0], null, 2));
+}
   // SKU candidato (priorità)
   const productSku =
     String(p?.internalId || "") ||
