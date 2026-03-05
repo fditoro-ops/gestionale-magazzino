@@ -12,6 +12,8 @@ import itemsRouter from "./routes/items.js";
 import ordersRouter from "./routes/orders.js";
 import { applyRecipeStock } from "./services/recipeStock.service.js";
 
+import { upsertUnresolved, listUnresolved } from "./data/cicUnresolved.store.js";
+
 /* =========================
    BOM (Google Sheet) Reader
    ========================= */
@@ -39,7 +41,6 @@ async function loadBomFromSheet(): Promise<BomMap> {
   }
 
   const text = await res.text();
-  // Google gviz response: "google.visualization.Query.setResponse(<json>);"
   const json = JSON.parse(text.substring(47).slice(0, -2));
   const rows = json?.table?.rows ?? [];
 
@@ -173,7 +174,7 @@ async function syncCicProducts() {
         const productSku = String(p?.internalId || "");
         if (productId && productSku) map[productId] = productSku;
 
-        // mappa varianti
+        // Varianti: le mappiamo comunque, ma per ora non le usiamo nel resolve
         const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
         for (const v of variants) {
           const variantId = String(v?.id || "");
@@ -195,7 +196,7 @@ async function syncCicProducts() {
 }
 
 function cicResolveSku(id: string) {
-  return cicIdToSkuMap[id] || id; // fallback: se non trova, lascia UUID
+  return cicIdToSkuMap[id] || id;
 }
 
 function cicExtractItems(data: any) {
@@ -210,7 +211,8 @@ function cicExtractItems(data: any) {
       const idVariant = String(r?.idProductVariant ?? "");
       const idProduct = String(r?.idProduct ?? "");
 
-      const resolved = cicResolveSku(idVariant || idProduct);
+      // ✅ FASE 1: IGNORIAMO VARIANTI (priorità al productId)
+      const resolved = cicResolveSku(idProduct || idVariant);
 
       return {
         sku: resolved,
@@ -264,7 +266,6 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
       }
     }
 
-    // Solo scontrini
     if (!operation.startsWith("RECEIPT/")) {
       console.log("CIC skipped (not receipt):", operation);
       return res.status(200).send("OK");
@@ -277,26 +278,38 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
     const tenantId = process.env.TENANT_ID || "IMP001";
 
     let items = cicExtractItems(data);
-    console.log("CIC ITEMS RAW (prima):", items);
 
-    // Se ci sono UUID non risolti, prova sync e ricalcola
+    // se ci sono UUID non risolti, provo sync e ricalcolo
     const hasUnresolved = items.some((it) => String(it.sku).includes("-"));
     if (hasUnresolved) {
       console.log("ℹ️ CIC: trovati ID non risolti, provo sync prodotti…");
       await syncCicProducts();
       items = cicExtractItems(data);
-      console.log("CIC ITEMS RAW (dopo sync):", items);
-
-      const unresolved = items.filter((it) => String(it.sku).includes("-"));
-      if (unresolved.length) console.log("❗UNRESOLVED:", unresolved);
     }
 
-    // Scarico ingredienti da ricetta
+    const unresolved = items.filter((it) => String(it.sku).includes("-"));
+    if (unresolved.length) {
+      console.warn("❗CIC UNRESOLVED:", unresolved);
+
+      for (const it of unresolved) {
+        upsertUnresolved({
+          productId: it._idProduct || undefined,
+          variantId: it._idProductVariant || undefined,
+          rawSku: String(it.sku),
+          docId,
+          operation,
+          total: it.total,
+        });
+      }
+    }
+
+    const resolvedItems = items.filter((it) => !String(it.sku).includes("-"));
+
     const inserted = applyRecipeStock({
       docId,
       tenantId,
       orderDate,
-      soldItems: items.map((i: any) => ({ sku: i.sku, qty: i.qty })),
+      soldItems: resolvedItems.map((i: any) => ({ sku: i.sku, qty: i.qty })),
       bom: bomCache,
     });
 
@@ -324,6 +337,14 @@ app.get("/debug/recipes", (_req, res) => {
   });
 });
 
+app.get("/debug/cic-unresolved", (_req, res) => {
+  const rows = listUnresolved();
+  res.json({
+    count: rows.length,
+    sample: rows.slice(0, 30),
+  });
+});
+
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
@@ -348,6 +369,7 @@ if (basicAuthEnabled && user && pass) {
   app.use((req, res, next) => {
     if (req.path === "/health") return next();
     if (req.path === "/debug/recipes") return next();
+    if (req.path === "/debug/cic-unresolved") return next();
     if (req.path.startsWith("/webhooks/cic")) return next();
     return auth(req, res, next);
   });
@@ -391,14 +413,11 @@ if (process.env.NODE_ENV !== "development") {
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`✅ Server attivo sulla porta ${PORT}`);
 
-  // Sync iniziali
   await syncCicProducts();
   await syncBom();
 
-  // refresh periodico CIC
   const msCic = Math.max(1, CIC_PRODUCTS_SYNC_HOURS) * 60 * 60 * 1000;
   setInterval(() => syncCicProducts(), msCic);
 
-  // refresh BOM ogni 5 min
   setInterval(() => syncBom(), 5 * 60 * 1000);
 });
