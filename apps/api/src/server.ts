@@ -10,8 +10,8 @@ import movementsRouter from "./routes/movements.js";
 import stockV2Router from "./routes/stock.v2.js";
 import itemsRouter from "./routes/items.js";
 import ordersRouter from "./routes/orders.js";
-import { applyRecipeStock } from "./services/recipeStock.service.js";
 
+import { applyRecipeStock } from "./services/recipeStock.service.js";
 import { upsertUnresolved, listUnresolved } from "./data/cicUnresolved.store.js";
 
 /* =========================
@@ -48,11 +48,6 @@ async function loadBomFromSheet(): Promise<BomMap> {
 
   for (const r of rows) {
     const c = r?.c ?? [];
-
-    // A: SKU PRODOTTO FINITO
-    // C: SKU INGREDIENTE
-    // E: QTA
-    // F: U.M.
     const productSku = c?.[0]?.v ? String(c[0].v).trim() : "";
     const ingredientSku = c?.[2]?.v ? String(c[2].v).trim() : "";
     const qty = Number(c?.[4]?.v ?? 0);
@@ -148,6 +143,8 @@ async function syncCicProducts() {
     let totalCount = Infinity;
     const limit = Math.max(1, Math.min(CIC_PRODUCTS_LIMIT || 200, 500));
 
+    let printedSample = false;
+
     while (start < totalCount) {
       const url = `${CIC_API_BASE_URL}${CIC_PRODUCTS_PATH}?start=${start}&limit=${limit}`;
       const res = await fetch(url, {
@@ -166,54 +163,58 @@ async function syncCicProducts() {
       }
 
       const json: any = await res.json();
-     const products: any[] = Array.isArray(json?.products) ? json.products : [];
+      const products: any[] = Array.isArray(json?.products) ? json.products : [];
+      totalCount = Number(json?.totalCount ?? products.length ?? 0);
 
-if (products.length) {
-  console.log("CIC PRODUCT SAMPLE:", JSON.stringify(products[0], null, 2));
-}
-  // SKU candidato (priorità)
-  const productSku =
-    String(p?.internalId || "") ||
-    String(p?.externalId || "") ||
-    "";
+      if (!printedSample && products.length) {
+        printedSample = true;
+        console.log("CIC PRODUCT SAMPLE:", JSON.stringify(products[0], null, 2));
+      }
 
-  if (productId && productSku) map[productId] = productSku;
+      for (const p of products) {
+        const productId = String(p?.id || "").trim();
 
-  // ✅ mappa anche codici a barre del prodotto (se esistono)
-  const pBarcodes: any[] =
-    (Array.isArray(p?.barcodes) && p.barcodes) ||
-    (Array.isArray(p?.salesBarcodes) && p.salesBarcodes) ||
-    [];
+        const productSku =
+          String(p?.internalId || "").trim() ||
+          String(p?.externalId || "").trim() ||
+          "";
 
-  for (const b of pBarcodes) {
-    const code = String(b?.barcode || b?.code || b || "").trim();
-    if (code && productSku) map[code] = productSku;
-  }
+        if (productId && productSku) map[productId] = productSku;
 
-  // ✅ varianti (se CIC te le ritorna)
-  const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
-  for (const v of variants) {
-    const variantId = String(v?.id || "");
+        // Barcodes del prodotto (se presenti)
+        const pBarcodes: any[] =
+          (Array.isArray(p?.barcodes) && p.barcodes) ||
+          (Array.isArray(p?.salesBarcodes) && p.salesBarcodes) ||
+          [];
 
-    const variantSku =
-      String(v?.internalId || "") ||
-      String(v?.externalId || "") ||
-      productSku; // fallback al prodotto
+        for (const b of pBarcodes) {
+          const code = String(b?.barcode || b?.code || b || "").trim();
+          if (code && productSku) map[code] = productSku;
+        }
 
-    if (variantId && variantSku) map[variantId] = variantSku;
+        // Varianti
+        const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
+        for (const v of variants) {
+          const variantId = String(v?.id || "").trim();
 
-    // ✅ mappa anche barcodes della variante
-    const vBarcodes: any[] =
-      (Array.isArray(v?.barcodes) && v.barcodes) ||
-      (Array.isArray(v?.salesBarcodes) && v.salesBarcodes) ||
-      [];
+          const variantSku =
+            String(v?.internalId || "").trim() ||
+            String(v?.externalId || "").trim() ||
+            productSku;
 
-    for (const b of vBarcodes) {
-      const code = String(b?.barcode || b?.code || b || "").trim();
-      if (code && variantSku) map[code] = variantSku;
-    }
-  }
-}
+          if (variantId && variantSku) map[variantId] = variantSku;
+
+          const vBarcodes: any[] =
+            (Array.isArray(v?.barcodes) && v.barcodes) ||
+            (Array.isArray(v?.salesBarcodes) && v.salesBarcodes) ||
+            [];
+
+          for (const b of vBarcodes) {
+            const code = String(b?.barcode || b?.code || b || "").trim();
+            if (code && variantSku) map[code] = variantSku;
+          }
+        }
+      }
 
       start += limit;
       if (!products.length) break;
@@ -221,7 +222,12 @@ if (products.length) {
 
     cicIdToSkuMap = map;
     cicProductsLastSyncAt = new Date().toISOString();
-    console.log("✅ CIC prodotti sincronizzati:", Object.keys(cicIdToSkuMap).length, "lastSync:", cicProductsLastSyncAt);
+    console.log(
+      "✅ CIC prodotti sincronizzati:",
+      Object.keys(cicIdToSkuMap).length,
+      "lastSync:",
+      cicProductsLastSyncAt
+    );
   } catch (err) {
     console.error("❌ Errore sync prodotti CIC:", err);
   }
@@ -229,9 +235,10 @@ if (products.length) {
 
 function cicResolveSku(id: string) {
   if (!id) return id;
-  if (id.startsWith("SKU")) return id; // già risolto
+  if (id.startsWith("SKU")) return id;
   return cicIdToSkuMap[id] || id;
 }
+
 function cicExtractItems(data: any) {
   const rows = data?.document?.rows ?? [];
   if (!Array.isArray(rows)) return [];
@@ -246,10 +253,11 @@ function cicExtractItems(data: any) {
 
       const resolved = cicResolveSku(idVariant || idProduct);
 
+      // ✅ QUI è il punto giusto per il log "CIC RESOLVE"
       console.log("CIC RESOLVE:", {
         variant: idVariant,
         product: idProduct,
-        resolved
+        resolved,
       });
 
       return {
@@ -262,6 +270,7 @@ function cicExtractItems(data: any) {
     })
     .filter((x: any) => x.sku && x.qty);
 }
+
 /* =========================
    App
    ========================= */
@@ -280,19 +289,18 @@ app.use(
   })
 );
 
-// ✅ Webhook checks (CIC fa anche GET/HEAD/OPTIONS di verifica)
+// CIC fa anche GET/HEAD/OPTIONS di verifica
 app.get("/webhooks/cic", (_req, res) => res.status(200).send("OK"));
 app.head("/webhooks/cic", (_req, res) => res.status(200).end());
 app.options("/webhooks/cic", (_req, res) => res.status(200).end());
 
-// ✅ Webhook raw body (firma HMAC)
+// Webhook raw body (firma HMAC)
 app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
   try {
     const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";
 
     const signature = (req.header("x-cn-signature") || "").trim();
     const operation = (req.header("x-cn-operation") || "").trim();
-
     console.log("CIC x-cn-operation:", operation);
 
     if (CIC_WEBHOOK_SECRET && signature) {
@@ -316,7 +324,6 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
 
     let items = cicExtractItems(data);
 
-    // se ci sono UUID non risolti, provo sync e ricalcolo
     const hasUnresolved = items.some((it) => String(it.sku).includes("-"));
     if (hasUnresolved) {
       console.log("ℹ️ CIC: trovati ID non risolti, provo sync prodotti…");
@@ -358,7 +365,7 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
   }
 });
 
-// ✅ JSON per il resto delle API
+// JSON per il resto delle API
 app.use(express.json());
 
 /* =========================
@@ -393,7 +400,7 @@ app.get("/health", (_req, res) => {
 });
 
 /* =========================
-   Basic Auth (protezione)
+   Basic Auth
    ========================= */
 
 const basicAuthEnabled = process.env.BASIC_AUTH_ENABLED === "true";
@@ -455,6 +462,5 @@ app.listen(PORT, "0.0.0.0", async () => {
 
   const msCic = Math.max(1, CIC_PRODUCTS_SYNC_HOURS) * 60 * 60 * 1000;
   setInterval(() => syncCicProducts(), msCic);
-
   setInterval(() => syncBom(), 5 * 60 * 1000);
 });
