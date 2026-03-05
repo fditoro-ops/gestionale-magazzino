@@ -229,9 +229,10 @@ async function syncCicProducts() {
 }
 
 function cicResolveSku(id: string) {
+  if (!id) return id;
+  if (id.startsWith("SKU")) return id; // già risolto
   return cicIdToSkuMap[id] || id;
 }
-
 function cicExtractItems(data: any) {
   const rows = data?.document?.rows ?? [];
   if (!Array.isArray(rows)) return [];
