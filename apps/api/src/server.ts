@@ -170,18 +170,51 @@ async function syncCicProducts() {
       totalCount = Number(json?.totalCount ?? products.length ?? 0);
 
       for (const p of products) {
-        const productId = String(p?.id || "");
-        const productSku = String(p?.internalId || "");
-        if (productId && productSku) map[productId] = productSku;
+  const productId = String(p?.id || "");
 
-        // Varianti: le mappiamo comunque, ma per ora non le usiamo nel resolve
-        const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
-        for (const v of variants) {
-          const variantId = String(v?.id || "");
-          const variantSku = String(v?.internalId || v?.externalId || "");
-          if (variantId && variantSku) map[variantId] = variantSku;
-        }
-      }
+  // SKU candidato (priorità)
+  const productSku =
+    String(p?.internalId || "") ||
+    String(p?.externalId || "") ||
+    "";
+
+  if (productId && productSku) map[productId] = productSku;
+
+  // ✅ mappa anche codici a barre del prodotto (se esistono)
+  const pBarcodes: any[] =
+    (Array.isArray(p?.barcodes) && p.barcodes) ||
+    (Array.isArray(p?.salesBarcodes) && p.salesBarcodes) ||
+    [];
+
+  for (const b of pBarcodes) {
+    const code = String(b?.barcode || b?.code || b || "").trim();
+    if (code && productSku) map[code] = productSku;
+  }
+
+  // ✅ varianti (se CIC te le ritorna)
+  const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
+  for (const v of variants) {
+    const variantId = String(v?.id || "");
+
+    const variantSku =
+      String(v?.internalId || "") ||
+      String(v?.externalId || "") ||
+      productSku; // fallback al prodotto
+
+    if (variantId && variantSku) map[variantId] = variantSku;
+
+    // ✅ mappa anche barcodes della variante
+    const vBarcodes: any[] =
+      (Array.isArray(v?.barcodes) && v.barcodes) ||
+      (Array.isArray(v?.salesBarcodes) && v.salesBarcodes) ||
+      [];
+
+    for (const b of vBarcodes) {
+      const code = String(b?.barcode || b?.code || b || "").trim();
+      if (code && variantSku) map[code] = variantSku;
+    }
+  }
+}
 
       start += limit;
       if (!products.length) break;
@@ -211,8 +244,13 @@ function cicExtractItems(data: any) {
       const idVariant = String(r?.idProductVariant ?? "");
       const idProduct = String(r?.idProduct ?? "");
 
-      // ✅ FASE 1: IGNORIAMO VARIANTI (priorità al productId)
-      const resolved = cicResolveSku(idProduct || idVariant);
+      const resolved = cicResolveSku(idVariant || idProduct);
+
+      console.log("CIC RESOLVE:", {
+        variant: idVariant,
+        product: idProduct,
+        resolved
+      });
 
       return {
         sku: resolved,
@@ -224,7 +262,6 @@ function cicExtractItems(data: any) {
     })
     .filter((x: any) => x.sku && x.qty);
 }
-
 /* =========================
    App
    ========================= */
