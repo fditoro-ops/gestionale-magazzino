@@ -151,9 +151,15 @@ async function pushUnresolvedToSheet(row: any) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        docId: row?.docId || "",
+        receiptNumber: row?.receiptNumber || "",
         cicId: row?._idProduct || "",
+        variantId: row?._idProductVariant || "",
         name: row?.description || "",
         price: row?.price || "",
+        qty: row?.qty || "",
+        rawSku: row?.rawSku || "",
+        note: row?.note || "",
       }),
     });
 
@@ -480,9 +486,19 @@ if (unresolved.length) {
     );
 
     await pushUnresolvedToSheet({
+      docId,
+      receiptNumber:
+        data?.document?.documentNumber ||
+        data?.document?.number ||
+        data?.document?.receiptNumber ||
+        "",
       _idProduct: it._idProduct,
-      description: rawRow?.description || "",
+      _idProductVariant: it._idProductVariant,
+      description: rawRow?.description || rawRow?.descriptionReceipt || "",
       price: rawRow?.price || "",
+      qty: rawRow?.quantity || it.qty || "",
+      rawSku: it.sku,
+      note: "Da configurare",
     });
 
     upsertUnresolved({
