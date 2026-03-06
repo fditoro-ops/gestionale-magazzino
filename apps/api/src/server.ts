@@ -22,7 +22,10 @@ type BomLine = { ingredientSku: string; qty: number; um: string };
 type BomMap = Record<string, BomLine[]>;
 
 type CicProductMode = "RECIPE" | "IGNORE";
-type CicProductMap = Record<string, CicProductMode>;
+type CicProductMap = Record<string, {
+  sku: string;
+  mode: CicProductMode;
+}>;
 
 let bomCache: BomMap = {};
 let bomLastSyncAt: string | null = null;
@@ -88,9 +91,7 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
   const tab = process.env.CIC_PRODUCTS_SHEET_TAB || "PRODOTTI_CIC";
   if (!sheetId) throw new Error("BOM_SHEET_ID mancante");
 
-  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(
-    tab
-  )}`;
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}`;
 
   const res = await fetch(url);
   if (!res.ok) {
@@ -107,18 +108,21 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
   for (const r of rows) {
     const c = r?.c ?? [];
 
-    const sku = c?.[0]?.v ? String(c[0].v).trim() : "";
+    const cicId = c?.[0]?.v ? String(c[0].v).trim() : "";
+    const sku = c?.[1]?.v ? String(c[1].v).trim() : "";
     const tipoScarico = c?.[5]?.v ? String(c[5].v).trim().toUpperCase() : "";
 
-    if (!sku) continue;
+    if (!cicId || !sku) continue;
     if (tipoScarico !== "RECIPE" && tipoScarico !== "IGNORE") continue;
 
-    map[sku] = tipoScarico as CicProductMode;
+    map[cicId] = {
+      sku,
+      mode: tipoScarico as CicProductMode,
+    };
   }
 
   return map;
 }
-
 async function syncCicProductModes() {
   try {
     const map = await loadCicProductModesFromSheet();
@@ -312,8 +316,20 @@ async function syncCicProducts() {
 
 function cicResolveSku(id: string) {
   if (!id) return id;
-  if (id.startsWith("SKU")) return id;
-  return cicIdToSkuMap[id] || id;
+
+  if (id.startsWith("SKU")) {
+    return id;
+  }
+
+  if (cicIdToSkuMap[id]) {
+    return cicIdToSkuMap[id];
+  }
+
+  if (cicProductModeCache[id]) {
+    return cicProductModeCache[id].sku;
+  }
+
+  return id;
 }
 
 function cicExtractItems(data: any) {
@@ -455,7 +471,9 @@ if (unresolved.length) {
       orderDate,
       soldItems: resolvedItems.map((i: any) => ({ sku: i.sku, qty: i.qty })),
       bom: bomCache,
-      cicProductModes: cicProductModeCache,
+      cicProductModes: Object.fromEntries(
+  Object.entries(cicProductModeCache).map(([k, v]) => [v.sku, v.mode])
+),
     });
 
     console.log("✅ SCARICHI GENERATI:", inserted);
