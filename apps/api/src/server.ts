@@ -110,7 +110,7 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
 
     const cicId = c?.[0]?.v ? String(c[0].v).trim() : "";
     const sku = c?.[1]?.v ? String(c[1].v).trim() : "";
-    const tipoScarico = c?.[5]?.v ? String(c[5].v).trim().toUpperCase() : "";
+    const tipoScarico = c?.[6]?.v ? String(c[6].v).trim().toUpperCase() : "";
 
     if (!cicId || !sku) continue;
     if (tipoScarico !== "RECIPE" && tipoScarico !== "IGNORE") continue;
