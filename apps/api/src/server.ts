@@ -140,7 +140,28 @@ async function syncCicProductModes() {
     console.error("❌ PRODOTTI_CIC sync error:", cicProductModeLastError);
   }
 }
+async function pushUnresolvedToSheet(row: any) {
+  const url = process.env.CIC_PRODUCTS_SHEET_WRITE_URL;
+  if (!url) return;
 
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        cicId: row?._idProduct || "",
+        name: row?.description || "",
+        price: row?.price || "",
+      }),
+    });
+
+    console.log("✅ CIC unresolved push to sheet OK:", row?._idProduct || "");
+  } catch (err) {
+    console.log("⚠️ push sheet failed:", err);
+  }
+}
 /* =========================
    CIC (Cassa in Cloud) Sync
    ========================= */
@@ -189,7 +210,6 @@ async function getCicBearerToken() {
   console.log("✅ CIC token OK (expiresIn s):", expiresIn);
   return cicBearerToken;
 }
-
 async function syncCicProducts() {
   try {
     if (!CIC_API_KEY) {
@@ -436,6 +456,12 @@ if (unresolved.length) {
 
   const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
 
+const unresolved = items.filter((it) => String(it.sku).includes("-"));
+if (unresolved.length) {
+  console.warn("❗CIC UNRESOLVED:", unresolved);
+
+  const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
+
   for (const it of unresolved) {
     const rawRow = rawRows.find((r: any) => {
       const rowVariant = String(r?.idProductVariant ?? "").trim();
@@ -447,10 +473,23 @@ if (unresolved.length) {
       );
     });
 
-    console.log("🔎 CIC UNRESOLVED ROW:", JSON.stringify({
-      unresolved: it,
-      row: rawRow || null,
-    }, null, 2));
+    console.log(
+      "🔎 CIC UNRESOLVED ROW:",
+      JSON.stringify(
+        {
+          unresolved: it,
+          row: rawRow || null,
+        },
+        null,
+        2
+      )
+    );
+
+    await pushUnresolvedToSheet({
+      _idProduct: it._idProduct,
+      description: rawRow?.description || "",
+      price: rawRow?.price || "",
+    });
 
     upsertUnresolved({
       productId: it._idProduct || undefined,
