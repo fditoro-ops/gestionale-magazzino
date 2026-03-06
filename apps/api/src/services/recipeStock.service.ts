@@ -23,41 +23,88 @@ export function applyRecipeStock({
   bom: BomMap;
 }) {
   const items = loadItems();
-const movements = loadMovements();
+  const movements = loadMovements();
 
-  // FIX TS7006 (o commentala/eliminala se non ti serve)
-  // const bySku = new Map(items.map((i: any) => [i.sku, i]));
-  void items; // se non usi items, evita warning in alcuni setup
+  const bySku = new Map(items.map((i: any) => [String(i.sku).trim(), i]));
+
+  // 1) Idempotenza: se esistono già movimenti per questo documento, non riscaricare
+  const alreadyProcessed = movements.some(
+    (m: any) => String(m.documento || "").trim() === String(docId).trim()
+  );
+
+  if (alreadyProcessed) {
+    console.log("⚠️ Documento già processato, salto:", docId);
+    return 0;
+  }
 
   const newMovements: any[] = [];
 
   for (const sold of soldItems) {
-    const recipe = bom[sold.sku];
+    const soldSku = String(sold.sku || "").trim();
+    const soldQty = Number(sold.qty || 0);
 
-    if (!recipe) {
-      console.log("⚠️ ricetta non trovata", sold.sku);
+    if (!soldSku || !soldQty) {
+      console.log("⚠️ Riga vendita non valida:", sold);
       continue;
     }
 
+    const recipe = bom[soldSku];
+
+    if (!recipe || !recipe.length) {
+      console.log("⚠️ Ricetta non trovata:", soldSku);
+      continue;
+    }
+
+    console.log("🍸 Ricetta trovata:", soldSku, "ingredienti:", recipe.length, "qty venduta:", soldQty);
+
     for (const ing of recipe) {
-      const qty = ing.qty * sold.qty;
+      const ingredientSku = String(ing.ingredientSku || "").trim();
+      const ingredientQty = Number(ing.qty || 0);
+      const ingredientUm = String(ing.um || "").trim().toUpperCase();
+
+      if (!ingredientSku || !ingredientQty) {
+        console.log("⚠️ Ingrediente BOM non valido:", ing);
+        continue;
+      }
+
+      const itemExists = bySku.has(ingredientSku);
+      if (!itemExists) {
+        console.log("❗ Ingrediente non presente in anagrafica:", ingredientSku, "per prodotto:", soldSku);
+        continue;
+      }
+
+      const qty = ingredientQty * soldQty;
 
       newMovements.push({
         timestamp: new Date().toISOString(),
         tipo_movimento: "DB-SCARICO",
         documento: docId,
         tenant_id: tenantId,
-        sku: ing.ingredientSku,
+        sku: ingredientSku,
         q_movimento: -qty,
-        um: ing.um,
-        note: `Scarico ricetta ${sold.sku}`,
+        um: ingredientUm,
+        note: `Scarico ricetta ${soldSku}`,
         data: orderDate.toISOString(),
+      });
+
+      console.log("✅ Movimento creato:", {
+        documento: docId,
+        sku: ingredientSku,
+        q_movimento: -qty,
+        um: ingredientUm,
       });
     }
   }
 
+  if (!newMovements.length) {
+    console.log("ℹ️ Nessun movimento creato per documento:", docId);
+    return 0;
+  }
+
   const updated = [...movements, ...newMovements];
   saveMovements(updated);
+
+  console.log("✅ Movimenti salvati:", newMovements.length, "documento:", docId);
 
   return newMovements.length;
 }
