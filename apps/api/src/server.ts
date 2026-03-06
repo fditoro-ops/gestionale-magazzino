@@ -232,7 +232,7 @@ async function syncCicProducts() {
         console.log("CIC PRODUCT SAMPLE:", JSON.stringify(products[0], null, 2));
       }
 
-      for (const p of products) {
+     for (const p of products) {
   const productId = String(p?.id || "").trim();
   const productDesc = String(p?.description || "").trim();
 
@@ -293,40 +293,6 @@ async function syncCicProducts() {
     }
   }
 }
-
-        const pBarcodes: any[] =
-          (Array.isArray(p?.barcodes) && p.barcodes) ||
-          (Array.isArray(p?.salesBarcodes) && p.salesBarcodes) ||
-          [];
-
-        for (const b of pBarcodes) {
-          const code = String(b?.barcode || b?.code || b?.value || b || "").trim();
-          if (code && productSku) map[code] = productSku;
-        }
-
-        const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
-        for (const v of variants) {
-          const variantId = String(v?.id || "").trim();
-
-          const variantSku =
-            String(v?.internalId || "").trim() ||
-            String(v?.externalId || "").trim() ||
-            productSku;
-
-          if (variantId && variantSku) map[variantId] = variantSku;
-
-          const vBarcodes: any[] =
-            (Array.isArray(v?.barcodes) && v.barcodes) ||
-            (Array.isArray(v?.salesBarcodes) && v.salesBarcodes) ||
-            [];
-
-          for (const b of vBarcodes) {
-            const code = String(b?.barcode || b?.code || b?.value || b || "").trim();
-            if (code && variantSku) map[code] = variantSku;
-          }
-        }
-      }
-
       start += limit;
       if (!products.length) break;
     }
