@@ -307,10 +307,19 @@ function cicExtractItems(data: any) {
       const qty = Number(r?.quantity ?? 0);
       const price = Number(r?.price ?? 0);
 
-      const idVariant = String(r?.idProductVariant ?? "");
-      const idProduct = String(r?.idProduct ?? "");
+      const idVariant = String(r?.idProductVariant ?? "").trim();
+      const idProduct = String(r?.idProduct ?? "").trim();
 
-      const resolved = cicResolveSku(idVariant || idProduct);
+      let resolved = "";
+
+      if (idVariant) {
+        resolved = cicResolveSku(idVariant);
+      }
+
+      // fallback: se la variante non si risolve in SKU, provo il prodotto padre
+      if (!resolved || resolved.includes("-")) {
+        resolved = cicResolveSku(idProduct);
+      }
 
       console.log("CIC RESOLVE:", {
         variant: idVariant,
