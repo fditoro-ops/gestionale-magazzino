@@ -13,7 +13,7 @@ import ordersRouter from "./routes/orders.js";
 
 import { applyRecipeStock } from "./services/recipeStock.service.js";
 import { upsertUnresolved, listUnresolved } from "./data/cicUnresolved.store.js";
-import { appendCicWebhookDump } from "./data/cicWebhookDump.store.js";
+import { appendCicWebhookDump, loadCicWebhookDumps } from "./data/cicWebhookDump.store.js";
 /* =========================
    BOM (Google Sheet) Reader
    ========================= */
@@ -419,7 +419,117 @@ app.use(
 app.get("/webhooks/cic", (_req, res) => res.status(200).send("OK"));
 app.head("/webhooks/cic", (_req, res) => res.status(200).end());
 app.options("/webhooks/cic", (_req, res) => res.status(200).end());
+function buildCicWebhookDebugDump(data: any, operation: string, headers: Record<string, any>) {
+  const document = data?.document ?? {};
+  const rows = Array.isArray(document?.rows) ? document.rows : [];
+  const payments = Array.isArray(document?.payments) ? document.payments : [];
+  const orderSummary = document?.orderSummary ?? null;
+  const user = document?.user ?? null;
 
+  return {
+    capturedAt: new Date().toISOString(),
+
+    operation,
+    headers,
+
+    receiptTopLevel: {
+      id: data?.id ?? null,
+      number: data?.number ?? null,
+      date: data?.date ?? null,
+      datetime: data?.datetime ?? null,
+      zNumber: data?.zNumber ?? null,
+      taxCode: data?.taxCode ?? null,
+      vatNumber: data?.vatNumber ?? null,
+      lotteryCode: data?.lotteryCode ?? null,
+    },
+
+    documentTopLevel: {
+      id: document?.id ?? null,
+      description: document?.description ?? null,
+      amount: document?.amount ?? null,
+      change: document?.change ?? null,
+      note: document?.note ?? null,
+      externalId: document?.externalId ?? null,
+      email: document?.email ?? null,
+      confirmed: document?.confirmed ?? null,
+      taxFree: document?.taxFree ?? null,
+      userType: document?.userType ?? null,
+      documentReason: document?.documentReason ?? null,
+      date: document?.date ?? null,
+      datetime: document?.datetime ?? null,
+      creationDate: document?.creationDate ?? null,
+      number: document?.number ?? null,
+      documentNumber: document?.documentNumber ?? null,
+      receiptNumber: document?.receiptNumber ?? null,
+    },
+
+    orderSummary: orderSummary
+      ? {
+          id: orderSummary?.id ?? null,
+          openingTime: orderSummary?.openingTime ?? null,
+          closingTime: orderSummary?.closingTime ?? null,
+          amount: orderSummary?.amount ?? null,
+          covers: orderSummary?.covers ?? null,
+          idTable: orderSummary?.idTable ?? null,
+          tableName: orderSummary?.tableName ?? null,
+          code: orderSummary?.code ?? null,
+        }
+      : null,
+
+    user: user
+      ? {
+          id: user?.id ?? null,
+          name: user?.name ?? null,
+        }
+      : null,
+
+    payments: payments.map((p: any) => ({
+      paymentType: p?.paymentType ?? null,
+      amount: p?.amount ?? null,
+      paymentNote: p?.paymentNote ?? null,
+      bankAccountHolder: p?.bankAccountHolder ?? null,
+      bankAccountInstitute: p?.bankAccountInstitute ?? null,
+      bankAccountIBAN: p?.bankAccountIBAN ?? null,
+      change: p?.change ?? null,
+      customPayment: p?.customPayment ?? null,
+      ticket: p?.ticket ?? null,
+    })),
+
+    rows: rows.map((r: any) => ({
+      id: r?.id ?? null,
+      subtotal: r?.subtotal ?? null,
+      refund: r?.refund ?? null,
+      menu: r?.menu ?? null,
+      composition: r?.composition ?? null,
+      coverCharge: r?.coverCharge ?? null,
+      idProduct: r?.idProduct ?? null,
+      idProductVariant: r?.idProductVariant ?? null,
+      idCategory: r?.idCategory ?? null,
+      idDepartment: r?.idDepartment ?? null,
+      salesType: r?.salesType ?? null,
+      idTax: r?.idTax ?? null,
+      idSalesMode: r?.idSalesMode ?? null,
+      stockMovementEnabled: r?.stockMovementEnabled ?? null,
+      idStockMovement: r?.idStockMovement ?? null,
+      idOutgoingMovement: r?.idOutgoingMovement ?? null,
+      rowNumber: r?.rowNumber ?? null,
+      quantity: r?.quantity ?? null,
+      price: r?.price ?? null,
+      percentageVariation: r?.percentageVariation ?? null,
+      variation: r?.variation ?? null,
+      variationType: r?.variationType ?? null,
+      note: r?.note ?? null,
+      calculatedAmount: r?.calculatedAmount ?? null,
+      shippingCost: r?.shippingCost ?? null,
+
+      // dump extra grezzo della riga
+      raw: r,
+    })),
+
+    // payload completo originale
+    rawPayload: data,
+  };
+}
 app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
   try {
     const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";
@@ -442,6 +552,13 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
     }
 
     const data = JSON.parse(raw);
+     const debugDump = buildCicWebhookDebugDump(data, operation, {
+  "x-cn-operation": req.header("x-cn-operation") || "",
+  "x-cn-signature": req.header("x-cn-signature") || "",
+  "content-type": req.header("content-type") || "",
+});
+
+appendCicWebhookDump(debugDump);
 
     const docId = "CIC-" + String(data?.document?.id || data?.id || "");
     const orderDate = new Date(data?.document?.date || data?.document?.creationDate || Date.now());
@@ -575,7 +692,13 @@ app.get("/debug/cic-unresolved", (_req, res) => {
     sample: rows.slice(0, 30),
   });
 });
-
+app.get("/debug/cic-webhook-dumps", (_req, res) => {
+  const rows = loadCicWebhookDumps([]);
+  res.json({
+    count: rows.length,
+    sample: rows.slice(-20), // ultimi 20 dump
+  });
+});
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
@@ -614,6 +737,7 @@ if (basicAuthEnabled && user && pass) {
     if (req.path === "/debug/recipes") return next();
     if (req.path === "/debug/cic-product-modes") return next();
     if (req.path === "/debug/cic-unresolved") return next();
+    if (req.path === "/debug/cic-webhook-dumps") return next();
     if (req.path.startsWith("/webhooks/cic")) return next();
     return auth(req, res, next);
   });
