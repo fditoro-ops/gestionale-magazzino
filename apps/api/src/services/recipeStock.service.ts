@@ -8,6 +8,8 @@ type BomLine = {
 };
 
 type BomMap = Record<string, BomLine[]>;
+type CicProductMode = "RECIPE" | "IGNORE";
+type CicProductMap = Record<string, CicProductMode>;
 
 export function applyRecipeStock({
   docId,
@@ -15,19 +17,20 @@ export function applyRecipeStock({
   orderDate,
   soldItems,
   bom,
+  cicProductModes,
 }: {
   docId: string;
   tenantId: string;
   orderDate: Date;
   soldItems: { sku: string; qty: number }[];
   bom: BomMap;
+  cicProductModes: CicProductMap;
 }) {
   const items = loadItems();
   const movements = loadMovements();
 
   const bySku = new Map(items.map((i: any) => [String(i.sku).trim(), i]));
 
-  // 1) Idempotenza: se esistono già movimenti per questo documento, non riscaricare
   const alreadyProcessed = movements.some(
     (m: any) => String(m.documento || "").trim() === String(docId).trim()
   );
@@ -48,10 +51,22 @@ export function applyRecipeStock({
       continue;
     }
 
+    const mode = cicProductModes[soldSku];
+
+    if (mode === "IGNORE") {
+      console.log("⏭ SKU ignorato da PRODOTTI_CIC:", soldSku);
+      continue;
+    }
+
+    if (mode !== "RECIPE") {
+      console.log("⚠️ SKU non classificato in PRODOTTI_CIC:", soldSku);
+      continue;
+    }
+
     const recipe = bom[soldSku];
 
     if (!recipe || !recipe.length) {
-      console.log("⚠️ Ricetta non trovata:", soldSku);
+      console.log("⚠️ Ricetta non trovata per SKU RECIPE:", soldSku);
       continue;
     }
 
@@ -67,8 +82,7 @@ export function applyRecipeStock({
         continue;
       }
 
-      const itemExists = bySku.has(ingredientSku);
-      if (!itemExists) {
+      if (!bySku.has(ingredientSku)) {
         console.log("❗ Ingrediente non presente in anagrafica:", ingredientSku, "per prodotto:", soldSku);
         continue;
       }
