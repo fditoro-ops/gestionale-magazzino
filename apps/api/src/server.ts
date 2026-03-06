@@ -21,9 +21,16 @@ import { upsertUnresolved, listUnresolved } from "./data/cicUnresolved.store.js"
 type BomLine = { ingredientSku: string; qty: number; um: string };
 type BomMap = Record<string, BomLine[]>;
 
+type CicProductMode = "RECIPE" | "IGNORE";
+type CicProductMap = Record<string, CicProductMode>;
+
 let bomCache: BomMap = {};
 let bomLastSyncAt: string | null = null;
 let bomLastError: string | null = null;
+
+let cicProductModeCache: CicProductMap = {};
+let cicProductModeLastSyncAt: string | null = null;
+let cicProductModeLastError: string | null = null;
 
 async function loadBomFromSheet(): Promise<BomMap> {
   const sheetId = process.env.BOM_SHEET_ID;
@@ -73,6 +80,60 @@ async function syncBom() {
   } catch (err: any) {
     bomLastError = String(err?.message ?? err);
     console.error("❌ BOM sync error:", bomLastError);
+  }
+}
+
+async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
+  const sheetId = process.env.BOM_SHEET_ID;
+  const tab = process.env.CIC_PRODUCTS_SHEET_TAB || "PRODOTTI_CIC";
+  if (!sheetId) throw new Error("BOM_SHEET_ID mancante");
+
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(
+    tab
+  )}`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`CIC products sheet fetch failed ${res.status}: ${txt}`);
+  }
+
+  const text = await res.text();
+  const json = JSON.parse(text.substring(47).slice(0, -2));
+  const rows = json?.table?.rows ?? [];
+
+  const map: CicProductMap = {};
+
+  for (const r of rows) {
+    const c = r?.c ?? [];
+
+    const sku = c?.[0]?.v ? String(c[0].v).trim() : "";
+    const tipoScarico = c?.[5]?.v ? String(c[5].v).trim().toUpperCase() : "";
+
+    if (!sku) continue;
+    if (tipoScarico !== "RECIPE" && tipoScarico !== "IGNORE") continue;
+
+    map[sku] = tipoScarico as CicProductMode;
+  }
+
+  return map;
+}
+
+async function syncCicProductModes() {
+  try {
+    const map = await loadCicProductModesFromSheet();
+    cicProductModeCache = map;
+    cicProductModeLastSyncAt = new Date().toISOString();
+    cicProductModeLastError = null;
+
+    console.log(
+      "✅ PRODOTTI_CIC sync OK:",
+      Object.keys(cicProductModeCache).length,
+      "sku classificati"
+    );
+  } catch (err: any) {
+    cicProductModeLastError = String(err?.message ?? err);
+    console.error("❌ PRODOTTI_CIC sync error:", cicProductModeLastError);
   }
 }
 
@@ -181,18 +242,16 @@ async function syncCicProducts() {
 
         if (productId && productSku) map[productId] = productSku;
 
-        // Barcodes del prodotto (se presenti)
         const pBarcodes: any[] =
           (Array.isArray(p?.barcodes) && p.barcodes) ||
           (Array.isArray(p?.salesBarcodes) && p.salesBarcodes) ||
           [];
 
         for (const b of pBarcodes) {
-          const code = String(b?.barcode || b?.code || b || "").trim();
+          const code = String(b?.barcode || b?.code || b?.value || b || "").trim();
           if (code && productSku) map[code] = productSku;
         }
 
-        // Varianti
         const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
         for (const v of variants) {
           const variantId = String(v?.id || "").trim();
@@ -210,7 +269,7 @@ async function syncCicProducts() {
             [];
 
           for (const b of vBarcodes) {
-            const code = String(b?.barcode || b?.code || b || "").trim();
+            const code = String(b?.barcode || b?.code || b?.value || b || "").trim();
             if (code && variantSku) map[code] = variantSku;
           }
         }
@@ -253,7 +312,6 @@ function cicExtractItems(data: any) {
 
       const resolved = cicResolveSku(idVariant || idProduct);
 
-      // ✅ QUI è il punto giusto per il log "CIC RESOLVE"
       console.log("CIC RESOLVE:", {
         variant: idVariant,
         product: idProduct,
@@ -289,12 +347,10 @@ app.use(
   })
 );
 
-// CIC fa anche GET/HEAD/OPTIONS di verifica
 app.get("/webhooks/cic", (_req, res) => res.status(200).send("OK"));
 app.head("/webhooks/cic", (_req, res) => res.status(200).end());
 app.options("/webhooks/cic", (_req, res) => res.status(200).end());
 
-// Webhook raw body (firma HMAC)
 app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
   try {
     const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";
@@ -355,6 +411,7 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
       orderDate,
       soldItems: resolvedItems.map((i: any) => ({ sku: i.sku, qty: i.qty })),
       bom: bomCache,
+      cicProductModes: cicProductModeCache,
     });
 
     console.log("✅ SCARICHI GENERATI:", inserted);
@@ -365,7 +422,6 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
   }
 });
 
-// JSON per il resto delle API
 app.use(express.json());
 
 /* =========================
@@ -378,6 +434,15 @@ app.get("/debug/recipes", (_req, res) => {
     bomLastSyncAt,
     bomLastError,
     sample: Object.entries(bomCache).slice(0, 5),
+  });
+});
+
+app.get("/debug/cic-product-modes", (_req, res) => {
+  res.json({
+    count: Object.keys(cicProductModeCache).length,
+    lastSyncAt: cicProductModeLastSyncAt,
+    lastError: cicProductModeLastError,
+    sample: Object.entries(cicProductModeCache).slice(0, 30),
   });
 });
 
@@ -394,8 +459,20 @@ app.get("/health", (_req, res) => {
     ok: true,
     service: "gestionale-magazzino-api",
     time: new Date().toISOString(),
-    cicProducts: { mapSize: Object.keys(cicIdToSkuMap).length, lastSyncAt: cicProductsLastSyncAt },
-    bom: { recipesCount: Object.keys(bomCache).length, lastSyncAt: bomLastSyncAt, lastError: bomLastError },
+    cicProducts: {
+      mapSize: Object.keys(cicIdToSkuMap).length,
+      lastSyncAt: cicProductsLastSyncAt,
+    },
+    cicProductModes: {
+      count: Object.keys(cicProductModeCache).length,
+      lastSyncAt: cicProductModeLastSyncAt,
+      lastError: cicProductModeLastError,
+    },
+    bom: {
+      recipesCount: Object.keys(bomCache).length,
+      lastSyncAt: bomLastSyncAt,
+      lastError: bomLastError,
+    },
   });
 });
 
@@ -413,6 +490,7 @@ if (basicAuthEnabled && user && pass) {
   app.use((req, res, next) => {
     if (req.path === "/health") return next();
     if (req.path === "/debug/recipes") return next();
+    if (req.path === "/debug/cic-product-modes") return next();
     if (req.path === "/debug/cic-unresolved") return next();
     if (req.path.startsWith("/webhooks/cic")) return next();
     return auth(req, res, next);
@@ -459,8 +537,10 @@ app.listen(PORT, "0.0.0.0", async () => {
 
   await syncCicProducts();
   await syncBom();
+  await syncCicProductModes();
 
   const msCic = Math.max(1, CIC_PRODUCTS_SYNC_HOURS) * 60 * 60 * 1000;
   setInterval(() => syncCicProducts(), msCic);
   setInterval(() => syncBom(), 5 * 60 * 1000);
+  setInterval(() => syncCicProductModes(), 5 * 60 * 1000);
 });
