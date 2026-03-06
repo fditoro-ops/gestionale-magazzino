@@ -415,20 +415,37 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
     }
 
     const unresolved = items.filter((it) => String(it.sku).includes("-"));
-    if (unresolved.length) {
-      console.warn("❗CIC UNRESOLVED:", unresolved);
+if (unresolved.length) {
+  console.warn("❗CIC UNRESOLVED:", unresolved);
 
-      for (const it of unresolved) {
-        upsertUnresolved({
-          productId: it._idProduct || undefined,
-          variantId: it._idProductVariant || undefined,
-          rawSku: String(it.sku),
-          docId,
-          operation,
-          total: it.total,
-        });
-      }
-    }
+  const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
+
+  for (const it of unresolved) {
+    const rawRow = rawRows.find((r: any) => {
+      const rowVariant = String(r?.idProductVariant ?? "").trim();
+      const rowProduct = String(r?.idProduct ?? "").trim();
+
+      return (
+        rowVariant === String(it._idProductVariant || "").trim() ||
+        rowProduct === String(it._idProduct || "").trim()
+      );
+    });
+
+    console.log("🔎 CIC UNRESOLVED ROW:", JSON.stringify({
+      unresolved: it,
+      row: rawRow || null,
+    }, null, 2));
+
+    upsertUnresolved({
+      productId: it._idProduct || undefined,
+      variantId: it._idProductVariant || undefined,
+      rawSku: String(it.sku),
+      docId,
+      operation,
+      total: it.total,
+    });
+  }
+}
 
     const resolvedItems = items.filter((it) => !String(it.sku).includes("-"));
 
