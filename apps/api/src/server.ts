@@ -233,14 +233,66 @@ async function syncCicProducts() {
       }
 
       for (const p of products) {
-        const productId = String(p?.id || "").trim();
+  const productId = String(p?.id || "").trim();
+  const productDesc = String(p?.description || "").trim();
 
-        const productSku =
-          String(p?.internalId || "").trim() ||
-          String(p?.externalId || "").trim() ||
-          "";
+  // DEBUG mirato sui prodotti problematici
+  if (
+    productId === "8a060ec2-5f36-4358-929a-f354e561819b" ||
+    productId === "0ccea60d-737c-4a9a-a6dc-534933b79032" ||
+    productDesc.toUpperCase().includes("KOZEL") ||
+    productDesc.toUpperCase().includes("ACQUA")
+  ) {
+    console.log("🔎 CIC TARGET PRODUCT:", JSON.stringify(p, null, 2));
+  }
 
-        if (productId && productSku) map[productId] = productSku;
+  const productSku =
+    String(p?.internalId || "").trim() ||
+    String(p?.externalId || "").trim() ||
+    "";
+
+  if (productId && productSku) map[productId] = productSku;
+
+  const pBarcodes: any[] =
+    (Array.isArray(p?.barcodes) && p.barcodes) ||
+    (Array.isArray(p?.salesBarcodes) && p.salesBarcodes) ||
+    [];
+
+  for (const b of pBarcodes) {
+    const code = String(b?.barcode || b?.code || b?.value || b || "").trim();
+    if (code && productSku) map[code] = productSku;
+  }
+
+  const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
+  for (const v of variants) {
+    const variantId = String(v?.id || "").trim();
+
+    // DEBUG mirato sulle varianti problematiche
+    if (
+      variantId === "2dbb6511-afe1-4599-a698-1673bb46ec3b" ||
+      variantId === "51667f52-9f38-469a-a056-60786b1d2d4d"
+    ) {
+      console.log("🔎 CIC TARGET VARIANT:", JSON.stringify(v, null, 2));
+    }
+
+    const variantSku =
+      String(v?.internalId || "").trim() ||
+      String(v?.externalId || "").trim() ||
+      productSku;
+
+    if (variantId && variantSku) map[variantId] = variantSku;
+
+    const vBarcodes: any[] =
+      (Array.isArray(v?.barcodes) && v.barcodes) ||
+      (Array.isArray(v?.salesBarcodes) && v.salesBarcodes) ||
+      [];
+
+    for (const b of vBarcodes) {
+      const code = String(b?.barcode || b?.code || b?.value || b || "").trim();
+      if (code && variantSku) map[code] = variantSku;
+    }
+  }
+}
 
         const pBarcodes: any[] =
           (Array.isArray(p?.barcodes) && p.barcodes) ||
