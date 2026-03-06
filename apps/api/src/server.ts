@@ -494,9 +494,21 @@ if (unresolved.length) {
         "",
       _idProduct: it._idProduct,
       _idProductVariant: it._idProductVariant,
-      description: rawRow?.description || rawRow?.descriptionReceipt || "",
-      price: rawRow?.price || "",
-      qty: rawRow?.quantity || it.qty || "",
+      description:
+  rawRow?.description ||
+  rawRow?.descriptionReceipt ||
+  rawRow?.name ||
+  "",
+
+price:
+  rawRow?.price ??
+  rawRow?.priceTotal ??
+  "",
+
+qty:
+  rawRow?.quantity ??
+  it.qty ??
+  1,
       rawSku: it.sku,
       note: "Da configurare",
     });
