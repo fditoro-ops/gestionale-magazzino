@@ -450,12 +450,6 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
       items = cicExtractItems(data);
     }
 
-    const unresolved = items.filter((it) => String(it.sku).includes("-"));
-if (unresolved.length) {
-  console.warn("❗CIC UNRESOLVED:", unresolved);
-
-  const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
-
 const unresolved = items.filter((it) => String(it.sku).includes("-"));
 if (unresolved.length) {
   console.warn("❗CIC UNRESOLVED:", unresolved);
@@ -501,7 +495,6 @@ if (unresolved.length) {
     });
   }
 }
-
     const resolvedItems = items.filter((it) => !String(it.sku).includes("-"));
 
     const inserted = applyRecipeStock({
