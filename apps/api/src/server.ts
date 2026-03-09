@@ -54,7 +54,7 @@ let cicProductModeLastError: string | null = null;
 
 async function loadBomFromSheet(): Promise<BomMap> {
   const sheetId = process.env.BOM_SHEET_ID;
-  const tab = process.env.BOM_SHEET_TAB || "RICETTARIO";
+  const tab = process.env.BOM_SHEET_TAB || "RICETTE";
   if (!sheetId) throw new Error("BOM_SHEET_ID mancante");
 
   const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(
