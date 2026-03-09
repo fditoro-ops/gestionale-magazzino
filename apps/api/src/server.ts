@@ -138,9 +138,14 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
   const tab = process.env.CIC_PRODUCTS_SHEET_TAB || "PRODOTTI_CIC";
   if (!sheetId) throw new Error("BOM_SHEET_ID mancante");
 
+  console.log("DEBUG CIC MODES sheetId:", sheetId);
+  console.log("DEBUG CIC MODES tab:", tab);
+
   const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(
     tab
   )}`;
+
+  console.log("DEBUG CIC MODES url:", url);
 
   const res = await fetch(url);
   if (!res.ok) {
@@ -149,8 +154,16 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
   }
 
   const text = await res.text();
+  console.log("DEBUG CIC MODES raw text preview:", text.slice(0, 180));
+
   const json = JSON.parse(text.substring(47).slice(0, -2));
   const rows = json?.table?.rows ?? [];
+
+  console.log("DEBUG CIC MODES raw rows:", rows.length);
+  console.log(
+    "DEBUG CIC MODES first row:",
+    rows?.[0] ? JSON.stringify(rows[0]) : "NO_ROWS"
+  );
 
   const map: CicProductMap = {};
 
@@ -171,7 +184,21 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
     const variantId = c?.[1]?.v ? String(c[1].v).trim() : "";
     const sku = c?.[2]?.v ? String(c[2].v).trim() : "";
     const name = c?.[3]?.v ? String(c[3].v).trim() : "";
-    const tipoScarico = c?.[7]?.v ? String(c[7].v).trim().toUpperCase() : "";
+    const tipoScaricoRaw = c?.[7]?.v ? String(c[7].v).trim() : "";
+    const tipoScarico = tipoScaricoRaw.toUpperCase();
+
+    if (!productId && !variantId && !sku && !name && !tipoScaricoRaw) {
+      continue;
+    }
+
+    console.log("DEBUG CIC MODES parsed row:", {
+      productId,
+      variantId,
+      sku,
+      name,
+      tipoScaricoRaw,
+      tipoScarico,
+    });
 
     if (!sku) continue;
     if (tipoScarico !== "RECIPE" && tipoScarico !== "IGNORE") continue;
@@ -188,6 +215,12 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
     if (variantId) map[variantId] = entry;
     if (productId) map[productId] = entry;
   }
+
+  console.log("DEBUG CIC MODES final keys:", Object.keys(map).length);
+  console.log(
+    "DEBUG CIC MODES sample entries:",
+    Object.entries(map).slice(0, 5)
+  );
 
   return map;
 }
@@ -209,7 +242,6 @@ async function syncCicProductModes() {
     console.error("❌ PRODOTTI_CIC sync error:", cicProductModeLastError);
   }
 }
-
 /* =========================
    SHEET write helpers
    ========================= */
