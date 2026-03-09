@@ -872,7 +872,7 @@ app.get("/debug/cic-products-full", async (_req, res) => {
   }
 });
 
-app.post("/debug/cic-products-export-sheet", async (_req, res) => {
+app.get("/debug/cic-products-export-sheet", async (_req, res) => {
   try {
     const rows = await fetchAllCicProducts();
     await pushCatalogToSheet(rows);
