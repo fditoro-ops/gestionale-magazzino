@@ -14,6 +14,7 @@ import ordersRouter from "./routes/orders.js";
 import { applyRecipeStock } from "./services/recipeStock.service.js";
 import { upsertUnresolved, listUnresolved } from "./data/cicUnresolved.store.js";
 import { appendCicWebhookDump, loadCicWebhookDumps } from "./data/cicWebhookDump.store.js";
+
 /* =========================
    BOM (Google Sheet) Reader
    ========================= */
@@ -22,10 +23,23 @@ type BomLine = { ingredientSku: string; qty: number; um: string };
 type BomMap = Record<string, BomLine[]>;
 
 type CicProductMode = "RECIPE" | "IGNORE";
-type CicProductMap = Record<string, {
-  sku: string;
-  mode: CicProductMode;
-}>;
+type CicProductMap = Record<
+  string,
+  {
+    sku: string;
+    mode: CicProductMode;
+  }
+>;
+
+type CicCatalogRow = {
+  type: "PRODUCT" | "VARIANT";
+  productId: string;
+  variantId: string;
+  name: string;
+  internalId: string;
+  externalId: string;
+  barcode: string;
+};
 
 let bomCache: BomMap = {};
 let bomLastSyncAt: string | null = null;
@@ -91,7 +105,9 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
   const tab = process.env.CIC_PRODUCTS_SHEET_TAB || "PRODOTTI_CIC";
   if (!sheetId) throw new Error("BOM_SHEET_ID mancante");
 
-  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}`;
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(
+    tab
+  )}`;
 
   const res = await fetch(url);
   if (!res.ok) {
@@ -123,6 +139,7 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
 
   return map;
 }
+
 async function syncCicProductModes() {
   try {
     const map = await loadCicProductModesFromSheet();
@@ -140,6 +157,7 @@ async function syncCicProductModes() {
     console.error("❌ PRODOTTI_CIC sync error:", cicProductModeLastError);
   }
 }
+
 async function pushUnresolvedToSheet(row: any) {
   const url = process.env.CIC_PRODUCTS_SHEET_WRITE_URL;
   if (!url) return;
@@ -168,6 +186,28 @@ async function pushUnresolvedToSheet(row: any) {
     console.log("⚠️ push sheet failed:", err);
   }
 }
+
+async function pushCatalogToSheet(rows: CicCatalogRow[]) {
+  const url = process.env.CIC_PRODUCTS_SHEET_WRITE_URL;
+  if (!url) throw new Error("CIC_PRODUCTS_SHEET_WRITE_URL mancante");
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      mode: "catalog",
+      rows,
+    }),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Catalog push failed ${res.status}: ${txt}`);
+  }
+}
+
 /* =========================
    CIC (Cassa in Cloud) Sync
    ========================= */
@@ -216,6 +256,105 @@ async function getCicBearerToken() {
   console.log("✅ CIC token OK (expiresIn s):", expiresIn);
   return cicBearerToken;
 }
+
+async function fetchAllCicProducts(): Promise<CicCatalogRow[]> {
+  if (!CIC_API_KEY) {
+    throw new Error("CIC_API_KEY mancante");
+  }
+
+  const token = await getCicBearerToken();
+  if (!token) {
+    throw new Error("Token CIC non disponibile");
+  }
+
+  const rows: CicCatalogRow[] = [];
+  let start = 0;
+  let totalCount = Infinity;
+  const limit = Math.max(1, Math.min(CIC_PRODUCTS_LIMIT || 200, 500));
+
+  while (start < totalCount) {
+    const url = `${CIC_API_BASE_URL}${CIC_PRODUCTS_PATH}?start=${start}&limit=${limit}`;
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Version": CIC_X_VERSION,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`CIC GET /products failed ${res.status}: ${txt}`);
+    }
+
+    const json: any = await res.json();
+    const products: any[] = Array.isArray(json?.products) ? json.products : [];
+    totalCount = Number(json?.totalCount ?? products.length ?? 0);
+
+    for (const p of products) {
+      const productId = String(p?.id || "").trim();
+      const productName = String(p?.description || p?.descriptionLabel || "").trim();
+      const productInternalId = String(p?.internalId || "").trim();
+      const productExternalId = String(p?.externalId || "").trim();
+
+      rows.push({
+        type: "PRODUCT",
+        productId,
+        variantId: "",
+        name: productName,
+        internalId: productInternalId,
+        externalId: productExternalId,
+        barcode: "",
+      });
+
+      const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
+      for (const v of variants) {
+        const variantId = String(v?.id || "").trim();
+        const variantName = String(
+          v?.description || v?.descriptionReceipt || productName || ""
+        ).trim();
+        const variantInternalId = String(v?.internalId || "").trim();
+        const variantExternalId = String(v?.externalId || "").trim();
+
+        const vBarcodes: any[] =
+          (Array.isArray(v?.barcodes) && v.barcodes) ||
+          (Array.isArray(v?.salesBarcodes) && v.salesBarcodes) ||
+          [];
+
+        if (!vBarcodes.length) {
+          rows.push({
+            type: "VARIANT",
+            productId,
+            variantId,
+            name: variantName,
+            internalId: variantInternalId,
+            externalId: variantExternalId,
+            barcode: "",
+          });
+        } else {
+          for (const b of vBarcodes) {
+            rows.push({
+              type: "VARIANT",
+              productId,
+              variantId,
+              name: variantName,
+              internalId: variantInternalId,
+              externalId: variantExternalId,
+              barcode: String(b?.barcode || b?.code || b?.value || b || "").trim(),
+            });
+          }
+        }
+      }
+    }
+
+    start += limit;
+    if (!products.length) break;
+  }
+
+  return rows;
+}
+
 async function syncCicProducts() {
   try {
     if (!CIC_API_KEY) {
@@ -262,67 +401,66 @@ async function syncCicProducts() {
         console.log("CIC PRODUCT SAMPLE:", JSON.stringify(products[0], null, 2));
       }
 
-     for (const p of products) {
-  const productId = String(p?.id || "").trim();
-  const productDesc = String(p?.description || "").trim();
+      for (const p of products) {
+        const productId = String(p?.id || "").trim();
+        const productDesc = String(p?.description || "").trim();
 
-  // DEBUG mirato sui prodotti problematici
-  if (
-    productId === "8a060ec2-5f36-4358-929a-f354e561819b" ||
-    productId === "0ccea60d-737c-4a9a-a6dc-534933b79032" ||
-    productDesc.toUpperCase().includes("KOZEL") ||
-    productDesc.toUpperCase().includes("ACQUA")
-  ) {
-    console.log("🔎 CIC TARGET PRODUCT:", JSON.stringify(p, null, 2));
-  }
+        if (
+          productId === "8a060ec2-5f36-4358-929a-f354e561819b" ||
+          productId === "0ccea60d-737c-4a9a-a6dc-534933b79032" ||
+          productDesc.toUpperCase().includes("KOZEL") ||
+          productDesc.toUpperCase().includes("ACQUA")
+        ) {
+          console.log("🔎 CIC TARGET PRODUCT:", JSON.stringify(p, null, 2));
+        }
 
-  const productSku =
-    String(p?.internalId || "").trim() ||
-    String(p?.externalId || "").trim() ||
-    "";
+        const productSku =
+          String(p?.internalId || "").trim() ||
+          String(p?.externalId || "").trim() ||
+          "";
 
-  if (productId && productSku) map[productId] = productSku;
+        if (productId && productSku) map[productId] = productSku;
 
-  const pBarcodes: any[] =
-    (Array.isArray(p?.barcodes) && p.barcodes) ||
-    (Array.isArray(p?.salesBarcodes) && p.salesBarcodes) ||
-    [];
+        const pBarcodes: any[] =
+          (Array.isArray(p?.barcodes) && p.barcodes) ||
+          (Array.isArray(p?.salesBarcodes) && p.salesBarcodes) ||
+          [];
 
-  for (const b of pBarcodes) {
-    const code = String(b?.barcode || b?.code || b?.value || b || "").trim();
-    if (code && productSku) map[code] = productSku;
-  }
+        for (const b of pBarcodes) {
+          const code = String(b?.barcode || b?.code || b?.value || b || "").trim();
+          if (code && productSku) map[code] = productSku;
+        }
 
-  const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
-  for (const v of variants) {
-    const variantId = String(v?.id || "").trim();
+        const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
+        for (const v of variants) {
+          const variantId = String(v?.id || "").trim();
 
-    // DEBUG mirato sulle varianti problematiche
-    if (
-      variantId === "2dbb6511-afe1-4599-a698-1673bb46ec3b" ||
-      variantId === "51667f52-9f38-469a-a056-60786b1d2d4d"
-    ) {
-      console.log("🔎 CIC TARGET VARIANT:", JSON.stringify(v, null, 2));
-    }
+          if (
+            variantId === "2dbb6511-afe1-4599-a698-1673bb46ec3b" ||
+            variantId === "51667f52-9f38-469a-a056-60786b1d2d4d"
+          ) {
+            console.log("🔎 CIC TARGET VARIANT:", JSON.stringify(v, null, 2));
+          }
 
-    const variantSku =
-      String(v?.internalId || "").trim() ||
-      String(v?.externalId || "").trim() ||
-      productSku;
+          const variantSku =
+            String(v?.internalId || "").trim() ||
+            String(v?.externalId || "").trim() ||
+            productSku;
 
-    if (variantId && variantSku) map[variantId] = variantSku;
+          if (variantId && variantSku) map[variantId] = variantSku;
 
-    const vBarcodes: any[] =
-      (Array.isArray(v?.barcodes) && v.barcodes) ||
-      (Array.isArray(v?.salesBarcodes) && v.salesBarcodes) ||
-      [];
+          const vBarcodes: any[] =
+            (Array.isArray(v?.barcodes) && v.barcodes) ||
+            (Array.isArray(v?.salesBarcodes) && v.salesBarcodes) ||
+            [];
 
-    for (const b of vBarcodes) {
-      const code = String(b?.barcode || b?.code || b?.value || b || "").trim();
-      if (code && variantSku) map[code] = variantSku;
-    }
-  }
-}
+          for (const b of vBarcodes) {
+            const code = String(b?.barcode || b?.code || b?.value || b || "").trim();
+            if (code && variantSku) map[code] = variantSku;
+          }
+        }
+      }
+
       start += limit;
       if (!products.length) break;
     }
@@ -376,7 +514,6 @@ function cicExtractItems(data: any) {
         resolved = cicResolveSku(idVariant);
       }
 
-      // fallback: se la variante non si risolve in SKU, provo il prodotto padre
       if (!resolved || resolved.includes("-")) {
         resolved = cicResolveSku(idProduct);
       }
@@ -419,6 +556,7 @@ app.use(
 app.get("/webhooks/cic", (_req, res) => res.status(200).send("OK"));
 app.head("/webhooks/cic", (_req, res) => res.status(200).end());
 app.options("/webhooks/cic", (_req, res) => res.status(200).end());
+
 function buildCicWebhookDebugDump(data: any, operation: string, headers: Record<string, any>) {
   const document = data?.document ?? {};
   const rows = Array.isArray(document?.rows) ? document.rows : [];
@@ -428,7 +566,6 @@ function buildCicWebhookDebugDump(data: any, operation: string, headers: Record<
 
   return {
     capturedAt: new Date().toISOString(),
-
     operation,
     headers,
 
@@ -521,15 +658,13 @@ function buildCicWebhookDebugDump(data: any, operation: string, headers: Record<
       note: r?.note ?? null,
       calculatedAmount: r?.calculatedAmount ?? null,
       shippingCost: r?.shippingCost ?? null,
-
-      // dump extra grezzo della riga
       raw: r,
     })),
 
-    // payload completo originale
     rawPayload: data,
   };
 }
+
 app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
   try {
     const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";
@@ -552,13 +687,14 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
     }
 
     const data = JSON.parse(raw);
-     const debugDump = buildCicWebhookDebugDump(data, operation, {
-  "x-cn-operation": req.header("x-cn-operation") || "",
-  "x-cn-signature": req.header("x-cn-signature") || "",
-  "content-type": req.header("content-type") || "",
-});
 
-appendCicWebhookDump(debugDump);
+    const debugDump = buildCicWebhookDebugDump(data, operation, {
+      "x-cn-operation": req.header("x-cn-operation") || "",
+      "x-cn-signature": req.header("x-cn-signature") || "",
+      "content-type": req.header("content-type") || "",
+    });
+
+    appendCicWebhookDump(debugDump);
 
     const docId = "CIC-" + String(data?.document?.id || data?.id || "");
     const orderDate = new Date(data?.document?.date || data?.document?.creationDate || Date.now());
@@ -573,73 +709,63 @@ appendCicWebhookDump(debugDump);
       items = cicExtractItems(data);
     }
 
-const unresolved = items.filter((it) => String(it.sku).includes("-"));
-if (unresolved.length) {
-  console.warn("❗CIC UNRESOLVED:", unresolved);
+    const unresolved = items.filter((it) => String(it.sku).includes("-"));
+    if (unresolved.length) {
+      console.warn("❗CIC UNRESOLVED:", unresolved);
 
-  const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
+      const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
 
-  for (const it of unresolved) {
-    const rawRow = rawRows.find((r: any) => {
-      const rowVariant = String(r?.idProductVariant ?? "").trim();
-      const rowProduct = String(r?.idProduct ?? "").trim();
+      for (const it of unresolved) {
+        const rawRow = rawRows.find((r: any) => {
+          const rowVariant = String(r?.idProductVariant ?? "").trim();
+          const rowProduct = String(r?.idProduct ?? "").trim();
 
-      return (
-        rowVariant === String(it._idProductVariant || "").trim() ||
-        rowProduct === String(it._idProduct || "").trim()
-      );
-    });
+          return (
+            rowVariant === String(it._idProductVariant || "").trim() ||
+            rowProduct === String(it._idProduct || "").trim()
+          );
+        });
 
-    console.log(
-      "🔎 CIC UNRESOLVED ROW:",
-      JSON.stringify(
-        {
-          unresolved: it,
-          row: rawRow || null,
-        },
-        null,
-        2
-      )
-    );
+        console.log(
+          "🔎 CIC UNRESOLVED ROW:",
+          JSON.stringify(
+            {
+              unresolved: it,
+              row: rawRow || null,
+            },
+            null,
+            2
+          )
+        );
 
-    await pushUnresolvedToSheet({
-      docId,
-      receiptNumber:
-        data?.document?.documentNumber ||
-        data?.document?.number ||
-        data?.document?.receiptNumber ||
-        "",
-      _idProduct: it._idProduct,
-      _idProductVariant: it._idProductVariant,
-      description:
-  rawRow?.description ||
-  rawRow?.descriptionReceipt ||
-  rawRow?.name ||
-  "",
+        await pushUnresolvedToSheet({
+          docId,
+          receiptNumber:
+            data?.document?.documentNumber ||
+            data?.document?.number ||
+            data?.document?.receiptNumber ||
+            data?.number ||
+            "",
+          _idProduct: it._idProduct,
+          _idProductVariant: it._idProductVariant,
+          description: rawRow?.description || rawRow?.descriptionReceipt || rawRow?.name || "",
+          price: rawRow?.price ?? rawRow?.priceTotal ?? "",
+          qty: rawRow?.quantity ?? it.qty ?? 1,
+          rawSku: it.sku,
+          note: "Da configurare",
+        });
 
-price:
-  rawRow?.price ??
-  rawRow?.priceTotal ??
-  "",
+        upsertUnresolved({
+          productId: it._idProduct || undefined,
+          variantId: it._idProductVariant || undefined,
+          rawSku: String(it.sku),
+          docId,
+          operation,
+          total: it.total,
+        });
+      }
+    }
 
-qty:
-  rawRow?.quantity ??
-  it.qty ??
-  1,
-      rawSku: it.sku,
-      note: "Da configurare",
-    });
-
-    upsertUnresolved({
-      productId: it._idProduct || undefined,
-      variantId: it._idProductVariant || undefined,
-      rawSku: String(it.sku),
-      docId,
-      operation,
-      total: it.total,
-    });
-  }
-}
     const resolvedItems = items.filter((it) => !String(it.sku).includes("-"));
 
     const inserted = applyRecipeStock({
@@ -649,8 +775,8 @@ qty:
       soldItems: resolvedItems.map((i: any) => ({ sku: i.sku, qty: i.qty })),
       bom: bomCache,
       cicProductModes: Object.fromEntries(
-  Object.entries(cicProductModeCache).map(([k, v]) => [v.sku, v.mode])
-),
+        Object.entries(cicProductModeCache).map(([_, v]) => [v.sku, v.mode])
+      ),
     });
 
     console.log("✅ SCARICHI GENERATI:", inserted);
@@ -692,13 +818,46 @@ app.get("/debug/cic-unresolved", (_req, res) => {
     sample: rows.slice(0, 30),
   });
 });
+
 app.get("/debug/cic-webhook-dumps", (_req, res) => {
-  const rows = loadCicWebhookDumps([]);
+  const rows = loadCicWebhookDumps();
   res.json({
     count: rows.length,
-    sample: rows.slice(-20), // ultimi 20 dump
+    sample: rows.slice(-20),
   });
 });
+
+app.get("/debug/cic-products-full", async (_req, res) => {
+  try {
+    const rows = await fetchAllCicProducts();
+    res.json({
+      count: rows.length,
+      sample: rows.slice(0, 300),
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      error: String(err?.message ?? err),
+    });
+  }
+});
+
+app.post("/debug/cic-products-export-sheet", async (_req, res) => {
+  try {
+    const rows = await fetchAllCicProducts();
+    await pushCatalogToSheet(rows);
+
+    res.json({
+      ok: true,
+      exported: rows.length,
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message ?? err),
+    });
+  }
+});
+
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
@@ -738,6 +897,8 @@ if (basicAuthEnabled && user && pass) {
     if (req.path === "/debug/cic-product-modes") return next();
     if (req.path === "/debug/cic-unresolved") return next();
     if (req.path === "/debug/cic-webhook-dumps") return next();
+    if (req.path === "/debug/cic-products-full") return next();
+    if (req.path === "/debug/cic-products-export-sheet") return next();
     if (req.path.startsWith("/webhooks/cic")) return next();
     return auth(req, res, next);
   });
