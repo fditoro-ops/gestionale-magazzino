@@ -201,7 +201,19 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
     });
 
     if (!sku) continue;
-    if (tipoScarico !== "RECIPE" && tipoScarico !== "IGNORE") continue;
+    if (!tipoScarico) continue;
+if (tipoScarico === "RECIPE" || tipoScarico === "IGNORE") {
+  const entry: CicProductMapEntry = {
+    sku,
+    mode: tipoScarico as CicProductMode,
+    productId,
+    variantId,
+    name,
+  };
+
+  if (variantId) map[variantId] = entry;
+  if (productId) map[productId] = entry;
+}
     if (!productId && !variantId) continue;
 
     const entry: CicProductMapEntry = {
