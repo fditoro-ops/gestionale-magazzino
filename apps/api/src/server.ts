@@ -13,12 +13,13 @@ import ordersRouter from "./routes/orders.js";
 
 import { applyRecipeStock } from "./services/recipeStock.service.js";
 import { upsertUnresolved, listUnresolved } from "./data/cicUnresolved.store.js";
-import { appendCicWebhookDump, loadCicWebhookDumps } from "./data/cicWebhookDump.store.js";
+import {
+  appendCicWebhookDump,
+  loadCicWebhookDumps,
+} from "./data/cicWebhookDump.store.js";
 import {
   upsertPendingRow,
   listPendingRows,
-  markPendingRowProcessed,
-  type CicPendingReason,
 } from "./data/cicPendingRows.store.js";
 
 /* =========================
@@ -50,6 +51,14 @@ type CicCatalogRow = {
   barcode: string;
 };
 
+type CicExtractedItem = {
+  sku: string;
+  qty: number;
+  total: number;
+  _idProduct: string;
+  _idProductVariant: string;
+};
+
 let bomCache: BomMap = {};
 let bomLastSyncAt: string | null = null;
 let bomLastError: string | null = null;
@@ -58,12 +67,18 @@ let cicProductModeCache: CicProductMap = {};
 let cicProductModeLastSyncAt: string | null = null;
 let cicProductModeLastError: string | null = null;
 
+/* =========================
+   BOM
+   ========================= */
+
 async function loadBomFromSheet(): Promise<BomMap> {
   const sheetId = process.env.BOM_SHEET_ID;
   const tab = process.env.BOM_SHEET_TAB || "RICETTE";
   if (!sheetId) throw new Error("BOM_SHEET_ID mancante");
 
-  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tab)}`;
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(
+    tab
+  )}`;
 
   const res = await fetch(url);
   if (!res.ok) {
@@ -79,6 +94,13 @@ async function loadBomFromSheet(): Promise<BomMap> {
 
   for (const r of rows) {
     const c = r?.c ?? [];
+
+    // RICETTE:
+    // A = SKU prodotto
+    // C = SKU ingrediente
+    // E = QTY
+    // F = UM
+
     const productSku = c?.[0]?.v ? String(c[0].v).trim() : "";
     const ingredientSku = c?.[2]?.v ? String(c[2].v).trim() : "";
     const qty = Number(c?.[4]?.v ?? 0);
@@ -106,6 +128,10 @@ async function syncBom() {
     console.error("❌ BOM sync error:", bomLastError);
   }
 }
+
+/* =========================
+   PRODOTTI_CIC
+   ========================= */
 
 async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
   const sheetId = process.env.BOM_SHEET_ID;
@@ -159,15 +185,8 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
       name,
     };
 
-    // priorità: variantId
-    if (variantId) {
-      map[variantId] = entry;
-    }
-
-    // fallback anche su productId
-    if (productId) {
-      map[productId] = entry;
-    }
+    if (variantId) map[variantId] = entry;
+    if (productId) map[productId] = entry;
   }
 
   return map;
@@ -190,6 +209,10 @@ async function syncCicProductModes() {
     console.error("❌ PRODOTTI_CIC sync error:", cicProductModeLastError);
   }
 }
+
+/* =========================
+   SHEET write helpers
+   ========================= */
 
 async function pushUnresolvedToSheet(row: any) {
   const url = process.env.CIC_PRODUCTS_SHEET_WRITE_URL;
@@ -242,7 +265,7 @@ async function pushCatalogToSheet(rows: CicCatalogRow[]) {
 }
 
 /* =========================
-   CIC (Cassa in Cloud) Sync
+   CIC API sync
    ========================= */
 
 const CIC_WEBHOOK_SECRET = process.env.CIC_WEBHOOK_SECRET || "";
@@ -261,7 +284,11 @@ let cicBearerToken: string | null = null;
 let cicBearerTokenExpMs: number | null = null;
 
 function cicTokenValid() {
-  return !!cicBearerToken && !!cicBearerTokenExpMs && Date.now() < cicBearerTokenExpMs - 30_000;
+  return (
+    !!cicBearerToken &&
+    !!cicBearerTokenExpMs &&
+    Date.now() < cicBearerTokenExpMs - 30_000
+  );
 }
 
 async function getCicBearerToken() {
@@ -291,14 +318,10 @@ async function getCicBearerToken() {
 }
 
 async function fetchAllCicProducts(): Promise<CicCatalogRow[]> {
-  if (!CIC_API_KEY) {
-    throw new Error("CIC_API_KEY mancante");
-  }
+  if (!CIC_API_KEY) throw new Error("CIC_API_KEY mancante");
 
   const token = await getCicBearerToken();
-  if (!token) {
-    throw new Error("Token CIC non disponibile");
-  }
+  if (!token) throw new Error("Token CIC non disponibile");
 
   const rows: CicCatalogRow[] = [];
   let start = 0;
@@ -511,25 +534,21 @@ async function syncCicProducts() {
   }
 }
 
+/* =========================
+   CIC resolve helpers
+   ========================= */
+
 function cicResolveSku(id: string) {
   if (!id) return id;
 
-  if (id.startsWith("SKU")) {
-    return id;
-  }
-
-  if (cicIdToSkuMap[id]) {
-    return cicIdToSkuMap[id];
-  }
-
-  if (cicProductModeCache[id]) {
-    return cicProductModeCache[id].sku;
-  }
+  if (id.startsWith("SKU")) return id;
+  if (cicIdToSkuMap[id]) return cicIdToSkuMap[id];
+  if (cicProductModeCache[id]) return cicProductModeCache[id].sku;
 
   return id;
 }
 
-function cicExtractItems(data: any) {
+function cicExtractItems(data: any): CicExtractedItem[] {
   const rows = data?.document?.rows ?? [];
   if (!Array.isArray(rows)) return [];
 
@@ -590,7 +609,11 @@ app.get("/webhooks/cic", (_req, res) => res.status(200).send("OK"));
 app.head("/webhooks/cic", (_req, res) => res.status(200).end());
 app.options("/webhooks/cic", (_req, res) => res.status(200).end());
 
-function buildCicWebhookDebugDump(data: any, operation: string, headers: Record<string, any>) {
+function buildCicWebhookDebugDump(
+  data: any,
+  operation: string,
+  headers: Record<string, any>
+) {
   const document = data?.document ?? {};
   const rows = Array.isArray(document?.rows) ? document.rows : [];
   const payments = Array.isArray(document?.payments) ? document.payments : [];
@@ -698,6 +721,10 @@ function buildCicWebhookDebugDump(data: any, operation: string, headers: Record<
   };
 }
 
+/* =========================
+   CIC webhook
+   ========================= */
+
 app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
   try {
     const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";
@@ -707,7 +734,11 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
     console.log("CIC x-cn-operation:", operation);
 
     if (CIC_WEBHOOK_SECRET && signature) {
-      const expected = crypto.createHmac("sha1", CIC_WEBHOOK_SECRET).update(raw, "utf8").digest("hex");
+      const expected = crypto
+        .createHmac("sha1", CIC_WEBHOOK_SECRET)
+        .update(raw, "utf8")
+        .digest("hex");
+
       if (signature !== expected) {
         console.error("❌ CIC signature mismatch");
         return res.status(401).send("Invalid signature");
@@ -730,7 +761,12 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
     appendCicWebhookDump(debugDump);
 
     const docId = "CIC-" + String(data?.document?.id || data?.id || "");
-    const orderDate = new Date(data?.document?.date || data?.document?.creationDate || data?.date || Date.now());
+    const orderDate = new Date(
+      data?.document?.date ||
+        data?.document?.creationDate ||
+        data?.date ||
+        Date.now()
+    );
     const tenantId = process.env.TENANT_ID || "IMP001";
 
     let items = cicExtractItems(data);
@@ -742,34 +778,66 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
       items = cicExtractItems(data);
     }
 
-    const unresolved = items.filter((it) => String(it.sku).includes("-"));
-    if (unresolved.length) {
-      console.warn("❗CIC UNRESOLVED:", unresolved);
+    const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
 
-      const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
+    const cicModesBySku = Object.fromEntries(
+      Object.entries(cicProductModeCache).map(([_, v]) => [v.sku, v.mode])
+    ) as Record<string, "RECIPE" | "IGNORE">;
 
-      for (const it of unresolved) {
-        const rawRow = rawRows.find((r: any) => {
-          const rowVariant = String(r?.idProductVariant ?? "").trim();
-          const rowProduct = String(r?.idProduct ?? "").trim();
+    const finalResolvedItems: Array<{ sku: string; qty: number }> = [];
 
-          return (
-            rowVariant === String(it._idProductVariant || "").trim() ||
-            rowProduct === String(it._idProduct || "").trim()
-          );
+    for (const it of items) {
+      const sku = String(it.sku || "").trim();
+      const mode = cicModesBySku[sku];
+      const hasRecipe = Array.isArray(bomCache[sku]) && bomCache[sku].length > 0;
+
+      const rawRow = rawRows.find((r: any) => {
+        const rowVariant = String(r?.idProductVariant ?? "").trim();
+        const rowProduct = String(r?.idProduct ?? "").trim();
+
+        return (
+          rowVariant === String(it._idProductVariant || "").trim() ||
+          rowProduct === String(it._idProduct || "").trim()
+        );
+      });
+
+      if (!sku || sku.includes("-")) {
+        console.warn("❗CIC UNMAPPED PRODUCT:", {
+          productId: it._idProduct,
+          variantId: it._idProductVariant,
+          rawSku: sku,
         });
 
-        console.log(
-          "🔎 CIC UNRESOLVED ROW:",
-          JSON.stringify(
-            {
-              unresolved: it,
-              row: rawRow || null,
-            },
-            null,
-            2
-          )
-        );
+        upsertPendingRow({
+          docId,
+          operation,
+          orderDate: orderDate.toISOString(),
+          tenantId,
+          productId: it._idProduct || undefined,
+          variantId: it._idProductVariant || undefined,
+          rawResolvedSku: sku,
+          qty: Number(it.qty || 0),
+          total: Number(it.total || 0),
+          price: Number(rawRow?.price ?? 0),
+          description:
+            String(
+              rawRow?.description ||
+                rawRow?.descriptionReceipt ||
+                rawRow?.name ||
+                ""
+            ).trim() || undefined,
+          reason: "UNMAPPED_PRODUCT",
+          rawRow: rawRow || null,
+        });
+
+        upsertUnresolved({
+          productId: it._idProduct || undefined,
+          variantId: it._idProductVariant || undefined,
+          rawSku: String(sku),
+          docId,
+          operation,
+          total: it.total,
+        });
 
         await pushUnresolvedToSheet({
           docId,
@@ -781,37 +849,97 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
             "",
           _idProduct: it._idProduct,
           _idProductVariant: it._idProductVariant,
-          description: rawRow?.description || rawRow?.descriptionReceipt || rawRow?.name || "",
+          description:
+            rawRow?.description ||
+            rawRow?.descriptionReceipt ||
+            rawRow?.name ||
+            "",
           price: rawRow?.price ?? rawRow?.priceTotal ?? "",
           qty: rawRow?.quantity ?? it.qty ?? 1,
-          rawSku: it.sku,
+          rawSku: sku,
           note: "Da configurare",
         });
 
-        upsertUnresolved({
-          productId: it._idProduct || undefined,
-          variantId: it._idProductVariant || undefined,
-          rawSku: String(it.sku),
+        continue;
+      }
+
+      if (!mode) {
+        console.log("⚠️ SKU non classificato in PRODOTTI_CIC:", sku);
+
+        upsertPendingRow({
           docId,
           operation,
-          total: it.total,
+          orderDate: orderDate.toISOString(),
+          tenantId,
+          productId: it._idProduct || undefined,
+          variantId: it._idProductVariant || undefined,
+          rawResolvedSku: sku,
+          qty: Number(it.qty || 0),
+          total: Number(it.total || 0),
+          price: Number(rawRow?.price ?? 0),
+          description:
+            String(
+              rawRow?.description ||
+                rawRow?.descriptionReceipt ||
+                rawRow?.name ||
+                ""
+            ).trim() || undefined,
+          reason: "UNCLASSIFIED_SKU",
+          rawRow: rawRow || null,
         });
+
+        continue;
       }
+
+      if (mode === "IGNORE") {
+        console.log("⏭ SKU ignorato da PRODOTTI_CIC:", sku);
+        continue;
+      }
+
+      if (mode === "RECIPE" && !hasRecipe) {
+        console.log("⚠️ Ricetta non trovata per SKU RECIPE:", sku);
+
+        upsertPendingRow({
+          docId,
+          operation,
+          orderDate: orderDate.toISOString(),
+          tenantId,
+          productId: it._idProduct || undefined,
+          variantId: it._idProductVariant || undefined,
+          rawResolvedSku: sku,
+          qty: Number(it.qty || 0),
+          total: Number(it.total || 0),
+          price: Number(rawRow?.price ?? 0),
+          description:
+            String(
+              rawRow?.description ||
+                rawRow?.descriptionReceipt ||
+                rawRow?.name ||
+                ""
+            ).trim() || undefined,
+          reason: "RECIPE_NOT_FOUND",
+          rawRow: rawRow || null,
+        });
+
+        continue;
+      }
+
+      finalResolvedItems.push({
+        sku,
+        qty: Number(it.qty || 0),
+      });
     }
 
-    const resolvedItems = items.filter((it) => !String(it.sku).includes("-"));
-
-    const cicModesBySku = Object.fromEntries(
-      Object.values(cicProductModeCache).map((v) => [v.sku, v.mode])
-    ) as Record<string, CicProductMode>;
+    const movementSign = operation === "RECEIPT/DELETE" ? 1 : -1;
 
     const inserted = applyRecipeStock({
       docId,
       tenantId,
       orderDate,
-      soldItems: resolvedItems.map((i: any) => ({ sku: i.sku, qty: i.qty })),
+      soldItems: finalResolvedItems,
       bom: bomCache,
       cicProductModes: cicModesBySku,
+      movementSign,
     });
 
     console.log("✅ SCARICHI GENERATI:", inserted);
@@ -893,6 +1021,22 @@ app.get("/debug/cic-products-export-sheet", async (_req, res) => {
   }
 });
 
+app.get("/debug/cic-pending", (_req, res) => {
+  const rows = listPendingRows();
+  res.json({
+    count: rows.length,
+    sample: rows.slice(-50),
+  });
+});
+
+app.get("/debug/cic-pending-open", (_req, res) => {
+  const rows = listPendingRows("PENDING");
+  res.json({
+    count: rows.length,
+    sample: rows.slice(-50),
+  });
+});
+
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
@@ -924,7 +1068,11 @@ const user = process.env.BASIC_AUTH_USER ?? "";
 const pass = process.env.BASIC_AUTH_PASS ?? "";
 
 if (basicAuthEnabled && user && pass) {
-  const auth = basicAuth({ users: { [user]: pass }, challenge: true, realm: "Core (staging)" });
+  const auth = basicAuth({
+    users: { [user]: pass },
+    challenge: true,
+    realm: "Core (staging)",
+  });
 
   app.use((req, res, next) => {
     if (req.path === "/health") return next();
@@ -934,6 +1082,8 @@ if (basicAuthEnabled && user && pass) {
     if (req.path === "/debug/cic-webhook-dumps") return next();
     if (req.path === "/debug/cic-products-full") return next();
     if (req.path === "/debug/cic-products-export-sheet") return next();
+    if (req.path === "/debug/cic-pending") return next();
+    if (req.path === "/debug/cic-pending-open") return next();
     if (req.path.startsWith("/webhooks/cic")) return next();
     return auth(req, res, next);
   });
