@@ -23,13 +23,16 @@ type BomLine = { ingredientSku: string; qty: number; um: string };
 type BomMap = Record<string, BomLine[]>;
 
 type CicProductMode = "RECIPE" | "IGNORE";
-type CicProductMap = Record<
-  string,
-  {
-    sku: string;
-    mode: CicProductMode;
-  }
->;
+
+type CicProductMapEntry = {
+  sku: string;
+  mode: CicProductMode;
+  productId: string;
+  variantId: string;
+  name?: string;
+};
+
+type CicProductMap = Record<string, CicProductMapEntry>;
 
 type CicCatalogRow = {
   type: "PRODUCT" | "VARIANT";
@@ -124,17 +127,43 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
   for (const r of rows) {
     const c = r?.c ?? [];
 
-    const cicId = c?.[0]?.v ? String(c[0].v).trim() : "";
-    const sku = c?.[1]?.v ? String(c[1].v).trim() : "";
-    const tipoScarico = c?.[6]?.v ? String(c[6].v).trim().toUpperCase() : "";
+    // PRODOTTI_CIC:
+    // A = CIC_PRODUCT_ID
+    // B = CIC_VARIANT_ID
+    // C = SKU
+    // D = NOME
+    // E = CATEGORIA
+    // F = REPARTO
+    // G = PREZZO
+    // H = TIPO_SCARICO
 
-    if (!cicId || !sku) continue;
+    const productId = c?.[0]?.v ? String(c[0].v).trim() : "";
+    const variantId = c?.[1]?.v ? String(c[1].v).trim() : "";
+    const sku = c?.[2]?.v ? String(c[2].v).trim() : "";
+    const name = c?.[3]?.v ? String(c[3].v).trim() : "";
+    const tipoScarico = c?.[7]?.v ? String(c[7].v).trim().toUpperCase() : "";
+
+    if (!sku) continue;
     if (tipoScarico !== "RECIPE" && tipoScarico !== "IGNORE") continue;
+    if (!productId && !variantId) continue;
 
-    map[cicId] = {
+    const entry: CicProductMapEntry = {
       sku,
       mode: tipoScarico as CicProductMode,
+      productId,
+      variantId,
+      name,
     };
+
+    // priorità: variantId
+    if (variantId) {
+      map[variantId] = entry;
+    }
+
+    // fallback anche su productId
+    if (productId) {
+      map[productId] = entry;
+    }
   }
 
   return map;
@@ -150,7 +179,7 @@ async function syncCicProductModes() {
     console.log(
       "✅ PRODOTTI_CIC sync OK:",
       Object.keys(cicProductModeCache).length,
-      "sku classificati"
+      "chiavi mappate"
     );
   } catch (err: any) {
     cicProductModeLastError = String(err?.message ?? err);
@@ -697,7 +726,7 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
     appendCicWebhookDump(debugDump);
 
     const docId = "CIC-" + String(data?.document?.id || data?.id || "");
-    const orderDate = new Date(data?.document?.date || data?.document?.creationDate || Date.now());
+    const orderDate = new Date(data?.document?.date || data?.document?.creationDate || data?.date || Date.now());
     const tenantId = process.env.TENANT_ID || "IMP001";
 
     let items = cicExtractItems(data);
@@ -768,15 +797,17 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
 
     const resolvedItems = items.filter((it) => !String(it.sku).includes("-"));
 
+    const cicModesBySku = Object.fromEntries(
+      Object.values(cicProductModeCache).map((v) => [v.sku, v.mode])
+    ) as Record<string, CicProductMode>;
+
     const inserted = applyRecipeStock({
       docId,
       tenantId,
       orderDate,
       soldItems: resolvedItems.map((i: any) => ({ sku: i.sku, qty: i.qty })),
       bom: bomCache,
-      cicProductModes: Object.fromEntries(
-        Object.entries(cicProductModeCache).map(([_, v]) => [v.sku, v.mode])
-      ),
+      cicProductModes: cicModesBySku,
     });
 
     console.log("✅ SCARICHI GENERATI:", inserted);
