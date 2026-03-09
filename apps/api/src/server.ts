@@ -14,6 +14,12 @@ import ordersRouter from "./routes/orders.js";
 import { applyRecipeStock } from "./services/recipeStock.service.js";
 import { upsertUnresolved, listUnresolved } from "./data/cicUnresolved.store.js";
 import { appendCicWebhookDump, loadCicWebhookDumps } from "./data/cicWebhookDump.store.js";
+import {
+  upsertPendingRow,
+  listPendingRows,
+  markPendingRowProcessed,
+  type CicPendingReason,
+} from "./data/cicPendingRows.store.js";
 
 /* =========================
    BOM (Google Sheet) Reader
