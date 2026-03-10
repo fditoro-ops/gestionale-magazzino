@@ -1,95 +1,152 @@
-import { Router } from "express";
 import { randomUUID } from "crypto";
-import type { Movement } from "../types/movement.js";
+import { loadItems } from "../data/items.store.js";
 import { loadMovements, saveMovements } from "../data/movements.store.js";
-import { CreateMovementSchema } from "../schemas/movement.schema.js";
-import { getItemBySku } from "../services/items.service.js";
 
-const router = Router();
+type BomLine = {
+  ingredientSku: string;
+  qty: number;
+  um: string;
+};
 
-/**
- * GET /movements
- */
-router.get("/", (_req, res) => {
-  const movements = loadMovements([]);
-  res.json(movements);
-});
+type BomMap = Record<string, BomLine[]>;
+type CicProductMode = "RECIPE" | "IGNORE";
+type CicProductMap = Record<string, CicProductMode>;
 
-function getCurrentQtyForSku(sku: string) {
-  const movements = loadMovements([]);
+export function applyRecipeStock({
+  docId,
+  tenantId,
+  orderDate,
+  soldItems,
+  bom,
+  cicProductModes,
+  movementSign,
+}: {
+  docId: string;
+  tenantId: string;
+  orderDate: Date;
+  soldItems: { sku: string; qty: number }[];
+  bom: BomMap;
+  cicProductModes: CicProductMap;
+  movementSign: 1 | -1;
+}) {
+  const items = loadItems();
+  const movements = loadMovements();
 
-  return movements
-    .filter((m: any) => m.sku === sku)
-    .reduce((sum, m: any) => {
-      if (m.type === "IN") return sum + m.quantity;
-      if (m.type === "OUT" || m.type === "ADJUST") return sum - m.quantity;
-      if (m.type === "INVENTORY") return m.quantity;
-      return sum;
-    }, 0);
+  const bySku = new Map(items.map((i: any) => [String(i.sku).trim(), i]));
+
+  const movementType = movementSign === 1 ? "IN" : "OUT";
+  const movementReason =
+    movementSign === 1 ? "STORNO_RICETTA_CIC" : "SCARICO_RICETTA_CIC";
+
+  const alreadyProcessed = movements.some(
+    (m: any) =>
+      String(m.documento || "").trim() === String(docId).trim() &&
+      String(m.reason || "").trim() === movementReason
+  );
+
+  if (alreadyProcessed) {
+    console.log("⚠️ Documento già processato per questo movimento, salto:", {
+      docId,
+      movementReason,
+    });
+    return 0;
+  }
+
+  const newMovements: any[] = [];
+
+  for (const sold of soldItems) {
+    const soldSku = String(sold.sku || "").trim();
+    const soldQty = Number(sold.qty || 0);
+
+    if (!soldSku || !soldQty) {
+      console.log("⚠️ Riga vendita non valida:", sold);
+      continue;
+    }
+
+    const mode = cicProductModes[soldSku];
+
+    if (mode === "IGNORE") {
+      console.log("⏭ SKU ignorato da PRODOTTI_CIC:", soldSku);
+      continue;
+    }
+
+    if (mode !== "RECIPE") {
+      console.log("⚠️ SKU non classificato in PRODOTTI_CIC:", soldSku);
+      continue;
+    }
+
+    const recipe = bom[soldSku];
+
+    if (!recipe || !recipe.length) {
+      console.log("⚠️ Ricetta non trovata per SKU RECIPE:", soldSku);
+      continue;
+    }
+
+    console.log(
+      "🍸 Ricetta trovata:",
+      soldSku,
+      "ingredienti:",
+      recipe.length,
+      "qty venduta:",
+      soldQty,
+      "movementType:",
+      movementType
+    );
+
+    for (const ing of recipe) {
+      const ingredientSku = String(ing.ingredientSku || "").trim();
+      const ingredientQty = Number(ing.qty || 0);
+
+      if (!ingredientSku || !ingredientQty) {
+        console.log("⚠️ Ingrediente BOM non valido:", ing);
+        continue;
+      }
+
+      if (!bySku.has(ingredientSku)) {
+        console.log(
+          "❗ Ingrediente non presente in anagrafica:",
+          ingredientSku,
+          "per prodotto:",
+          soldSku
+        );
+        continue;
+      }
+
+      const quantity = ingredientQty * soldQty;
+
+      newMovements.push({
+        id: randomUUID(),
+        sku: ingredientSku,
+        quantity,
+        type: movementType,
+        reason: movementReason,
+        date: orderDate.toISOString(),
+        note:
+          movementSign === 1
+            ? `Storno ricetta ${soldSku} doc ${docId}`
+            : `Scarico ricetta ${soldSku} doc ${docId}`,
+        documento: docId,
+        tenant_id: tenantId,
+      });
+
+      console.log("✅ Movimento creato:", {
+        documento: docId,
+        type: movementType,
+        sku: ingredientSku,
+        quantity,
+      });
+    }
+  }
+
+  if (!newMovements.length) {
+    console.log("ℹ️ Nessun movimento creato per documento:", docId);
+    return 0;
+  }
+
+  const updated = [...movements, ...newMovements];
+  saveMovements(updated);
+
+  console.log("✅ Movimenti salvati:", newMovements.length, "documento:", docId);
+
+  return newMovements.length;
 }
-
-/**
- * POST /movements
- */
-router.post("/", (req, res) => {
-  const parsed = CreateMovementSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({
-      error: "Validation error",
-      details: parsed.error.format(),
-    });
-  }
-
-  const movements = loadMovements([]);
-
-  const sku = parsed.data.sku.toUpperCase().trim();
-  const { quantity, type, reason, note } = parsed.data;
-
-  const item = getItemBySku(sku);
-
-  if (!item) {
-    return res.status(400).json({
-      error: `SKU ${sku} non esistente in anagrafica`,
-    });
-  }
-
-  if (item.active === false) {
-    return res.status(400).json({
-      error: `SKU ${sku} è disattivato`,
-    });
-  }
-
-  const finalReason = type === "INVENTORY" ? "INVENTARIO" : reason;
-
-  const currentQty = getCurrentQtyForSku(sku);
-
-  let nextQty = currentQty;
-  if (type === "IN") nextQty = currentQty + quantity;
-  if (type === "OUT" || type === "ADJUST") nextQty = currentQty - quantity;
-  if (type === "INVENTORY") nextQty = quantity;
-
-  if ((type === "OUT" || type === "ADJUST") && nextQty < 0) {
-    return res.status(400).json({
-      error: `Stock negativo non consentito per ${sku}`,
-      disponibile: currentQty,
-      tentativo: nextQty,
-    });
-  }
-
-  const movement: Movement = {
-    id: randomUUID(),
-    sku,
-    quantity,
-    type,
-    reason: finalReason,
-    date: new Date().toISOString(),
-    note,
-  };
-
-  movements.push(movement);
-  saveMovements(movements);
-
-  return res.status(201).json(movement);
-});
-
-export default router;
