@@ -1,8 +1,7 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
 import type { Movement } from "../types/movement.js";
-import { movements } from "../data/movements.js";
-import { saveMovements } from "../data/movements.store.js";
+import { loadMovements, saveMovements } from "../data/movements.store.js";
 import { CreateMovementSchema } from "../schemas/movement.schema.js";
 import { getItemBySku } from "../services/items.service.js";
 
@@ -12,20 +11,19 @@ const router = Router();
  * GET /movements
  */
 router.get("/", (_req, res) => {
+  const movements = loadMovements([]);
   res.json(movements);
 });
 
-/**
- * Helper: calcola stock corrente per uno SKU (dalla lista movimenti)
- * Nota: assumiamo che lo SKU arrivi già normalizzato (UPPER+trim)
- */
 function getCurrentQtyForSku(sku: string) {
+  const movements = loadMovements([]);
+
   return movements
-    .filter((m) => m.sku === sku)
-    .reduce((sum, m) => {
+    .filter((m: any) => m.sku === sku)
+    .reduce((sum, m: any) => {
       if (m.type === "IN") return sum + m.quantity;
       if (m.type === "OUT" || m.type === "ADJUST") return sum - m.quantity;
-      if (m.type === "INVENTORY") return m.quantity; // reset
+      if (m.type === "INVENTORY") return m.quantity;
       return sum;
     }, 0);
 }
@@ -34,7 +32,6 @@ function getCurrentQtyForSku(sku: string) {
  * POST /movements
  */
 router.post("/", (req, res) => {
-  // 1) VALIDAZIONE INPUT (ZOD)
   const parsed = CreateMovementSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -43,11 +40,11 @@ router.post("/", (req, res) => {
     });
   }
 
-  // 2) NORMALIZZA SKU (fonte di verità)
+  const movements = loadMovements([]);
+
   const sku = parsed.data.sku.toUpperCase().trim();
   const { quantity, type, reason, note } = parsed.data;
 
-  // 3) CONTROLLO SKU ESISTENTE IN ANAGRAFICA (STORE)
   const item = getItemBySku(sku);
 
   if (!item) {
@@ -62,10 +59,8 @@ router.post("/", (req, res) => {
     });
   }
 
-  // 4) LOGICA INVENTORY (reason forzata)
   const finalReason = type === "INVENTORY" ? "INVENTARIO" : reason;
 
-  // 5) CALCOLO STOCK (currentQty + nextQty)
   const currentQty = getCurrentQtyForSku(sku);
 
   let nextQty = currentQty;
@@ -73,7 +68,6 @@ router.post("/", (req, res) => {
   if (type === "OUT" || type === "ADJUST") nextQty = currentQty - quantity;
   if (type === "INVENTORY") nextQty = quantity;
 
-  // 6) BLOCCO STOCK NEGATIVO (solo per movimenti che scaricano)
   if ((type === "OUT" || type === "ADJUST") && nextQty < 0) {
     return res.status(400).json({
       error: `Stock negativo non consentito per ${sku}`,
@@ -82,7 +76,6 @@ router.post("/", (req, res) => {
     });
   }
 
-  // 7) CREAZIONE MOVIMENTO
   const movement: Movement = {
     id: randomUUID(),
     sku,
