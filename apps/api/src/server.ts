@@ -59,6 +59,7 @@ type CicExtractedItem = {
   _idProductVariant: string;
 };
 
+// cache ricette
 let bomCache: BomMap = {};
 let bomLastSyncAt: string | null = null;
 let bomLastError: string | null = null;
@@ -160,25 +161,11 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
   const rows = json?.table?.rows ?? [];
 
   console.log("DEBUG CIC MODES raw rows:", rows.length);
-  console.log(
-    "DEBUG CIC MODES first row:",
-    rows?.[0] ? JSON.stringify(rows[0]) : "NO_ROWS"
-  );
 
   const map: CicProductMap = {};
 
   for (const r of rows) {
     const c = r?.c ?? [];
-
-    // PRODOTTI_CIC:
-    // A = CIC_PRODUCT_ID
-    // B = CIC_VARIANT_ID
-    // C = SKU
-    // D = NOME
-    // E = CATEGORIA
-    // F = REPARTO
-    // G = PREZZO
-    // H = TIPO_SCARICO
 
     const productId = c?.[0]?.v ? String(c[0].v).trim() : "";
     const variantId = c?.[1]?.v ? String(c[1].v).trim() : "";
@@ -187,34 +174,9 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
     const tipoScaricoRaw = c?.[7]?.v ? String(c[7].v).trim() : "";
     const tipoScarico = tipoScaricoRaw.toUpperCase();
 
-    if (!productId && !variantId && !sku && !name && !tipoScaricoRaw) {
-      continue;
-    }
-
-    console.log("DEBUG CIC MODES parsed row:", {
-      productId,
-      variantId,
-      sku,
-      name,
-      tipoScaricoRaw,
-      tipoScarico,
-    });
-
     if (!sku) continue;
-    if (!tipoScarico) continue;
-if (tipoScarico === "RECIPE" || tipoScarico === "IGNORE") {
-  const entry: CicProductMapEntry = {
-    sku,
-    mode: tipoScarico as CicProductMode,
-    productId,
-    variantId,
-    name,
-  };
-
-  if (variantId) map[variantId] = entry;
-  if (productId) map[productId] = entry;
-}
     if (!productId && !variantId) continue;
+    if (tipoScarico !== "RECIPE" && tipoScarico !== "IGNORE") continue;
 
     const entry: CicProductMapEntry = {
       sku,
@@ -236,7 +198,6 @@ if (tipoScarico === "RECIPE" || tipoScarico === "IGNORE") {
 
   return map;
 }
-
 async function syncCicProductModes() {
   try {
     const map = await loadCicProductModesFromSheet();
