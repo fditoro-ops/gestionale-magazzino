@@ -937,7 +937,7 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
 
     const movementSign = operation === "RECEIPT/DELETE" ? 1 : -1;
 
-    const inserted = applyRecipeStock({
+    const inserted = await applyRecipeStock({
       docId,
       tenantId,
       orderDate,
