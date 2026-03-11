@@ -36,20 +36,13 @@ export async function loadMovements(
   defaultMovements: Movement[] = []
 ): Promise<Movement[]> {
   try {
-    console.log("---- LOAD MOVEMENTS FROM DB ----");
-
     const res = await pool.query<DbMovementRow>(`
       SELECT id, sku, quantity, type, reason, date, note, documento, tenant_id
       FROM movements
       ORDER BY date ASC, id ASC
     `);
 
-    const rows = res.rows.map(mapRowToMovement);
-
-    console.log("MOVEMENTS LOADED =", rows.length);
-    console.log("-------------------------------");
-
-    return rows;
+    return res.rows.map(mapRowToMovement);
   } catch (err) {
     console.error("LOAD MOVEMENTS ERROR:", err);
     return defaultMovements;
@@ -57,41 +50,31 @@ export async function loadMovements(
 }
 
 export async function insertMovement(movement: Movement): Promise<void> {
-  try {
-    await pool.query(
-      `
-      INSERT INTO movements (
-        id, sku, quantity, type, reason, date, note, documento, tenant_id
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      ON CONFLICT (id) DO NOTHING
-      `,
-      [
-        movement.id,
-        movement.sku,
-        movement.quantity,
-        movement.type,
-        movement.reason ?? null,
-        movement.date,
-        movement.note ?? null,
-        movement.documento ?? null,
-        movement.tenant_id ?? null,
-      ]
-    );
-
-    console.log("✅ INSERT MOVEMENT OK:", movement.id);
-  } catch (err) {
-    console.error("INSERT MOVEMENT ERROR:", err);
-    throw err;
-  }
+  await pool.query(
+    `
+    INSERT INTO movements (
+      id, sku, quantity, type, reason, date, note, documento, tenant_id
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    ON CONFLICT (id) DO NOTHING
+    `,
+    [
+      movement.id,
+      movement.sku,
+      movement.quantity,
+      movement.type,
+      movement.reason ?? null,
+      movement.date,
+      movement.note ?? null,
+      movement.documento ?? null,
+      movement.tenant_id ?? null,
+    ]
+  );
 }
 
 export async function insertManyMovements(
   movements: Movement[]
 ): Promise<void> {
-  if (!movements.length) {
-    console.log("insertManyMovements: nessun movimento da inserire");
-    return;
-  }
+  if (!movements.length) return;
 
   const client = await pool.connect();
 
@@ -121,7 +104,6 @@ export async function insertManyMovements(
     }
 
     await client.query("COMMIT");
-    console.log("✅ INSERT MANY MOVEMENTS OK:", movements.length);
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("INSERT MANY MOVEMENTS ERROR:", err);
@@ -131,12 +113,49 @@ export async function insertManyMovements(
   }
 }
 
-export async function deleteAllMovements(): Promise<void> {
+/**
+ * Compatibilità con il vecchio codice:
+ * riscrive tutta la tabella con l'array passato.
+ */
+export async function saveMovements(movements: Movement[]): Promise<void> {
+  const client = await pool.connect();
+
   try {
-    await pool.query(`DELETE FROM movements`);
-    console.log("🧹 Tutti i movimenti eliminati");
+    await client.query("BEGIN");
+    await client.query(`DELETE FROM movements`);
+
+    for (const movement of movements) {
+      await client.query(
+        `
+        INSERT INTO movements (
+          id, sku, quantity, type, reason, date, note, documento, tenant_id
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        `,
+        [
+          movement.id,
+          movement.sku,
+          movement.quantity,
+          movement.type,
+          movement.reason ?? null,
+          movement.date,
+          movement.note ?? null,
+          movement.documento ?? null,
+          movement.tenant_id ?? null,
+        ]
+      );
+    }
+
+    await client.query("COMMIT");
+    console.log("✅ SAVE MOVEMENTS TO DB =", movements.length);
   } catch (err) {
-    console.error("DELETE ALL MOVEMENTS ERROR:", err);
+    await client.query("ROLLBACK");
+    console.error("SAVE MOVEMENTS ERROR:", err);
     throw err;
+  } finally {
+    client.release();
   }
+}
+
+export async function deleteAllMovements(): Promise<void> {
+  await pool.query(`DELETE FROM movements`);
 }
