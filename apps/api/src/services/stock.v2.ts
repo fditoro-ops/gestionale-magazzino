@@ -12,22 +12,19 @@ type ItemStock = {
 
   stockKind: StockKind;
 
-  // conversioni (restano per futuro / distinte base)
   unitToCl?: number | null;
   containerSizeCl?: number | null;
 
-  // ✅ MINIMO in BT
   minStockBt?: number | null;
 };
 
-// ✅ 1 decimale, arrotondamento matematico
 function round1(n: number) {
   return Math.round(n * 10) / 10;
 }
 
-export function buildWarehouseView() {
+export async function buildWarehouseView() {
   const items = loadItems([]);
-  const movements: Movement[] = loadMovements();
+  const movements: Movement[] = await loadMovements();
 
   console.log("WAREHOUSE items:", items.length, "movements:", movements.length);
 
@@ -51,10 +48,8 @@ export function buildWarehouseView() {
         itemId: item.itemId,
         sku: item.sku,
         name: item.name,
-
         stockBt,
         minStockBt: minBt,
-
         underMin: minBt > 0 ? stockBt < minBt : false,
       };
     });
