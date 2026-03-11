@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { loadItems } from "../data/items.store.js";
-import { loadMovements, saveMovements } from "../data/movements.store.js";
+import { loadMovements, insertManyMovements } from "../data/movements.store.js";
+import type { Movement } from "../types/movement.js";
 
 type BomLine = {
   ingredientSku: string;
@@ -9,23 +10,10 @@ type BomLine = {
 };
 
 type BomMap = Record<string, BomLine[]>;
-
 type CicProductMode = "RECIPE" | "IGNORE";
 type CicProductMap = Record<string, CicProductMode>;
 
-type ItemRecord = {
-  sku: string;
-  name?: string;
-  stockKind?: "UNIT" | "VOLUME_CONTAINER";
-  containerSizeCl?: number | null;
-  unitToCl?: number | null;
-};
-
-function round4(n: number) {
-  return Math.round(n * 10000) / 10000;
-}
-
-export function applyRecipeStock({
+export async function applyRecipeStock({
   docId,
   tenantId,
   orderDate,
@@ -42,10 +30,10 @@ export function applyRecipeStock({
   cicProductModes: CicProductMap;
   movementSign: 1 | -1;
 }) {
-  const items = loadItems([]) as ItemRecord[];
-  const movements = loadMovements([]);
+  const items = loadItems();
+  const movements = await loadMovements();
 
-  const bySku = new Map(items.map((i) => [String(i.sku).trim(), i]));
+  const bySku = new Map(items.map((i: any) => [String(i.sku).trim(), i]));
 
   const movementType = movementSign === 1 ? "IN" : "OUT";
   const movementReason =
@@ -54,18 +42,18 @@ export function applyRecipeStock({
   const alreadyProcessed = movements.some(
     (m: any) =>
       String(m.documento || "").trim() === String(docId).trim() &&
-      String(m.reason || "").trim() === movementReason
+      String(m.type || "").trim() === movementType
   );
 
   if (alreadyProcessed) {
     console.log("⚠️ Documento già processato per questo movimento, salto:", {
       docId,
-      movementReason,
+      movementType,
     });
     return 0;
   }
 
-  const newMovements: any[] = [];
+  const newMovements: Movement[] = [];
 
   for (const sold of soldItems) {
     const soldSku = String(sold.sku || "").trim();
@@ -128,48 +116,25 @@ export function applyRecipeStock({
         continue;
       }
 
-      const stockKind = item.stockKind || "UNIT";
+      let quantity = ingredientQty * soldQty;
 
-      let quantity = 0;
-
-      if (stockKind === "VOLUME_CONTAINER") {
-        const containerSizeCl = Number(item.containerSizeCl || 0);
-
-        if (!containerSizeCl || containerSizeCl <= 0) {
-          console.log("❗ containerSizeCl mancante/non valido per:", ingredientSku);
-          continue;
+      // Conversione CL -> BT per articoli volumetrici
+      if (ingredientUm === "CL") {
+        const containerSizeCl = Number(item.containerSizeCl ?? 0);
+        if (containerSizeCl > 0) {
+          quantity = quantity / containerSizeCl;
         }
-
-        if (ingredientUm !== "CL") {
-          console.log(
-            "⚠️ Ingrediente volumetrico con UM non CL:",
-            ingredientSku,
-            "UM:",
-            ingredientUm
-          );
-          continue;
-        }
-
-        const totalCl = ingredientQty * soldQty;
-        quantity = round4(totalCl / containerSizeCl);
-      } else {
-        quantity = round4(ingredientQty * soldQty);
       }
 
-      if (!quantity || quantity <= 0) {
-        console.log("⚠️ Quantità movimento non valida:", {
-          soldSku,
-          ingredientSku,
-          quantity,
-        });
-        continue;
-      }
+      quantity = Math.round(quantity * 1000) / 1000;
 
-      newMovements.push({
+      if (!quantity || quantity <= 0) continue;
+
+      const movement: Movement = {
         id: randomUUID(),
         sku: ingredientSku,
         quantity,
-        type: movementType,
+        type: movementType as Movement["type"],
         reason: movementReason,
         date: orderDate.toISOString(),
         note:
@@ -178,15 +143,16 @@ export function applyRecipeStock({
             : `Scarico ricetta ${soldSku} doc ${docId}`,
         documento: docId,
         tenant_id: tenantId,
-      });
+      };
+
+      newMovements.push(movement);
 
       console.log("✅ Movimento creato:", {
         documento: docId,
-        type: movementType,
+        type: movement.type,
         sku: ingredientSku,
-        quantity,
-        stockKind,
-        ingredientUm,
+        quantity: movement.quantity,
+        um: ingredientUm,
       });
     }
   }
@@ -196,8 +162,7 @@ export function applyRecipeStock({
     return 0;
   }
 
-  const updated = [...movements, ...newMovements];
-  saveMovements(updated);
+  await insertManyMovements(newMovements);
 
   console.log("✅ Movimenti salvati:", newMovements.length, "documento:", docId);
 
