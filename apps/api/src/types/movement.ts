@@ -7,7 +7,9 @@ export type MovementReason =
   | "FURTO"
   | "RETTIFICA"
   | "INVENTARIO"
-  | "RICEZIONE_ORDINE";
+  | "RICEZIONE_ORDINE"
+  | "SCARICO_RICETTA_CIC"
+  | "STORNO_RICETTA_CIC";
 
 export type Movement = {
   id: string;
@@ -17,4 +19,8 @@ export type Movement = {
   reason?: MovementReason;
   note?: string;
   date: string;
+
+  // campi extra per integrazione POS
+  documento?: string;
+  tenant_id?: string;
 };
