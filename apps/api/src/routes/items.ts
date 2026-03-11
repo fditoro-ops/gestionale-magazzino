@@ -58,7 +58,6 @@ function normalizeItem(it: any) {
   };
 }
 
-// ✅ QUI SOTTO, dopo funzioni e costanti
 let items = loadItems(defaultItems).map(normalizeItem);
 
 if (process.env.MIGRATE_ITEMS === "1") {
@@ -66,20 +65,26 @@ if (process.env.MIGRATE_ITEMS === "1") {
   console.log("✅ MIGRATE_ITEMS: salvati items normalizzati");
 }
 
-
 type Item = (typeof items)[number];
 
-router.get("/", (_req, res) => res.json(items));
+router.get("/", (_req, res) => {
+  return res.json(items);
+});
 
 router.post("/", (req, res) => {
   const parsed = CreateItemSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Validation error", details: parsed.error.format() });
+    return res.status(400).json({
+      error: "Validation error",
+      details: parsed.error.format(),
+    });
   }
 
   const data = parsed.data;
   const exists = items.some((i: Item) => i.sku.toUpperCase() === data.sku.toUpperCase());
-  if (exists) return res.status(400).json({ error: `SKU ${data.sku} già esistente` });
+  if (exists) {
+    return res.status(400).json({ error: `SKU ${data.sku} già esistente` });
+  }
 
   const newItem = normalizeItem({ itemId: `itm_${Date.now()}`, ...data });
   items.push(newItem);
@@ -87,30 +92,54 @@ router.post("/", (req, res) => {
   return res.status(201).json(newItem);
 });
 
-router.patch("/:sku", (req, res) => {
+router.put("/:itemId", (req, res) => {
   const parsed = UpdateItemSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Validation error", details: parsed.error.format() });
+    return res.status(400).json({
+      error: "Validation error",
+      details: parsed.error.format(),
+    });
   }
 
-  const skuParam = req.params.sku.toUpperCase().trim();
-  const idx = items.findIndex((i: Item) => i.sku === skuParam);
-  if (idx === -1) return res.status(404).json({ error: `SKU ${skuParam} non trovato` });
-
-  const next = parsed.data;
-
-  if (next.active === false && items[idx].active === true) {
-    const currentStock = getStockBtForSku(skuParam);
-    if (currentStock !== 0) {
-      return res.status(400).json({
-        error: `Impossibile disattivare ${skuParam}: stock attuale = ${currentStock}`,
-      });
-    }
+  const index = items.findIndex((i: Item) => i.itemId === req.params.itemId);
+  if (index === -1) {
+    return res.status(404).json({ error: "Item non trovato" });
   }
 
-  items[idx] = normalizeItem({ ...items[idx], ...next });
+  const current = items[index];
+  const nextSku = (parsed.data.sku ?? current.sku).toUpperCase().trim();
+
+  const duplicate = items.some(
+    (i: Item) => i.itemId !== req.params.itemId && i.sku.toUpperCase() === nextSku
+  );
+  if (duplicate) {
+    return res.status(400).json({ error: `SKU ${nextSku} già esistente` });
+  }
+
+  const updated = normalizeItem({
+    ...current,
+    ...parsed.data,
+    itemId: current.itemId,
+    sku: nextSku,
+  });
+
+  items[index] = updated;
   saveItems(items);
-  return res.json(items[idx]);
+  return res.json(updated);
+});
+
+router.get("/:itemId", async (req, res) => {
+  const item = items.find((i: Item) => i.itemId === req.params.itemId);
+  if (!item) {
+    return res.status(404).json({ error: "Item non trovato" });
+  }
+
+  const stockBt = await getStockBtForSku(item.sku);
+
+  return res.json({
+    ...item,
+    stockBt,
+  });
 });
 
 export default router;
