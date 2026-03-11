@@ -9,8 +9,21 @@ type BomLine = {
 };
 
 type BomMap = Record<string, BomLine[]>;
+
 type CicProductMode = "RECIPE" | "IGNORE";
 type CicProductMap = Record<string, CicProductMode>;
+
+type ItemRecord = {
+  sku: string;
+  name?: string;
+  stockKind?: "UNIT" | "VOLUME_CONTAINER";
+  containerSizeCl?: number | null;
+  unitToCl?: number | null;
+};
+
+function round4(n: number) {
+  return Math.round(n * 10000) / 10000;
+}
 
 export function applyRecipeStock({
   docId,
@@ -29,10 +42,10 @@ export function applyRecipeStock({
   cicProductModes: CicProductMap;
   movementSign: 1 | -1;
 }) {
-  const items = loadItems();
-  const movements = loadMovements();
+  const items = loadItems([]) as ItemRecord[];
+  const movements = loadMovements([]);
 
-  const bySku = new Map(items.map((i: any) => [String(i.sku).trim(), i]));
+  const bySku = new Map(items.map((i) => [String(i.sku).trim(), i]));
 
   const movementType = movementSign === 1 ? "IN" : "OUT";
   const movementReason =
@@ -96,13 +109,16 @@ export function applyRecipeStock({
     for (const ing of recipe) {
       const ingredientSku = String(ing.ingredientSku || "").trim();
       const ingredientQty = Number(ing.qty || 0);
+      const ingredientUm = String(ing.um || "").trim().toUpperCase();
 
       if (!ingredientSku || !ingredientQty) {
         console.log("⚠️ Ingrediente BOM non valido:", ing);
         continue;
       }
 
-      if (!bySku.has(ingredientSku)) {
+      const item = bySku.get(ingredientSku);
+
+      if (!item) {
         console.log(
           "❗ Ingrediente non presente in anagrafica:",
           ingredientSku,
@@ -112,7 +128,42 @@ export function applyRecipeStock({
         continue;
       }
 
-      const quantity = ingredientQty * soldQty;
+      const stockKind = item.stockKind || "UNIT";
+
+      let quantity = 0;
+
+      if (stockKind === "VOLUME_CONTAINER") {
+        const containerSizeCl = Number(item.containerSizeCl || 0);
+
+        if (!containerSizeCl || containerSizeCl <= 0) {
+          console.log("❗ containerSizeCl mancante/non valido per:", ingredientSku);
+          continue;
+        }
+
+        if (ingredientUm !== "CL") {
+          console.log(
+            "⚠️ Ingrediente volumetrico con UM non CL:",
+            ingredientSku,
+            "UM:",
+            ingredientUm
+          );
+          continue;
+        }
+
+        const totalCl = ingredientQty * soldQty;
+        quantity = round4(totalCl / containerSizeCl);
+      } else {
+        quantity = round4(ingredientQty * soldQty);
+      }
+
+      if (!quantity || quantity <= 0) {
+        console.log("⚠️ Quantità movimento non valida:", {
+          soldSku,
+          ingredientSku,
+          quantity,
+        });
+        continue;
+      }
 
       newMovements.push({
         id: randomUUID(),
@@ -134,6 +185,8 @@ export function applyRecipeStock({
         type: movementType,
         sku: ingredientSku,
         quantity,
+        stockKind,
+        ingredientUm,
       });
     }
   }
