@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import basicAuth from "express-basic-auth";
 import fs from "fs";
 import crypto from "crypto";
-
+import { pool } from "./db.js";
 import movementsRouter from "./routes/movements.js";
 import stockV2Router from "./routes/stock.v2.js";
 import itemsRouter from "./routes/items.js";
@@ -1041,7 +1041,32 @@ app.get("/debug/cic-pending-open", (_req, res) => {
     sample: rows.slice(-50),
   });
 });
+app.get("/debug/db", async (_req, res) => {
+  try {
+    const nowRes = await pool.query("SELECT NOW() as now");
+    const countRes = await pool.query("SELECT COUNT(*)::int as count FROM movements");
+    const sampleRes = await pool.query(`
+      SELECT id, sku, quantity, type, reason, date, note, documento, tenant_id
+      FROM movements
+      ORDER BY date DESC, id DESC
+      LIMIT 20
+    `);
 
+    res.json({
+      ok: true,
+      databaseUrlPresent: !!process.env.DATABASE_URL,
+      now: nowRes.rows[0]?.now ?? null,
+      movementsCount: countRes.rows[0]?.count ?? 0,
+      sample: sampleRes.rows,
+    });
+  } catch (err: any) {
+    console.error("GET /debug/db error:", err);
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message ?? err),
+    });
+  }
+});
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
@@ -1090,6 +1115,7 @@ if (basicAuthEnabled && user && pass) {
     if (req.path === "/debug/cic-pending") return next();
     if (req.path === "/debug/cic-pending-open") return next();
     if (req.path.startsWith("/webhooks/cic")) return next();
+    if (req.path === "/debug/db") return next();
     return auth(req, res, next);
   });
 }
