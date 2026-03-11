@@ -82,18 +82,25 @@ router.post("/", (req, res) => {
 
   const data = parsed.data;
   const exists = items.some((i: Item) => i.sku.toUpperCase() === data.sku.toUpperCase());
+
   if (exists) {
     return res.status(400).json({ error: `SKU ${data.sku} già esistente` });
   }
 
-  const newItem = normalizeItem({ itemId: `itm_${Date.now()}`, ...data });
+  const newItem = normalizeItem({
+    itemId: `itm_${Date.now()}`,
+    ...data,
+  });
+
   items.push(newItem);
   saveItems(items);
+
   return res.status(201).json(newItem);
 });
 
 router.put("/:itemId", (req, res) => {
   const parsed = UpdateItemSchema.safeParse(req.body);
+
   if (!parsed.success) {
     return res.status(400).json({
       error: "Validation error",
@@ -102,16 +109,24 @@ router.put("/:itemId", (req, res) => {
   }
 
   const index = items.findIndex((i: Item) => i.itemId === req.params.itemId);
+
   if (index === -1) {
     return res.status(404).json({ error: "Item non trovato" });
   }
 
   const current = items[index];
-  const nextSku = (parsed.data.sku ?? current.sku).toUpperCase().trim();
+
+  const incomingSku =
+    typeof (parsed.data as any).sku === "string"
+      ? (parsed.data as any).sku
+      : undefined;
+
+  const nextSku = (incomingSku ?? current.sku).toUpperCase().trim();
 
   const duplicate = items.some(
     (i: Item) => i.itemId !== req.params.itemId && i.sku.toUpperCase() === nextSku
   );
+
   if (duplicate) {
     return res.status(400).json({ error: `SKU ${nextSku} già esistente` });
   }
@@ -125,11 +140,13 @@ router.put("/:itemId", (req, res) => {
 
   items[index] = updated;
   saveItems(items);
+
   return res.json(updated);
 });
 
 router.get("/:itemId", async (req, res) => {
   const item = items.find((i: Item) => i.itemId === req.params.itemId);
+
   if (!item) {
     return res.status(404).json({ error: "Item non trovato" });
   }
