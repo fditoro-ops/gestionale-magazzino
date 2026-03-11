@@ -1,6 +1,8 @@
 import type { Movement } from "../types/movement.js";
-import { loadMovements } from "./movements.store.js";
 
-// 🔐 fonte unica dei dati
-export const movements: Movement[] = loadMovements();
-    
+/**
+ * Legacy placeholder.
+ * Non usare più questo array come fonte di verità.
+ * La fonte vera ora è PostgreSQL tramite movements.store.ts
+ */
+export const movements: Movement[] = [];
