@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import basicAuth from "express-basic-auth";
 import fs from "fs";
 import crypto from "crypto";
-import { pool } from "./db.js";
+import { pool, testDbConnection, initDb } from "./db.js";
 import movementsRouter from "./routes/movements.js";
 import stockV2Router from "./routes/stock.v2.js";
 import itemsRouter from "./routes/items.js";
@@ -1174,6 +1174,9 @@ if (process.env.NODE_ENV !== "development") {
 
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`✅ Server attivo sulla porta ${PORT}`);
+
+  await testDbConnection();
+  await initDb();
 
   await syncCicProducts();
   await syncBom();
