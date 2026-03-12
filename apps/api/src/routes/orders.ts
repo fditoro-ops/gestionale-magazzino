@@ -32,8 +32,6 @@ router.get("/_debug", (_req, res) => {
   });
 });
 
-const router = Router();
-
 function getPackSizeForSku(sku: string): number {
   const it = getItemBySku(sku);
   const p = Number(it?.packSize ?? 1);
