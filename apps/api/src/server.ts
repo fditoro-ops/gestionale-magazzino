@@ -286,7 +286,7 @@ const CIC_PRODUCTS_PATH = process.env.CIC_PRODUCTS_PATH || "/products";
 const DEBUG_CIC = false;
 const CIC_PRODUCTS_LIMIT = Number(process.env.CIC_PRODUCTS_LIMIT || 200);
 const CIC_PRODUCTS_SYNC_HOURS = Number(
-  process.env.CIC_PRODUCTS_SYNC_HOURS || 6
+  process.env.CIC_PRODUCTS_SYNC_HOURS || 1
 );
 
 let cicIdToSkuMap: Record<string, string> = {};
@@ -568,8 +568,14 @@ function cicResolveSku(id: string) {
   if (!id) return id;
 
   if (id.startsWith("SKU")) return id;
-  if (cicIdToSkuMap[id]) return cicIdToSkuMap[id];
-  if (cicProductModeCache[id]) return cicProductModeCache[id].sku;
+
+  if (cicProductModeCache[id]) {
+    return cicProductModeCache[id].sku;
+  }
+
+  if (cicIdToSkuMap[id]) {
+    return cicIdToSkuMap[id];
+  }
 
   return id;
 }
@@ -800,12 +806,13 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
     let items = cicExtractItems(data);
 
     const hasUnresolved = items.some((it) => String(it.sku).includes("-"));
-    if (hasUnresolved) {
-      console.log("ℹ️ CIC: trovati ID non risolti, provo sync prodotti…");
-      await syncCicProducts();
-      items = cicExtractItems(data);
-    }
 
+if (hasUnresolved && Date.now() - lastEmergencySyncMs > 60_000) {
+  console.log("ℹ️ CIC: trovati ID non risolti, provo sync prodotti…");
+  await syncCicProducts();
+  lastEmergencySyncMs = Date.now();
+  items = cicExtractItems(data);
+}
     const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
 
     const cicModesBySku = Object.fromEntries(
@@ -1189,8 +1196,8 @@ app.listen(PORT, "0.0.0.0", async () => {
   await initDb();
 
   await syncCicProducts();
-  await syncBom();
   await syncCicProductModes();
+  await syncBom();
 
   const msCic = Math.max(1, CIC_PRODUCTS_SYNC_HOURS) * 60 * 60 * 1000;
   setInterval(() => syncCicProducts(), msCic);
