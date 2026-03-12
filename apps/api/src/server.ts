@@ -1210,6 +1210,17 @@ if (basicAuthEnabled && user && pass) {
 /* =========================
    API routes
    ========================= */
+app.get("/_top-ping", (_req, res) => {
+  res.json({ ok: true, where: "server top level" });
+});
+
+app.get("/orders-test", (_req, res) => {
+  res.json({ ok: true, where: "server direct /orders-test" });
+});
+
+app.get("/orders/_server-test", (_req, res) => {
+  res.json({ ok: true, where: "server direct /orders/_server-test" });
+});
 
 app.use("/items", itemsRouter);
 app.use("/movements", movementsRouter);
