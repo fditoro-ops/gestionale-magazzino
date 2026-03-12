@@ -14,8 +14,8 @@ import {
 import { getItemBySku } from "../services/items.service.js";
 
 import type { Movement } from "../types/movement.js";
-import { loadMovements, saveMovements } from "../data/movements.store.js";
 import { movements as defaultMovements } from "../data/movements.js";
+import { loadMovements, saveMovements } from "../data/movements.store.js";
 
 const router = Router();
 
@@ -31,18 +31,22 @@ function confToBt(sku: string, qtyConf: number): number {
 
 function hasDuplicateSkus(lines: Array<{ sku: string }>): boolean {
   const seen = new Set<string>();
+
   for (const line of lines) {
     const sku = String(line.sku ?? "").toUpperCase().trim();
     if (seen.has(sku)) return true;
     seen.add(sku);
   }
+
   return false;
 }
+
+/* ---------------- IN-MEMORY + PERSISTED ---------------- */
 
 let orders: Order[] = loadOrders(defaultOrders as any).map(normalizeOrder);
 saveOrders(orders);
 
-let movements: Movement[] = loadMovements(defaultMovements as any);
+/* ---------------- NORMALIZE (retro-compat) ---------------- */
 
 function normalizeOrder(o: any): Order {
   const lines = Array.isArray(o?.lines) ? o.lines : [];
@@ -92,7 +96,10 @@ router.get("/", (_req, res) => {
 
 router.get("/:id", (req, res) => {
   const ord = orders.find((o) => o.orderId === req.params.id);
-  if (!ord) return res.status(404).json({ error: `Ordine ${req.params.id} non trovato` });
+  if (!ord) {
+    return res.status(404).json({ error: `Ordine ${req.params.id} non trovato` });
+  }
+
   return res.json(ord);
 });
 
@@ -100,6 +107,7 @@ router.get("/:id", (req, res) => {
 
 router.post("/", (req, res) => {
   const parsed = CreateOrderSchema.safeParse(req.body);
+
   if (!parsed.success) {
     return res.status(400).json({
       error: "Validation error",
@@ -110,14 +118,20 @@ router.post("/", (req, res) => {
   const data = parsed.data;
 
   if (hasDuplicateSkus(data.lines)) {
-    return res.status(400).json({ error: "Sono presenti SKU duplicati nello stesso ordine" });
+    return res
+      .status(400)
+      .json({ error: "Sono presenti SKU duplicati nello stesso ordine" });
   }
 
   for (const line of data.lines) {
     const it = getItemBySku(line.sku);
+
     if (!it) {
-      return res.status(400).json({ error: `SKU ${line.sku} non esistente in anagrafica` });
+      return res
+        .status(400)
+        .json({ error: `SKU ${line.sku} non esistente in anagrafica` });
     }
+
     if (it.active === false) {
       return res.status(400).json({ error: `SKU ${line.sku} è disattivato` });
     }
@@ -145,10 +159,12 @@ router.post("/", (req, res) => {
 });
 
 /* ---------------- PATCH /orders/:id ---------------- */
-/* modifica solo ordini DRAFT e NON consente di toccare qtyReceivedConf o status */
+/* modifica solo ordini DRAFT */
+/* non consente di cambiare status o qtyReceivedConf */
 
 router.patch("/:id", (req, res) => {
   const parsed = UpdateOrderSchema.safeParse(req.body);
+
   if (!parsed.success) {
     return res.status(400).json({
       error: "Validation error",
@@ -157,6 +173,7 @@ router.patch("/:id", (req, res) => {
   }
 
   const idx = orders.findIndex((o) => o.orderId === req.params.id);
+
   if (idx === -1) {
     return res.status(404).json({ error: `Ordine ${req.params.id} non trovato` });
   }
@@ -171,30 +188,24 @@ router.patch("/:id", (req, res) => {
 
   const next = parsed.data;
 
-  if ("status" in next) {
-    return res.status(400).json({
-      error: "Lo stato non può essere modificato via PATCH",
-    });
-  }
-
   if (Array.isArray(next.lines)) {
     if (hasDuplicateSkus(next.lines)) {
-      return res.status(400).json({ error: "Sono presenti SKU duplicati nello stesso ordine" });
+      return res
+        .status(400)
+        .json({ error: "Sono presenti SKU duplicati nello stesso ordine" });
     }
 
     for (const line of next.lines) {
       const it = getItemBySku(line.sku);
+
       if (!it) {
-        return res.status(400).json({ error: `SKU ${line.sku} non esistente in anagrafica` });
-      }
-      if (it.active === false) {
-        return res.status(400).json({ error: `SKU ${line.sku} è disattivato` });
+        return res
+          .status(400)
+          .json({ error: `SKU ${line.sku} non esistente in anagrafica` });
       }
 
-      if ("qtyReceivedConf" in line) {
-        return res.status(400).json({
-          error: `SKU ${line.sku}: qtyReceivedConf non è modificabile via PATCH`,
-        });
+      if (it.active === false) {
+        return res.status(400).json({ error: `SKU ${line.sku} è disattivato` });
       }
     }
   }
@@ -222,6 +233,7 @@ router.patch("/:id", (req, res) => {
 
 router.post("/:id/send", (req, res) => {
   const idx = orders.findIndex((o) => o.orderId === req.params.id);
+
   if (idx === -1) {
     return res.status(404).json({ error: `Ordine ${req.params.id} non trovato` });
   }
@@ -229,11 +241,15 @@ router.post("/:id/send", (req, res) => {
   const ord = orders[idx];
 
   if (ord.status !== "DRAFT") {
-    return res.status(400).json({ error: "Solo un ordine DRAFT può essere inviato" });
+    return res
+      .status(400)
+      .json({ error: "Solo un ordine DRAFT può essere inviato" });
   }
 
   if (!ord.lines.length) {
-    return res.status(400).json({ error: "Impossibile inviare un ordine senza righe" });
+    return res
+      .status(400)
+      .json({ error: "Impossibile inviare un ordine senza righe" });
   }
 
   ord.status = "SENT";
@@ -247,8 +263,9 @@ router.post("/:id/send", (req, res) => {
 
 /* ---------------- POST /orders/:id/receive ---------------- */
 
-router.post("/:id/receive", (req, res) => {
+router.post("/:id/receive", async (req, res) => {
   const parsed = ReceiveOrderSchema.safeParse(req.body);
+
   if (!parsed.success) {
     return res.status(400).json({
       error: "Validation error",
@@ -257,6 +274,7 @@ router.post("/:id/receive", (req, res) => {
   }
 
   const idx = orders.findIndex((o) => o.orderId === req.params.id);
+
   if (idx === -1) {
     return res.status(404).json({ error: `Ordine ${req.params.id} non trovato` });
   }
@@ -271,17 +289,23 @@ router.post("/:id/receive", (req, res) => {
 
   const note = parsed.data.note ?? null;
   const bySku = new Map(ord.lines.map((l) => [l.sku, l]));
+  const movements: Movement[] = await loadMovements(defaultMovements as any);
 
   for (const r of parsed.data.lines) {
     const line = bySku.get(r.sku);
+
     if (!line) {
       return res.status(400).json({ error: `SKU ${r.sku} non presente nell'ordine` });
     }
 
     const it = getItemBySku(r.sku);
+
     if (!it) {
-      return res.status(400).json({ error: `SKU ${r.sku} non esistente in anagrafica` });
+      return res
+        .status(400)
+        .json({ error: `SKU ${r.sku} non esistente in anagrafica` });
     }
+
     if (it.active === false) {
       return res.status(400).json({ error: `SKU ${r.sku} è disattivato` });
     }
@@ -324,7 +348,7 @@ router.post("/:id/receive", (req, res) => {
   orders[idx] = normalizeOrder(ord);
 
   saveOrders(orders);
-  saveMovements(movements);
+  await saveMovements(movements);
 
   return res.json(orders[idx]);
 });
@@ -333,6 +357,7 @@ router.post("/:id/receive", (req, res) => {
 
 router.post("/:id/cancel", (req, res) => {
   const idx = orders.findIndex((o) => o.orderId === req.params.id);
+
   if (idx === -1) {
     return res.status(404).json({ error: `Ordine ${req.params.id} non trovato` });
   }
@@ -346,6 +371,7 @@ router.post("/:id/cancel", (req, res) => {
   }
 
   ord.status = "CANCELLED";
+
   orders[idx] = normalizeOrder(ord);
   saveOrders(orders);
 
