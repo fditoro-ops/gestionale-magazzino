@@ -671,21 +671,18 @@ const PORT = Number(process.env.PORT ?? 3001);
    Middleware
    ========================= */
 
-import cors from "cors";
-
 const allowedOrigins = [
   "http://localhost:5173",
   "https://gestionale-magazzino-8cdo.onrender.com",
 ];
 
-app.use(
-  cors({
-    origin: allowedOrigins,
-    credentials: true,
-  })
-);
+const corsOptions = {
+  origin: allowedOrigins,
+  credentials: true,
+};
 
-app.options("*", cors());
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 app.get("/webhooks/cic", (_req, res) => res.status(200).send("OK"));
 app.head("/webhooks/cic", (_req, res) => res.status(200).end());
