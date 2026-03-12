@@ -1,11 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { Order } from "./OrdersTable";
 
-type OrderLine = {
-  sku: string;
-  qtyOrderedConf: number;
-  qtyReceivedConf: number;
-};
+type DrawerOrderLine = Order["lines"][number];
 
 export default function OrderDrawer({
   open,
@@ -64,7 +60,7 @@ export default function OrderDrawer({
   const isClosed = o?.status === "RECEIVED" || o?.status === "CANCELLED";
   const canReceive = o?.status === "SENT" || o?.status === "PARTIAL";
 
-  function remaining(l: OrderLine) {
+  function remaining(l: DrawerOrderLine) {
     const r = Number(l.qtyOrderedConf ?? 0) - Number(l.qtyReceivedConf ?? 0);
     return r > 0 ? r : 0;
   }
@@ -74,10 +70,9 @@ export default function OrderDrawer({
 
     const lines = (o.lines || [])
       .map((l) => {
-        const rem = remaining(l as OrderLine);
+        const rem = remaining(l);
         const wanted = Number(draft[l.sku] ?? 0);
         const qty = Math.max(0, Math.min(wanted, rem));
-
         return qty > 0 ? { sku: l.sku, qtyReceivedNowConf: qty } : null;
       })
       .filter(Boolean) as Array<{ sku: string; qtyReceivedNowConf: number }>;
@@ -99,10 +94,10 @@ export default function OrderDrawer({
     if (!o) return null;
 
     const lines = (o.lines || [])
-      .filter((l) => remaining(l as OrderLine) > 0)
+      .filter((l) => remaining(l) > 0)
       .map((l) => ({
         sku: l.sku,
-        qtyReceivedNowConf: remaining(l as OrderLine),
+        qtyReceivedNowConf: remaining(l),
       }));
 
     if (!lines.length) return null;
@@ -186,8 +181,7 @@ export default function OrderDrawer({
 
                 <tbody>
                   {o.lines.map((l) => {
-                    const line = l as OrderLine;
-                    const rem = remaining(line);
+                    const rem = remaining(l);
                     const it = itemsBySku[String(l.sku || "").toUpperCase().trim()];
                     const label = it?.name ? String(it.name) : "";
                     const current = Number(draft[l.sku] ?? 0);
@@ -198,8 +192,8 @@ export default function OrderDrawer({
                           <span style={{ fontWeight: 900 }}>{l.sku}</span>
                         </Td>
                         <Td style={{ color: "#334" }}>{label}</Td>
-                        <Td style={{ textAlign: "right" }}>{line.qtyOrderedConf}</Td>
-                        <Td style={{ textAlign: "right" }}>{line.qtyReceivedConf}</Td>
+                        <Td style={{ textAlign: "right" }}>{l.qtyOrderedConf}</Td>
+                        <Td style={{ textAlign: "right" }}>{l.qtyReceivedConf}</Td>
                         <Td style={{ textAlign: "right", fontWeight: 900 }}>
                           {rem}
                         </Td>
