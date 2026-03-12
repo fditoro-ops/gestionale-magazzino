@@ -1,37 +1,59 @@
 import { z } from "zod";
 
-const SupplierSchema = z.enum(["DORECA", "ALPORI", "VARI"]);
-const StatusSchema = z.enum(["DRAFT", "SENT", "PARTIAL", "RECEIVED"]);
+export const SupplierSchema = z.enum(["DORECA", "ALPORI", "VARI"]);
+export const StatusSchema = z.enum([
+  "DRAFT",
+  "SENT",
+  "PARTIAL",
+  "RECEIVED",
+  "CANCELLED",
+]);
 
-const OrderLineCreate = z.object({
-  sku: z.string().min(1).transform((s) => s.toUpperCase().trim()),
+const SkuSchema = z.string().min(1).transform((s) => s.toUpperCase().trim());
+
+const NullableNotesSchema = z.preprocess(
+  (v) => {
+    if (typeof v !== "string") return v;
+    const trimmed = v.trim();
+    return trimmed === "" ? null : trimmed;
+  },
+  z.string().min(1).nullable()
+);
+
+const OrderLineCreateSchema = z.object({
+  sku: SkuSchema,
   qtyOrderedConf: z.number().int().positive(),
 });
 
 export const CreateOrderSchema = z.object({
   supplier: SupplierSchema,
-  notes: z.string().trim().min(1).nullable().optional(),
-  lines: z.array(OrderLineCreate).min(1),
+  notes: NullableNotesSchema.optional(),
+  lines: z.array(OrderLineCreateSchema).min(1),
 });
 
-const OrderLineUpdate = z.object({
-  sku: z.string().min(1).transform((s) => s.toUpperCase().trim()),
+const OrderLinePatchSchema = z.object({
+  sku: SkuSchema,
   qtyOrderedConf: z.number().int().positive(),
-  qtyReceivedConf: z.number().int().min(0).default(0),
 });
 
 export const UpdateOrderSchema = z.object({
   supplier: SupplierSchema.optional(),
-  status: StatusSchema.optional(),
-  notes: z.string().trim().min(1).nullable().optional(),
-  lines: z.array(OrderLineUpdate).optional(),
+  notes: NullableNotesSchema.optional(),
+  lines: z.array(OrderLinePatchSchema).min(1).optional(),
 });
 
 export const ReceiveOrderSchema = z.object({
-  note: z.string().trim().min(1).optional(),
+  note: z.preprocess(
+    (v) => {
+      if (typeof v !== "string") return v;
+      const trimmed = v.trim();
+      return trimmed === "" ? undefined : trimmed;
+    },
+    z.string().min(1).optional()
+  ),
   lines: z.array(
     z.object({
-      sku: z.string().min(1).transform((s) => s.toUpperCase().trim()),
+      sku: SkuSchema,
       qtyReceivedNowConf: z.number().int().positive(),
     })
   ).min(1),
