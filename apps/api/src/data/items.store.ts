@@ -6,8 +6,8 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// percorso stabile indipendente dalla working directory
-const FILE = path.resolve(__dirname, "../../data/items.json");
+// da dist/src/data -> ../../../data/items.json
+const FILE = path.resolve(__dirname, "../../../data/items.json");
 
 console.log("ITEMS_STORE FILE =", FILE);
 
