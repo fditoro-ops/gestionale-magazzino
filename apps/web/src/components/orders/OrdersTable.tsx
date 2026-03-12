@@ -1,12 +1,12 @@
 import React from "react";
 
 type Supplier = "DORECA" | "ALPORI" | "VARI";
-type OrderStatus = "DRAFT" | "SENT" | "PARTIAL" | "RECEIVED";
+type OrderStatus = "DRAFT" | "SENT" | "PARTIAL" | "RECEIVED" | "CANCELLED";
 
 type OrderLine = {
   sku: string;
-  qtyOrderedPz: number;
-  qtyReceivedPz: number;
+  qtyOrderedConf: number;
+  qtyReceivedConf: number;
 };
 
 export type Order = {
@@ -29,13 +29,33 @@ export default function OrdersTable({
 }) {
   return (
     <div style={card}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
         <strong>Ordini</strong>
         <span style={{ fontSize: 12, color: "#667" }}>{orders.length} ordini</span>
       </div>
 
-      <div style={{ marginTop: 10, border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", background: "white" }}>
+      <div
+        style={{
+          marginTop: 10,
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          overflow: "hidden",
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            background: "white",
+          }}
+        >
           <thead>
             <tr style={{ background: "#f9fafb" }}>
               <Th>Numero</Th>
@@ -67,17 +87,7 @@ export default function OrdersTable({
                 </Td>
 
                 <Td>
-                  <Badge
-                    tone={
-                      o.status === "RECEIVED"
-                        ? "ok"
-                        : o.status === "PARTIAL"
-                          ? "warn"
-                          : "info"
-                    }
-                  >
-                    {o.status}
-                  </Badge>
+                  <Badge tone={statusTone(o.status)}>{statusLabel(o.status)}</Badge>
                 </Td>
 
                 <Td style={{ textAlign: "right" }}>
@@ -106,7 +116,22 @@ export default function OrdersTable({
   );
 }
 
-/* ---------- UI Bits ---------- */
+function statusTone(status: OrderStatus): "ok" | "warn" | "info" | "danger" | "muted" {
+  if (status === "RECEIVED") return "ok";
+  if (status === "PARTIAL") return "warn";
+  if (status === "CANCELLED") return "muted";
+  if (status === "DRAFT") return "info";
+  return "danger";
+}
+
+function statusLabel(status: OrderStatus): string {
+  if (status === "DRAFT") return "Bozza";
+  if (status === "SENT") return "Inviato";
+  if (status === "PARTIAL") return "Parziale";
+  if (status === "RECEIVED") return "Ricevuto";
+  if (status === "CANCELLED") return "Annullato";
+  return status;
+}
 
 function Th({
   children,
@@ -158,14 +183,18 @@ function Badge({
   tone,
 }: {
   children: React.ReactNode;
-  tone: "ok" | "warn" | "info";
+  tone: "ok" | "warn" | "info" | "danger" | "muted";
 }) {
   const styles =
     tone === "ok"
       ? { background: "#ECFDF5", border: "1px solid #BBF7D0", color: "#065F46" }
       : tone === "warn"
         ? { background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E" }
-        : { background: "#EFF6FF", border: "1px solid #BFDBFE", color: "#1E40AF" };
+        : tone === "danger"
+          ? { background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B" }
+          : tone === "muted"
+            ? { background: "#F3F4F6", border: "1px solid #E5E7EB", color: "#4B5563" }
+            : { background: "#EFF6FF", border: "1px solid #BFDBFE", color: "#1E40AF" };
 
   return (
     <span
@@ -183,8 +212,6 @@ function Badge({
     </span>
   );
 }
-
-/* ---------- Styles ---------- */
 
 const card: React.CSSProperties = {
   background: "white",
