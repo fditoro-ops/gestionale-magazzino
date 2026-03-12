@@ -414,10 +414,12 @@ async function fetchAllCicProducts(): Promise<CicCatalogRow[]> {
         const variantInternalId = String(v?.internalId || "").trim();
         const variantExternalId = String(v?.externalId || "").trim();
 
-        const variantPrice =
-          Array.isArray(v?.prices) && v.prices.length
-            ? Number(v.prices[0]?.value ?? productPrice || 0)
-            : productPrice;
+        const variantRawPrice =
+  Array.isArray(v?.prices) && v.prices.length
+    ? v.prices[0]?.value
+    : productPrice;
+
+const variantPrice = Number(variantRawPrice ?? 0);
 
         const vBarcodes: any[] =
           (Array.isArray(v?.barcodes) && v.barcodes) ||
