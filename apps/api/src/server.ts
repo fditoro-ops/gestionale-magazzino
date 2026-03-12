@@ -139,14 +139,14 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
   const tab = process.env.CIC_PRODUCTS_SHEET_TAB || "PRODOTTI_CIC";
   if (!sheetId) throw new Error("BOM_SHEET_ID mancante");
 
-  console.log("DEBUG CIC MODES sheetId:", sheetId);
-  console.log("DEBUG CIC MODES tab:", tab);
+  if (DEBUG_CIC) console.log("DEBUG CIC MODES sheetId:", sheetId);
+  if (DEBUG_CIC) console.log("DEBUG CIC MODES tab:", tab);
 
   const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(
     tab
   )}`;
 
-  console.log("DEBUG CIC MODES url:", url);
+  if (DEBUG_CIC) console.log("DEBUG CIC MODES url:", url);
 
   const res = await fetch(url);
   if (!res.ok) {
@@ -155,12 +155,12 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
   }
 
   const text = await res.text();
-  console.log("DEBUG CIC MODES raw text preview:", text.slice(0, 180));
+  if (DEBUG_CIC) console.log("DEBUG CIC MODES raw text preview:", text.slice(0, 180));
 
   const json = JSON.parse(text.substring(47).slice(0, -2));
   const rows = json?.table?.rows ?? [];
 
-  console.log("DEBUG CIC MODES raw rows:", rows.length);
+  if (DEBUG_CIC) console.log("DEBUG CIC MODES raw rows:", rows.length);
 
   const map: CicProductMap = {};
 
@@ -190,15 +190,16 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
     if (productId) map[productId] = entry;
   }
 
-  console.log("DEBUG CIC MODES final keys:", Object.keys(map).length);
-  console.log(
-    "DEBUG CIC MODES sample entries:",
-    Object.entries(map).slice(0, 5)
-  );
+  if (DEBUG_CIC) console.log("DEBUG CIC MODES final keys:", Object.keys(map).length);
+  if (DEBUG_CIC) {
+    console.log(
+      "DEBUG CIC MODES sample entries:",
+      Object.entries(map).slice(0, 5)
+    );
+  }
 
   return map;
 }
-
 async function syncCicProductModes() {
   try {
     const map = await loadCicProductModesFromSheet();
@@ -282,6 +283,7 @@ const CIC_API_BASE_URL =
 const CIC_X_VERSION = process.env.CIC_X_VERSION || "1.0.0";
 const CIC_PRODUCTS_PATH = process.env.CIC_PRODUCTS_PATH || "/products";
 
+const DEBUG_CIC = false;
 const CIC_PRODUCTS_LIMIT = Number(process.env.CIC_PRODUCTS_LIMIT || 200);
 const CIC_PRODUCTS_SYNC_HOURS = Number(
   process.env.CIC_PRODUCTS_SYNC_HOURS || 6
@@ -466,23 +468,26 @@ async function syncCicProducts() {
       const products: any[] = Array.isArray(json?.products) ? json.products : [];
       totalCount = Number(json?.totalCount ?? products.length ?? 0);
 
-      if (!printedSample && products.length) {
-        printedSample = true;
-        console.log("CIC PRODUCT SAMPLE:", JSON.stringify(products[0], null, 2));
-      }
+     if (DEBUG_CIC && !printedSample && products.length) {
+  printedSample = true;
+  console.log("CIC PRODUCT SAMPLE:", JSON.stringify(products[0], null, 2));
+}
 
       for (const p of products) {
         const productId = String(p?.id || "").trim();
         const productDesc = String(p?.description || "").trim();
 
         if (
-          productId === "8a060ec2-5f36-4358-929a-f354e561819b" ||
-          productId === "0ccea60d-737c-4a9a-a6dc-534933b79032" ||
-          productDesc.toUpperCase().includes("KOZEL") ||
-          productDesc.toUpperCase().includes("ACQUA")
-        ) {
-          console.log("🔎 CIC TARGET PRODUCT:", JSON.stringify(p, null, 2));
-        }
+  DEBUG_CIC &&
+  (
+    productId === "8a060ec2-5f36-4358-929a-f354e561819b" ||
+    productId === "0ccea60d-737c-4a9a-a6dc-534933b79032" ||
+    productDesc.toUpperCase().includes("KOZEL") ||
+    productDesc.toUpperCase().includes("ACQUA")
+  )
+) {
+  console.log("🔎 CIC TARGET PRODUCT:", JSON.stringify(p, null, 2));
+}
 
         const productSku =
           String(p?.internalId || "").trim() ||
@@ -507,12 +512,15 @@ async function syncCicProducts() {
         for (const v of variants) {
           const variantId = String(v?.id || "").trim();
 
-          if (
-            variantId === "2dbb6511-afe1-4599-a698-1673bb46ec3b" ||
-            variantId === "51667f52-9f38-469a-a056-60786b1d2d4d"
-          ) {
-            console.log("🔎 CIC TARGET VARIANT:", JSON.stringify(v, null, 2));
-          }
+         if (
+  DEBUG_CIC &&
+  (
+    variantId === "2dbb6511-afe1-4599-a698-1673bb46ec3b" ||
+    variantId === "51667f52-9f38-469a-a056-60786b1d2d4d"
+  )
+) {
+  console.log("🔎 CIC TARGET VARIANT:", JSON.stringify(v, null, 2));
+}
 
           const variantSku =
             String(v?.internalId || "").trim() ||
@@ -588,11 +596,13 @@ function cicExtractItems(data: any): CicExtractedItem[] {
         resolved = cicResolveSku(idProduct);
       }
 
-      console.log("CIC RESOLVE:", {
-        variant: idVariant,
-        product: idProduct,
-        resolved,
-      });
+      if (DEBUG_CIC) {
+  console.log("CIC RESOLVE:", {
+    variant: idVariant,
+    product: idProduct,
+    resolved,
+  });
+}
 
       return {
         sku: resolved,
