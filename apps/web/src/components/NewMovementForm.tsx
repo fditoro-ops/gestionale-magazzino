@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 
+const API_BASE =
+  import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+
 type MovementType = "IN" | "OUT" | "ADJUST" | "INVENTORY";
 
 type MovementReason =
@@ -99,7 +102,7 @@ export default function NewMovementForm({
         payload.reason = reason;
       }
 
-      const res = await fetch("/movements", {
+      const res = await fetch(`${API_BASE}/movements`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
