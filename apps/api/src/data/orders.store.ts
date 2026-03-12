@@ -2,18 +2,23 @@ import fs from "fs";
 import path from "path";
 
 export type Supplier = "DORECA" | "ALPORI" | "VARI";
-export type OrderStatus = "DRAFT" | "SENT" | "PARTIAL" | "RECEIVED";
+export type OrderStatus =
+  | "DRAFT"
+  | "SENT"
+  | "PARTIAL"
+  | "RECEIVED"
+  | "CANCELLED";
 
 export type OrderLine = {
   sku: string;
-  qtyOrderedConf: number;   // ✅ confezioni ordinate
-  qtyReceivedConf: number;  // ✅ confezioni ricevute
+  qtyOrderedConf: number;   // confezioni ordinate
+  qtyReceivedConf: number;  // confezioni ricevute
 };
 
 export type Order = {
   orderId: string;
-  supplier: "DORECA" | "ALPORI" | "VARI";
-  status: "DRAFT" | "SENT" | "PARTIAL" | "RECEIVED";
+  supplier: Supplier;
+  status: OrderStatus;
   createdAt: string;
   sentAt?: string | null;
   receivedAt?: string | null;
