@@ -1,15 +1,37 @@
+import { useMemo } from "react";
 import type { Movement } from "../types/movement";
+
+type ItemLite = {
+  sku: string;
+  name?: string;
+};
 
 type Props = {
   movements: Movement[];
+  items: ItemLite[];
 };
 
-export default function MovementsList({ movements }: Props) {
+export default function MovementsList({ movements, items }: Props) {
   const ordered = [...movements].sort((a, b) => {
     const bd = b.date ?? b.at ?? "";
     const ad = a.date ?? a.at ?? "";
     return new Date(bd).getTime() - new Date(ad).getTime();
   });
+
+  const itemNameBySku = useMemo(() => {
+    const map = new Map<string, string>();
+
+    for (const item of items) {
+      const sku = String(item.sku ?? "").trim();
+      const name = String(item.name ?? "").trim();
+
+      if (sku) {
+        map.set(sku, name || sku);
+      }
+    }
+
+    return map;
+  }, [items]);
 
   return (
     <div className="panel-glass p-6">
@@ -26,6 +48,7 @@ export default function MovementsList({ movements }: Props) {
         {ordered.map((m) => {
           const type = (m.type ?? m.kind ?? "") as string;
           const qty = Number(m.quantity ?? m.qty ?? 0);
+          const productName = itemNameBySku.get(m.sku) || m.sku;
 
           const sign = type === "IN" || type === "INVENTORY" ? "+" : "−";
 
@@ -59,7 +82,7 @@ export default function MovementsList({ movements }: Props) {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <div className="font-medium text-gray-900 truncate">
-                    {m.sku}
+                    {productName}
                   </div>
 
                   <span
@@ -70,6 +93,8 @@ export default function MovementsList({ movements }: Props) {
                 </div>
 
                 <div className="text-sm text-gray-500 truncate">
+                  <span className="text-gray-400">{m.sku}</span>
+                  {" · "}
                   {dtLabel}
                   {meta ? ` · ${meta}` : ""}
                 </div>
