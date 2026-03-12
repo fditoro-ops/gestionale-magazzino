@@ -1214,7 +1214,9 @@ if (basicAuthEnabled && user && pass) {
 app.use("/items", itemsRouter);
 app.use("/movements", movementsRouter);
 app.use("/stock-v2", stockV2Router);
+console.log("✅ Mounting /orders router");
 app.use("/orders", ordersRouter);
+
 
 /* =========================
    Static frontend
