@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
 
+console.log("✅ ORDERS ROUTER FILE LOADED");
+
 import { orders as defaultOrders } from "../data/orders.js";
 import type { Order } from "../data/orders.store.js";
 import { loadOrders, saveOrders } from "../data/orders.store.js";
@@ -16,7 +18,19 @@ import { getItemBySku } from "../services/items.service.js";
 import type { Movement } from "../types/movement.js";
 import { insertManyMovements } from "../data/movements.store.js";
 
-console.log("✅ ORDERS ROUTER FILE LOADED");
+const router = Router();
+
+router.get("/_ping", (_req, res) => {
+  res.json({ ok: true, route: "/orders/_ping" });
+});
+
+router.get("/_debug", (_req, res) => {
+  res.json({
+    ok: true,
+    ordersCount: Array.isArray(orders) ? orders.length : -1,
+    sample: Array.isArray(orders) ? orders.slice(0, 3) : [],
+  });
+});
 
 const router = Router();
 
