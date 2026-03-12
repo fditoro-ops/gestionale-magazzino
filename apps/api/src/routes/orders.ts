@@ -13,10 +13,9 @@ import {
 
 import { getItemBySku } from "../services/items.service.js";
 
-// Per scrivere movimenti IN quando ricevi
 import type { Movement } from "../types/movement.js";
-import { movements } from "../data/movements.js";
-import { saveMovements } from "../data/movements.store.js";
+import { loadMovements, saveMovements } from "../data/movements.store.js";
+import { movements as defaultMovements } from "../data/movements.js";
 
 const router = Router();
 
@@ -30,11 +29,20 @@ function confToBt(sku: string, qtyConf: number): number {
   return qtyConf * getPackSizeForSku(sku);
 }
 
-/* ---------------- IN-MEMORY + PERSISTED ---------------- */
+function hasDuplicateSkus(lines: Array<{ sku: string }>): boolean {
+  const seen = new Set<string>();
+  for (const line of lines) {
+    const sku = String(line.sku ?? "").toUpperCase().trim();
+    if (seen.has(sku)) return true;
+    seen.add(sku);
+  }
+  return false;
+}
 
-let orders: Order[] = loadOrders(defaultOrders as any);
+let orders: Order[] = loadOrders(defaultOrders as any).map(normalizeOrder);
+saveOrders(orders);
 
-/* ---------------- NORMALIZE (retro-compat) ---------------- */
+let movements: Movement[] = loadMovements(defaultMovements as any);
 
 function normalizeOrder(o: any): Order {
   const lines = Array.isArray(o?.lines) ? o.lines : [];
@@ -48,7 +56,6 @@ function normalizeOrder(o: any): Order {
     receivedAt: o?.receivedAt ?? null,
     notes: o?.notes ?? null,
 
-    // ✅ retro-compat: se arrivano PZ li trasformiamo in CONF usando packSize (arrotondo su)
     lines: lines.map((l: any) => {
       const sku = (l?.sku ?? "").toString().toUpperCase().trim();
 
@@ -75,21 +82,17 @@ function normalizeOrder(o: any): Order {
   } as Order;
 }
 
-orders = orders.map(normalizeOrder);
-saveOrders(orders);
-
 /* ---------------- GET /orders ---------------- */
 
 router.get("/", (_req, res) => {
-  res.json(orders);
+  return res.json(orders);
 });
 
 /* ---------------- GET /orders/:id ---------------- */
 
 router.get("/:id", (req, res) => {
-  const id = req.params.id;
-  const ord = orders.find((o) => o.orderId === id);
-  if (!ord) return res.status(404).json({ error: `Ordine ${id} non trovato` });
+  const ord = orders.find((o) => o.orderId === req.params.id);
+  if (!ord) return res.status(404).json({ error: `Ordine ${req.params.id} non trovato` });
   return res.json(ord);
 });
 
@@ -98,22 +101,26 @@ router.get("/:id", (req, res) => {
 router.post("/", (req, res) => {
   const parsed = CreateOrderSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res
-      .status(400)
-      .json({ error: "Validation error", details: parsed.error.format() });
+    return res.status(400).json({
+      error: "Validation error",
+      details: parsed.error.format(),
+    });
   }
 
   const data = parsed.data;
 
-  // Validazione SKU esistenti + attivi
+  if (hasDuplicateSkus(data.lines)) {
+    return res.status(400).json({ error: "Sono presenti SKU duplicati nello stesso ordine" });
+  }
+
   for (const line of data.lines) {
     const it = getItemBySku(line.sku);
-    if (!it)
-      return res
-        .status(400)
-        .json({ error: `SKU ${line.sku} non esistente in anagrafica` });
-    if (it.active === false)
+    if (!it) {
+      return res.status(400).json({ error: `SKU ${line.sku} non esistente in anagrafica` });
+    }
+    if (it.active === false) {
       return res.status(400).json({ error: `SKU ${line.sku} è disattivato` });
+    }
   }
 
   const newOrder = normalizeOrder({
@@ -121,13 +128,14 @@ router.post("/", (req, res) => {
     supplier: data.supplier,
     status: "DRAFT",
     createdAt: new Date().toISOString(),
+    sentAt: null,
+    receivedAt: null,
     notes: data.notes ?? null,
     lines: data.lines.map((l) => ({
-  sku: l.sku,
-  qtyOrderedConf: l.qtyOrderedConf,
-  qtyReceivedConf: 0,
-})),
-
+      sku: l.sku,
+      qtyOrderedConf: l.qtyOrderedConf,
+      qtyReceivedConf: 0,
+    })),
   });
 
   orders.push(newOrder);
@@ -137,39 +145,101 @@ router.post("/", (req, res) => {
 });
 
 /* ---------------- PATCH /orders/:id ---------------- */
+/* modifica solo ordini DRAFT e NON consente di toccare qtyReceivedConf o status */
 
 router.patch("/:id", (req, res) => {
   const parsed = UpdateOrderSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res
-      .status(400)
-      .json({ error: "Validation error", details: parsed.error.format() });
+    return res.status(400).json({
+      error: "Validation error",
+      details: parsed.error.format(),
+    });
   }
 
-  const id = req.params.id;
-  const idx = orders.findIndex((o) => o.orderId === id);
-  if (idx === -1) return res.status(404).json({ error: `Ordine ${id} non trovato` });
+  const idx = orders.findIndex((o) => o.orderId === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: `Ordine ${req.params.id} non trovato` });
+  }
+
+  const current = orders[idx];
+
+  if (current.status !== "DRAFT") {
+    return res.status(400).json({
+      error: "Si possono modificare solo ordini in stato DRAFT",
+    });
+  }
 
   const next = parsed.data;
 
-  // Se aggiornano lines: validiamo SKU + received<=ordered
+  if ("status" in next) {
+    return res.status(400).json({
+      error: "Lo stato non può essere modificato via PATCH",
+    });
+  }
+
   if (Array.isArray(next.lines)) {
+    if (hasDuplicateSkus(next.lines)) {
+      return res.status(400).json({ error: "Sono presenti SKU duplicati nello stesso ordine" });
+    }
+
     for (const line of next.lines) {
       const it = getItemBySku(line.sku);
-      if (!it) return res.status(400).json({ error: `SKU ${line.sku} non esistente in anagrafica` });
-      if (it.active === false) return res.status(400).json({ error: `SKU ${line.sku} è disattivato` });
-      if (line.qtyReceivedConf > line.qtyOrderedConf) {
-  return res.status(400).json({ error: `SKU ${line.sku}: qtyReceivedConf non può superare qtyOrderedConf` });
-}
+      if (!it) {
+        return res.status(400).json({ error: `SKU ${line.sku} non esistente in anagrafica` });
+      }
+      if (it.active === false) {
+        return res.status(400).json({ error: `SKU ${line.sku} è disattivato` });
+      }
 
+      if ("qtyReceivedConf" in line) {
+        return res.status(400).json({
+          error: `SKU ${line.sku}: qtyReceivedConf non è modificabile via PATCH`,
+        });
+      }
     }
   }
 
-  const merged = normalizeOrder({ ...orders[idx], ...next });
-
-  if (merged.status === "SENT" && !merged.sentAt) merged.sentAt = new Date().toISOString();
+  const merged = normalizeOrder({
+    ...current,
+    supplier: next.supplier ?? current.supplier,
+    notes: next.notes ?? current.notes,
+    lines: Array.isArray(next.lines)
+      ? next.lines.map((l) => ({
+          sku: l.sku,
+          qtyOrderedConf: l.qtyOrderedConf,
+          qtyReceivedConf: 0,
+        }))
+      : current.lines,
+  });
 
   orders[idx] = merged;
+  saveOrders(orders);
+
+  return res.json(orders[idx]);
+});
+
+/* ---------------- POST /orders/:id/send ---------------- */
+
+router.post("/:id/send", (req, res) => {
+  const idx = orders.findIndex((o) => o.orderId === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: `Ordine ${req.params.id} non trovato` });
+  }
+
+  const ord = orders[idx];
+
+  if (ord.status !== "DRAFT") {
+    return res.status(400).json({ error: "Solo un ordine DRAFT può essere inviato" });
+  }
+
+  if (!ord.lines.length) {
+    return res.status(400).json({ error: "Impossibile inviare un ordine senza righe" });
+  }
+
+  ord.status = "SENT";
+  ord.sentAt = ord.sentAt ?? new Date().toISOString();
+
+  orders[idx] = normalizeOrder(ord);
   saveOrders(orders);
 
   return res.json(orders[idx]);
@@ -180,19 +250,23 @@ router.patch("/:id", (req, res) => {
 router.post("/:id/receive", (req, res) => {
   const parsed = ReceiveOrderSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res
-      .status(400)
-      .json({ error: "Validation error", details: parsed.error.format() });
+    return res.status(400).json({
+      error: "Validation error",
+      details: parsed.error.format(),
+    });
   }
 
-  const id = req.params.id;
-  const idx = orders.findIndex((o) => o.orderId === id);
-  if (idx === -1) return res.status(404).json({ error: `Ordine ${id} non trovato` });
+  const idx = orders.findIndex((o) => o.orderId === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: `Ordine ${req.params.id} non trovato` });
+  }
 
   const ord = orders[idx];
 
-  if (ord.status === "RECEIVED") {
-    return res.status(400).json({ error: `Ordine ${id} già ricevuto` });
+  if (!["SENT", "PARTIAL"].includes(ord.status)) {
+    return res.status(400).json({
+      error: `Ordine ${req.params.id} non ricevibile nello stato ${ord.status}`,
+    });
   }
 
   const note = parsed.data.note ?? null;
@@ -200,44 +274,51 @@ router.post("/:id/receive", (req, res) => {
 
   for (const r of parsed.data.lines) {
     const line = bySku.get(r.sku);
-    if (!line) return res.status(400).json({ error: `SKU ${r.sku} non presente nell'ordine` });
+    if (!line) {
+      return res.status(400).json({ error: `SKU ${r.sku} non presente nell'ordine` });
+    }
 
     const it = getItemBySku(r.sku);
-    if (!it) return res.status(400).json({ error: `SKU ${r.sku} non esistente in anagrafica` });
-    if (it.active === false) return res.status(400).json({ error: `SKU ${r.sku} è disattivato` });
+    if (!it) {
+      return res.status(400).json({ error: `SKU ${r.sku} non esistente in anagrafica` });
+    }
+    if (it.active === false) {
+      return res.status(400).json({ error: `SKU ${r.sku} è disattivato` });
+    }
 
-  const nextReceived = line.qtyReceivedConf + r.qtyReceivedNowConf;
-if (nextReceived > line.qtyOrderedConf) {
-  return res.status(400).json({
-    error: `SKU ${r.sku}: ricezione oltre ordinato`,
-    orderedConf: line.qtyOrderedConf,
-    receivedConf: line.qtyReceivedConf,
-    tryingConf: nextReceived,
-  });
-}
+    const nextReceived = line.qtyReceivedConf + r.qtyReceivedNowConf;
 
-line.qtyReceivedConf = nextReceived;
+    if (nextReceived > line.qtyOrderedConf) {
+      return res.status(400).json({
+        error: `SKU ${r.sku}: ricezione oltre ordinato`,
+        orderedConf: line.qtyOrderedConf,
+        receivedConf: line.qtyReceivedConf,
+        tryingConf: nextReceived,
+      });
+    }
 
-// ✅ MOVIMENTO IN in BT
-const qtyBt = confToBt(r.sku, r.qtyReceivedNowConf);
+    line.qtyReceivedConf = nextReceived;
 
-const mv: Movement = {
-  id: randomUUID(),
-  sku: r.sku,
-  quantity: qtyBt,          // ✅ BT
-  type: "IN",
-  reason: "RICEZIONE_ORDINE",
-  date: new Date().toISOString(),
-  note: note ? `ORD:${id} | ${note}` : `ORD:${id}`,
-};
+    const qtyBt = confToBt(r.sku, r.qtyReceivedNowConf);
 
-movements.push(mv);
+    const mv: Movement = {
+      id: randomUUID(),
+      sku: r.sku,
+      quantity: qtyBt,
+      type: "IN",
+      reason: "RICEZIONE_ORDINE",
+      date: new Date().toISOString(),
+      note: note ? `ORD:${req.params.id} | ${note}` : `ORD:${req.params.id}`,
+    };
 
+    movements.push(mv);
   }
 
- const allReceived = ord.lines.every((l) => l.qtyReceivedConf >= l.qtyOrderedConf);
-ord.status = allReceived ? "RECEIVED" : "PARTIAL";
+  const allReceived = ord.lines.every(
+    (l) => l.qtyReceivedConf >= l.qtyOrderedConf
+  );
 
+  ord.status = allReceived ? "RECEIVED" : "PARTIAL";
   ord.receivedAt = allReceived ? new Date().toISOString() : ord.receivedAt ?? null;
 
   orders[idx] = normalizeOrder(ord);
@@ -248,5 +329,27 @@ ord.status = allReceived ? "RECEIVED" : "PARTIAL";
   return res.json(orders[idx]);
 });
 
-export default router;
+/* ---------------- POST /orders/:id/cancel ---------------- */
 
+router.post("/:id/cancel", (req, res) => {
+  const idx = orders.findIndex((o) => o.orderId === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: `Ordine ${req.params.id} non trovato` });
+  }
+
+  const ord = orders[idx];
+
+  if (ord.status === "RECEIVED" || ord.status === "PARTIAL") {
+    return res.status(400).json({
+      error: "Non puoi annullare un ordine già ricevuto o parzialmente ricevuto",
+    });
+  }
+
+  ord.status = "CANCELLED";
+  orders[idx] = normalizeOrder(ord);
+  saveOrders(orders);
+
+  return res.json(orders[idx]);
+});
+
+export default router;
