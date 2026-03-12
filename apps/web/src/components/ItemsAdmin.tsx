@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import ItemDetailsModal, { type Item } from "./ItemDetailsModal";
 import { RefreshCw, Plus, Pencil, X } from "lucide-react";
 
+const API_BASE =
+  import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+
 type StockKind = "UNIT" | "VOLUME_CONTAINER";
 type Supplier = "DORECA" | "ALPORI" | "VARI";
 
@@ -89,7 +92,7 @@ export default function ItemsAdmin() {
     setLoading(true);
     setErr(null);
     try {
-      const res = await fetch(`/items`);
+      const res = await fetch(`${API_BASE}/items`);
       const data = await res.json();
       setItems(Array.isArray(data) ? data : []);
     } catch {
@@ -169,7 +172,7 @@ export default function ItemsAdmin() {
 
     setLoading(true);
     try {
-      const res = await fetch(`/items`, {
+      const res = await fetch(`${API_BASE}/items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -193,7 +196,7 @@ export default function ItemsAdmin() {
   }
 
   async function savePatch(sku: string, patch: any) {
-    const res = await fetch(`/items/${encodeURIComponent(sku)}`, {
+    const res = await fetch(`${API_BASE}/items/${encodeURIComponent(sku)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
