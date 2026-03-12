@@ -200,6 +200,7 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
 
   return map;
 }
+
 async function syncCicProductModes() {
   try {
     const map = await loadCicProductModesFromSheet();
@@ -803,9 +804,9 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
     );
     const tenantId = process.env.TENANT_ID || "IMP001";
 
-    let items = cicExtractItems(data);
+let items = cicExtractItems(data);
 
-    const hasUnresolved = items.some((it) => String(it.sku).includes("-"));
+const hasUnresolved = items.some((it) => String(it.sku).includes("-"));
 
 if (hasUnresolved && Date.now() - lastEmergencySyncMs > 60_000) {
   console.log("ℹ️ CIC: trovati ID non risolti, provo sync prodotti…");
@@ -813,7 +814,8 @@ if (hasUnresolved && Date.now() - lastEmergencySyncMs > 60_000) {
   lastEmergencySyncMs = Date.now();
   items = cicExtractItems(data);
 }
-    const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
+
+const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
 
     const cicModesBySku = Object.fromEntries(
       Object.entries(cicProductModeCache).map(([_, v]) => [v.sku, v.mode])
