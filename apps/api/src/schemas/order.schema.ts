@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const SupplierSchema = z.enum(["DORECA", "ALPORI", "VARI"]);
+
 export const StatusSchema = z.enum([
   "DRAFT",
   "SENT",
@@ -51,10 +52,12 @@ export const ReceiveOrderSchema = z.object({
     },
     z.string().min(1).optional()
   ),
-  lines: z.array(
-    z.object({
-      sku: SkuSchema,
-      qtyReceivedNowConf: z.number().int().positive(),
-    })
-  ).min(1),
+  lines: z
+    .array(
+      z.object({
+        sku: SkuSchema,
+        qtyReceivedNowConf: z.number().int().positive(),
+      })
+    )
+    .min(1),
 });
