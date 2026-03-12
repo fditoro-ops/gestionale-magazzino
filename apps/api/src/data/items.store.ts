@@ -1,9 +1,15 @@
 // src/data/items.store.ts
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const FILE = path.resolve(process.cwd(), "apps/api/data/items.json");
-console.log("ITEMS_STORE FILE =", FILE, "CWD =", process.cwd());
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// percorso stabile indipendente dalla working directory
+const FILE = path.resolve(__dirname, "../../data/items.json");
+
+console.log("ITEMS_STORE FILE =", FILE);
 
 export function saveItems(items: any[]) {
   fs.writeFileSync(FILE, JSON.stringify(items, null, 2), "utf-8");
