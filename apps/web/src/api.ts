@@ -11,4 +11,3 @@ export async function getStock() {
   if (!res.ok) throw new Error("Errore stock");
   return res.json();
 }
-
