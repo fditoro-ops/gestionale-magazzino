@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import OrdersTable, { type Order } from "./orders/OrdersTable";
 import OrderDrawer from "./orders/OrderDrawer";
 
+/* ---------------- API ---------------- */
+
+const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+
 /* ---------------- TYPES ---------------- */
 
 type Supplier = "DORECA" | "ALPORI" | "VARI";
@@ -17,7 +21,7 @@ export default function OrdersPage({
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // NEW ORDER (draft) -> UI in PACK
+  // NEW ORDER (draft) -> UI in PACK / CONF
   const [supplier, setSupplier] = useState<Supplier>("DORECA");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Array<{ sku: string; qtyPack: number }>>([
@@ -32,7 +36,7 @@ export default function OrdersPage({
     return orders.find((o) => o.orderId === openOrderId) ?? null;
   }, [orders, openOrderId]);
 
-  // packSizeBySku: serve per convertire PACK -> PZ
+  // packSizeBySku: utile solo per mostrare xN in UI
   const packSizeBySku = useMemo(() => {
     const arr = Array.isArray(items) ? items : [];
     return Object.fromEntries(
@@ -47,7 +51,7 @@ export default function OrdersPage({
 
   async function loadOrders() {
     try {
-      const r = await fetch("http://localhost:3001/orders");
+      const r = await fetch(`${API_BASE}/orders`);
       const data = await r.json();
       setOrders(Array.isArray(data) ? data : []);
     } catch {
@@ -82,7 +86,7 @@ export default function OrdersPage({
 
             return {
               sku,
-              qtyOrderedConf: l.qtyPack, // ✅ PACK → PZ
+              qtyOrderedConf: l.qtyPack, // quantità in confezioni/casse
             };
           }),
       };
@@ -98,7 +102,7 @@ export default function OrdersPage({
 
     setLoading(true);
     try {
-      const r = await fetch("http://localhost:3001/orders", {
+      const r = await fetch(`${API_BASE}/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -124,19 +128,20 @@ export default function OrdersPage({
 
   async function postReceive(
     order: Order,
-    payload: { lines: Array<{ sku: string; qtyReceivedNowPz: number }>; note?: string }
+    payload: {
+      lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
+      note?: string;
+    }
   ) {
     setErr(null);
     setLoading(true);
+
     try {
-      const r = await fetch(
-        `http://localhost:3001/orders/${order.orderId}/receive`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      const r = await fetch(`${API_BASE}/orders/${order.orderId}/receive`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       if (!r.ok) {
         const j = await safeJson(r);
@@ -220,7 +225,6 @@ export default function OrdersPage({
                     ))}
                   </select>
 
-                  {/* qtyPack */}
                   <input
                     type="number"
                     min={1}
@@ -231,10 +235,9 @@ export default function OrdersPage({
                       setLines(next);
                     }}
                     style={{ ...inp, width: 110 }}
-                    title="Quantità in PACK (casse)"
+                    title="Quantità in confezioni/casse"
                   />
 
-                  {/* label xPackSize */}
                   <span
                     style={{
                       fontSize: 12,
@@ -243,7 +246,7 @@ export default function OrdersPage({
                       minWidth: 44,
                       textAlign: "right",
                     }}
-                    title="Pack size (PZ per cassa)"
+                    title="Pack size (pezzi/bottiglie per confezione)"
                   >
                     {ps ? `x${ps}` : "—"}
                   </span>
