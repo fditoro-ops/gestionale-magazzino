@@ -1,4 +1,5 @@
-const API_URL = "http://localhost:3001";
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:3001";
 
 export async function getMovements() {
   const res = await fetch(`${API_URL}/movements`);
@@ -7,7 +8,7 @@ export async function getMovements() {
 }
 
 export async function getStock() {
-  const res = await fetch(`${API_URL}/stock`);
+  const res = await fetch(`${API_URL}/stock-v2`);
   if (!res.ok) throw new Error("Errore stock");
   return res.json();
 }
