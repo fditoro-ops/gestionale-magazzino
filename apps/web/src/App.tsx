@@ -11,6 +11,9 @@ import OrdersPage from "./components/OrdersPage";
 
 import type { Movement } from "./types/movement";
 
+const API_BASE =
+  import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+
 type WarehouseRow = {
   itemId: string;
   sku: string;
@@ -21,18 +24,15 @@ type WarehouseRow = {
 };
 
 export default function App() {
-  /* ---------- NAV ---------- */
   const [tab, setTab] = useState<TabKey>("movements");
   const [mode, setMode] = useState<"live" | "historical">("live");
 
-  /* ---------- DATA ---------- */
   const [movements, setMovements] = useState<Movement[]>([]);
   const [warehouse, setWarehouse] = useState<WarehouseRow[]>([]);
   const [draftSku, setDraftSku] = useState<string>("");
 
   const [items, setItems] = useState<any[]>([]);
 
-  // packSizeBySku: sempre safe
   const packSizeBySku = useMemo(() => {
     const arr = Array.isArray(items) ? items : [];
     return Object.fromEntries(
@@ -40,7 +40,6 @@ export default function App() {
     ) as Record<string, number | null>;
   }, [items]);
 
-  // availableBySku: sempre safe
   const availableBySku = useMemo(() => {
     const arr = Array.isArray(warehouse) ? warehouse : [];
     return Object.fromEntries(
@@ -48,14 +47,13 @@ export default function App() {
     ) as Record<string, number>;
   }, [warehouse]);
 
-  /* ---------- LOAD ---------- */
   const reload = () => {
-    fetch("/movements")
+    fetch(`${API_BASE}/movements`)
       .then((r) => r.json())
       .then((data) => setMovements(Array.isArray(data) ? data : []))
       .catch(console.error);
 
-    fetch("/stock-v2")
+    fetch(`${API_BASE}/stock-v2`)
       .then((r) => r.json())
       .then((data) => {
         const rows = Array.isArray(data)
@@ -71,20 +69,16 @@ export default function App() {
       })
       .catch(console.error);
 
-    fetch("/items")
+    fetch(`${API_BASE}/items`)
       .then((r) => r.json())
       .then((data) => setItems(Array.isArray(data) ? data : []))
       .catch(console.error);
-
-    // ⚠️ NOTA: niente fetch /orders qui
-    // OrdersPage prova da solo a chiamare /orders e se non esiste usa fallback locale.
   };
 
   useEffect(() => {
     reload();
   }, []);
 
-  /* ---------- UI ---------- */
   return (
     <div className="app-bg">
       <div className="app-bg-content min-h-screen">
@@ -111,9 +105,9 @@ export default function App() {
                 packSizeBySku={packSizeBySku}
               />
               <MovementsList
-  movements={movements}
-  items={Array.isArray(items) ? items : []}
-/>
+                movements={movements}
+                items={Array.isArray(items) ? items : []}
+              />
             </div>
           )}
 
@@ -129,7 +123,6 @@ export default function App() {
 
           {tab === "items" && <ItemsAdmin />}
 
-          {/* ✅ ORDERS: pagina vera */}
           {tab === "orders" && (
             <OrdersPage
               items={Array.isArray(items) ? items : []}
