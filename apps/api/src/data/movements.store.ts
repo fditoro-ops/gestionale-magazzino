@@ -104,6 +104,7 @@ export async function insertManyMovements(
     }
 
     await client.query("COMMIT");
+    console.log("✅ INSERT MANY MOVEMENTS =", movements.length);
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("INSERT MANY MOVEMENTS ERROR:", err);
@@ -114,8 +115,9 @@ export async function insertManyMovements(
 }
 
 /**
- * Compatibilità con il vecchio codice:
+ * Compatibilità legacy:
  * riscrive tutta la tabella con l'array passato.
+ * Da NON usare nel normale flusso ordini/ricezioni.
  */
 export async function saveMovements(movements: Movement[]): Promise<void> {
   const client = await pool.connect();
