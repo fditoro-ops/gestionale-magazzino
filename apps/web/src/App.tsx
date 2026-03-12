@@ -110,7 +110,10 @@ export default function App() {
                 defaultSku={draftSku}
                 packSizeBySku={packSizeBySku}
               />
-              <MovementsList movements={movements} />
+              <MovementsList
+  movements={movements}
+  items={Array.isArray(items) ? items : []}
+/>
             </div>
           )}
 
