@@ -14,8 +14,7 @@ import {
 import { getItemBySku } from "../services/items.service.js";
 
 import type { Movement } from "../types/movement.js";
-import { movements as defaultMovements } from "../data/movements.js";
-import { loadMovements, saveMovements } from "../data/movements.store.js";
+import { insertManyMovements } from "../data/movements.store.js";
 
 const router = Router();
 
@@ -96,6 +95,7 @@ router.get("/", (_req, res) => {
 
 router.get("/:id", (req, res) => {
   const ord = orders.find((o) => o.orderId === req.params.id);
+
   if (!ord) {
     return res.status(404).json({ error: `Ordine ${req.params.id} non trovato` });
   }
@@ -289,7 +289,7 @@ router.post("/:id/receive", async (req, res) => {
 
   const note = parsed.data.note ?? null;
   const bySku = new Map(ord.lines.map((l) => [l.sku, l]));
-  const movements: Movement[] = await loadMovements(defaultMovements as any);
+  const newMovements: Movement[] = [];
 
   for (const r of parsed.data.lines) {
     const line = bySku.get(r.sku);
@@ -335,7 +335,7 @@ router.post("/:id/receive", async (req, res) => {
       note: note ? `ORD:${req.params.id} | ${note}` : `ORD:${req.params.id}`,
     };
 
-    movements.push(mv);
+    newMovements.push(mv);
   }
 
   const allReceived = ord.lines.every(
@@ -348,7 +348,7 @@ router.post("/:id/receive", async (req, res) => {
   orders[idx] = normalizeOrder(ord);
 
   saveOrders(orders);
-  await saveMovements(movements);
+  await insertManyMovements(newMovements);
 
   return res.json(orders[idx]);
 });
