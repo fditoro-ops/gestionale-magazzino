@@ -49,6 +49,9 @@ type CicCatalogRow = {
   internalId: string;
   externalId: string;
   barcode: string;
+  category: string;
+  department: string;
+  price: number | string;
 };
 
 type CicExtractedItem = {
@@ -233,17 +236,19 @@ async function pushUnresolvedToSheet(row: any) {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        docId: row?.docId || "",
-        receiptNumber: row?.receiptNumber || "",
-        cicId: row?._idProduct || "",
-        variantId: row?._idProductVariant || "",
-        name: row?.description || "",
-        price: row?.price || "",
-        qty: row?.qty || "",
-        rawSku: row?.rawSku || "",
-        note: row?.note || "",
-      }),
+     body: JSON.stringify({
+  docId: row?.docId || "",
+  receiptNumber: row?.receiptNumber || "",
+  cicId: row?._idProduct || "",
+  variantId: row?._idProductVariant || "",
+  name: row?.description || "",
+  price: row?.price || "",
+  qty: row?.qty || "",
+  rawSku: row?.rawSku || "",
+  category: row?.category || "",
+  department: row?.department || "",
+  note: row?.note || "",
+}),
     });
 
     console.log("✅ CIC unresolved push to sheet OK:", row?._idProduct || "");
@@ -370,6 +375,23 @@ async function fetchAllCicProducts(): Promise<CicCatalogRow[]> {
       const productInternalId = String(p?.internalId || "").trim();
       const productExternalId = String(p?.externalId || "").trim();
 
+      const category = String(
+        p?.category?.description ||
+          p?.category?.descriptionLabel ||
+          ""
+      ).trim();
+
+      const department = String(
+        p?.department?.description ||
+          p?.department?.descriptionLabel ||
+          ""
+      ).trim();
+
+      const productPrice =
+        Array.isArray(p?.prices) && p.prices.length
+          ? Number(p.prices[0]?.value ?? 0)
+          : "";
+
       rows.push({
         type: "PRODUCT",
         productId,
@@ -378,6 +400,9 @@ async function fetchAllCicProducts(): Promise<CicCatalogRow[]> {
         internalId: productInternalId,
         externalId: productExternalId,
         barcode: "",
+        category,
+        department,
+        price: productPrice,
       });
 
       const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
@@ -388,6 +413,11 @@ async function fetchAllCicProducts(): Promise<CicCatalogRow[]> {
         ).trim();
         const variantInternalId = String(v?.internalId || "").trim();
         const variantExternalId = String(v?.externalId || "").trim();
+
+        const variantPrice =
+          Array.isArray(v?.prices) && v.prices.length
+            ? Number(v.prices[0]?.value ?? productPrice || 0)
+            : productPrice;
 
         const vBarcodes: any[] =
           (Array.isArray(v?.barcodes) && v.barcodes) ||
@@ -403,6 +433,9 @@ async function fetchAllCicProducts(): Promise<CicCatalogRow[]> {
             internalId: variantInternalId,
             externalId: variantExternalId,
             barcode: "",
+            category,
+            department,
+            price: variantPrice,
           });
         } else {
           for (const b of vBarcodes) {
@@ -416,6 +449,9 @@ async function fetchAllCicProducts(): Promise<CicCatalogRow[]> {
               barcode: String(
                 b?.barcode || b?.code || b?.value || b || ""
               ).trim(),
+              category,
+              department,
+              price: variantPrice,
             });
           }
         }
@@ -428,7 +464,6 @@ async function fetchAllCicProducts(): Promise<CicCatalogRow[]> {
 
   return rows;
 }
-
 async function syncCicProducts() {
   try {
     if (!CIC_API_KEY) {
@@ -878,26 +913,33 @@ const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
         });
 
         await pushUnresolvedToSheet({
-          docId,
-          receiptNumber:
-            data?.document?.documentNumber ||
-            data?.document?.number ||
-            data?.document?.receiptNumber ||
-            data?.number ||
-            "",
-          _idProduct: it._idProduct,
-          _idProductVariant: it._idProductVariant,
-          description:
-            rawRow?.description ||
-            rawRow?.descriptionReceipt ||
-            rawRow?.name ||
-            "",
-          price: rawRow?.price ?? rawRow?.priceTotal ?? "",
-          qty: rawRow?.quantity ?? it.qty ?? 1,
-          rawSku: sku,
-          note: "Da configurare",
-        });
-
+  docId,
+  receiptNumber:
+    data?.document?.documentNumber ||
+    data?.document?.number ||
+    data?.document?.receiptNumber ||
+    data?.number ||
+    "",
+  _idProduct: it._idProduct,
+  _idProductVariant: it._idProductVariant,
+  description:
+    rawRow?.description ||
+    rawRow?.descriptionReceipt ||
+    rawRow?.name ||
+    "",
+  price: rawRow?.price ?? rawRow?.priceTotal ?? "",
+  qty: rawRow?.quantity ?? it.qty ?? 1,
+  rawSku: sku,
+  category:
+    rawRow?.category?.description ||
+    rawRow?.category?.descriptionLabel ||
+    "",
+  department:
+    rawRow?.department?.description ||
+    rawRow?.department?.descriptionLabel ||
+    "",
+  note: "Da configurare",
+});
         continue;
       }
 
