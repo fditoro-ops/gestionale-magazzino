@@ -292,6 +292,7 @@ const CIC_PRODUCTS_SYNC_HOURS = Number(
 
 let cicIdToSkuMap: Record<string, string> = {};
 let cicProductsLastSyncAt: string | null = null;
+let lastEmergencySyncMs = 0;
 
 let cicBearerToken: string | null = null;
 let cicBearerTokenExpMs: number | null = null;
