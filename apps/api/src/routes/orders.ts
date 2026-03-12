@@ -16,6 +16,8 @@ import { getItemBySku } from "../services/items.service.js";
 import type { Movement } from "../types/movement.js";
 import { insertManyMovements } from "../data/movements.store.js";
 
+console.log("✅ ORDERS ROUTER FILE LOADED");
+
 const router = Router();
 
 function getPackSizeForSku(sku: string): number {
