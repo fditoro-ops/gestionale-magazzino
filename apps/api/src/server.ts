@@ -674,8 +674,16 @@ const PORT = Number(process.env.PORT ?? 3001);
 const allowedOrigins = [
   "http://localhost:5173",
   "https://gestionale-magazzino-8cdo.onrender.com",
+  "https://gestionale-magazzino-1-2dnc.onrender.com",
 ];
 
+const corsOptions = {
+  origin: allowedOrigins,
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 const corsOptions = {
   origin: allowedOrigins,
   credentials: true,
