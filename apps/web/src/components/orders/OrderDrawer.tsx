@@ -1,10 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { Order } from "./OrdersTable";
 
 type OrderLine = {
   sku: string;
-  qtyOrderedPz: number;
-  qtyReceivedPz: number;
+  qtyOrderedConf: number;
+  qtyReceivedConf: number;
 };
 
 export default function OrderDrawer({
@@ -21,70 +21,115 @@ export default function OrderDrawer({
   items: any[];
   loading: boolean;
   onClose: () => void;
-  onReceiveSelected: (order: Order, payload: { lines: Array<{ sku: string; qtyReceivedNowPz: number }>; note?: string }) => void;
-  onReceiveAll: (order: Order, payload: { lines: Array<{ sku: string; qtyReceivedNowPz: number }>; note?: string }) => void;
+  onReceiveSelected: (
+    order: Order,
+    payload: {
+      lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
+      note?: string;
+    }
+  ) => void;
+  onReceiveAll: (
+    order: Order,
+    payload: {
+      lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
+      note?: string;
+    }
+  ) => void;
 }) {
   const [note, setNote] = useState("");
   const [draft, setDraft] = useState<Record<string, number>>({});
 
+  useEffect(() => {
+    if (!open) {
+      setNote("");
+      setDraft({});
+    }
+  }, [open]);
+
+  useEffect(() => {
+    setNote("");
+    setDraft({});
+  }, [order?.orderId]);
+
   const itemsBySku = useMemo(() => {
     const arr = Array.isArray(items) ? items : [];
-    return Object.fromEntries(arr.map((it: any) => [String(it.sku || "").toUpperCase(), it])) as Record<string, any>;
+    return Object.fromEntries(
+      arr.map((it: any) => [String(it.sku || "").toUpperCase().trim(), it])
+    ) as Record<string, any>;
   }, [items]);
 
   if (!open) return null;
 
   const o = order;
-  const isClosed = o?.status === "RECEIVED";
+  const isClosed = o?.status === "RECEIVED" || o?.status === "CANCELLED";
+  const canReceive = o?.status === "SENT" || o?.status === "PARTIAL";
 
   function remaining(l: OrderLine) {
-    const r = (l.qtyOrderedPz ?? 0) - (l.qtyReceivedPz ?? 0);
+    const r = Number(l.qtyOrderedConf ?? 0) - Number(l.qtyReceivedConf ?? 0);
     return r > 0 ? r : 0;
   }
 
   function buildSelectedPayload() {
     if (!o) return null;
+
     const lines = (o.lines || [])
       .map((l) => {
-        const rem = remaining(l);
+        const rem = remaining(l as OrderLine);
         const wanted = Number(draft[l.sku] ?? 0);
         const qty = Math.max(0, Math.min(wanted, rem));
-        return qty > 0 ? { sku: l.sku, qtyReceivedNowPz: qty } : null;
+
+        return qty > 0 ? { sku: l.sku, qtyReceivedNowConf: qty } : null;
       })
-      .filter(Boolean) as Array<{ sku: string; qtyReceivedNowPz: number }>;
+      .filter(Boolean) as Array<{ sku: string; qtyReceivedNowConf: number }>;
 
     if (!lines.length) return null;
-    const payload: any = { lines };
+
+    const payload: {
+      lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
+      note?: string;
+    } = { lines };
+
     const n = note.trim();
     if (n) payload.note = n;
+
     return payload;
   }
 
   function buildAllPayload() {
     if (!o) return null;
+
     const lines = (o.lines || [])
-      .filter((l) => l.qtyReceivedPz < l.qtyOrderedPz)
+      .filter((l) => remaining(l as OrderLine) > 0)
       .map((l) => ({
         sku: l.sku,
-        qtyReceivedNowPz: (l.qtyOrderedPz ?? 0) - (l.qtyReceivedPz ?? 0),
+        qtyReceivedNowConf: remaining(l as OrderLine),
       }));
 
     if (!lines.length) return null;
-    const payload: any = { lines };
+
+    const payload: {
+      lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
+      note?: string;
+    } = { lines };
+
     const n = note.trim();
     if (n) payload.note = n;
+
     return payload;
   }
 
   return (
     <div style={overlay} onMouseDown={onClose}>
       <div style={panel} onMouseDown={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div style={panelHeader}>
           <div style={{ display: "grid", gap: 2 }}>
-            <div style={{ fontWeight: 1000, fontSize: 16 }}>{o?.orderId ?? "Ordine"}</div>
+            <div style={{ fontWeight: 1000, fontSize: 16 }}>
+              {o?.orderId ?? "Ordine"}
+            </div>
             <div style={{ fontSize: 12, color: "#667" }}>
-              {o ? `${o.supplier} • ${new Date(o.createdAt).toLocaleString()} • ${o.status}` : ""}
+              {o
+                ? `${o.supplier} • ${new Date(o.createdAt).toLocaleString()} • ${o.status}`
+                : ""}
             </div>
           </div>
 
@@ -94,7 +139,9 @@ export default function OrderDrawer({
         </div>
 
         {!o ? (
-          <div style={{ padding: 14, color: "#667" }}>Nessun ordine selezionato.</div>
+          <div style={{ padding: 14, color: "#667" }}>
+            Nessun ordine selezionato.
+          </div>
         ) : (
           <div style={{ padding: 14, display: "grid", gap: 12 }}>
             {o.notes && (
@@ -103,7 +150,7 @@ export default function OrderDrawer({
               </div>
             )}
 
-            {!isClosed && (
+            {canReceive && (
               <input
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
@@ -112,9 +159,20 @@ export default function OrderDrawer({
               />
             )}
 
-            {/* Lines */}
-            <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", background: "white" }}>
+            <div
+              style={{
+                border: "1px solid #e5e7eb",
+                borderRadius: 12,
+                overflow: "hidden",
+              }}
+            >
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  background: "white",
+                }}
+              >
                 <thead>
                   <tr style={{ background: "#f9fafb" }}>
                     <Th>SKU</Th>
@@ -128,8 +186,9 @@ export default function OrderDrawer({
 
                 <tbody>
                   {o.lines.map((l) => {
-                    const rem = remaining(l);
-                    const it = itemsBySku[l.sku?.toUpperCase()];
+                    const line = l as OrderLine;
+                    const rem = remaining(line);
+                    const it = itemsBySku[String(l.sku || "").toUpperCase().trim()];
                     const label = it?.name ? String(it.name) : "";
                     const current = Number(draft[l.sku] ?? 0);
 
@@ -139,11 +198,13 @@ export default function OrderDrawer({
                           <span style={{ fontWeight: 900 }}>{l.sku}</span>
                         </Td>
                         <Td style={{ color: "#334" }}>{label}</Td>
-                        <Td style={{ textAlign: "right" }}>{l.qtyOrderedPz}</Td>
-                        <Td style={{ textAlign: "right" }}>{l.qtyReceivedPz}</Td>
-                        <Td style={{ textAlign: "right", fontWeight: 900 }}>{rem}</Td>
+                        <Td style={{ textAlign: "right" }}>{line.qtyOrderedConf}</Td>
+                        <Td style={{ textAlign: "right" }}>{line.qtyReceivedConf}</Td>
+                        <Td style={{ textAlign: "right", fontWeight: 900 }}>
+                          {rem}
+                        </Td>
                         <Td style={{ textAlign: "right" }}>
-                          {isClosed ? (
+                          {!canReceive || isClosed ? (
                             <span style={{ color: "#667", fontSize: 12 }}>—</span>
                           ) : (
                             <input
@@ -152,10 +213,14 @@ export default function OrderDrawer({
                               max={rem}
                               value={current}
                               onChange={(e) =>
-                                setDraft((prev) => ({ ...prev, [l.sku]: Number(e.target.value) }))
+                                setDraft((prev) => ({
+                                  ...prev,
+                                  [l.sku]: Number(e.target.value),
+                                }))
                               }
                               style={{ ...inp, width: 110, textAlign: "right" }}
                               disabled={loading || rem === 0}
+                              title="Quantità da ricevere ora in confezioni/casse"
                             />
                           )}
                         </Td>
@@ -166,8 +231,7 @@ export default function OrderDrawer({
               </table>
             </div>
 
-            {/* Actions */}
-            {!isClosed && (
+            {canReceive && !isClosed && (
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <button
                   onClick={() => {
@@ -209,9 +273,13 @@ export default function OrderDrawer({
   );
 }
 
-/* ---------- UI Bits ---------- */
-
-function Th({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function Th({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
   return (
     <th
       style={{
@@ -227,7 +295,13 @@ function Th({ children, style }: { children: React.ReactNode; style?: React.CSSP
   );
 }
 
-function Td({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function Td({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
   return (
     <td
       style={{
@@ -240,8 +314,6 @@ function Td({ children, style }: { children: React.ReactNode; style?: React.CSSP
     </td>
   );
 }
-
-/* ---------- Styles ---------- */
 
 const overlay: React.CSSProperties = {
   position: "fixed",
