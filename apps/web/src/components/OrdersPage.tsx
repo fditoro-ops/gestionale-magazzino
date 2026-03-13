@@ -2,33 +2,45 @@ import { useEffect, useMemo, useState } from "react";
 import OrdersTable, { type Order } from "./orders/OrdersTable";
 import OrderDrawer from "./orders/OrderDrawer";
 
-/* ---------------- API ---------------- */
-
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
-
-/* ---------------- TYPES ---------------- */
 
 type Supplier = "DORECA" | "ALPORI" | "VARI";
 
+type WarehouseRow = {
+  itemId: string;
+  sku: string;
+  name: string;
+  stockBt: number;
+  minStockBt: number | null;
+  underMin: boolean;
+};
+
+type OrderLineDraft = {
+  sku: string;
+  qtyPack: number;
+  query: string;
+  open: boolean;
+};
+
 export default function OrdersPage({
   items,
+  warehouse,
   onReload,
 }: {
   items: any[];
+  warehouse: WarehouseRow[];
   onReload: () => void;
 }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // NEW ORDER (draft) -> UI in PACK / CONF
   const [supplier, setSupplier] = useState<Supplier>("DORECA");
   const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<Array<{ sku: string; qtyPack: number }>>([
-    { sku: "", qtyPack: 1 },
+  const [lines, setLines] = useState<OrderLineDraft[]>([
+    { sku: "", qtyPack: 1, query: "", open: false },
   ]);
 
-  // Drawer
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
 
   const openOrder = useMemo(() => {
@@ -36,18 +48,46 @@ export default function OrdersPage({
     return orders.find((o) => o.orderId === openOrderId) ?? null;
   }, [orders, openOrderId]);
 
-  // packSizeBySku: utile solo per mostrare xN in UI
-  const packSizeBySku = useMemo(() => {
-    const arr = Array.isArray(items) ? items : [];
+  const itemsSafe = Array.isArray(items) ? items : [];
+  const warehouseSafe = Array.isArray(warehouse) ? warehouse : [];
+
+  const stockBySku = useMemo(() => {
     return Object.fromEntries(
-      arr.map((it: any) => [
+      warehouseSafe.map((r) => [
+        String(r.sku || "").toUpperCase().trim(),
+        Number(r.stockBt ?? 0),
+      ])
+    ) as Record<string, number>;
+  }, [warehouseSafe]);
+
+  const packSizeBySku = useMemo(() => {
+    return Object.fromEntries(
+      itemsSafe.map((it: any) => [
         String(it.sku || "").toUpperCase().trim(),
         it.packSize ?? null,
       ])
     ) as Record<string, number | null>;
-  }, [items]);
+  }, [itemsSafe]);
 
-  /* ---------------- LOAD ORDERS ---------------- */
+  const itemsForSearch = useMemo(() => {
+    return itemsSafe
+      .filter((it: any) => it?.active !== false)
+      .map((it: any) => {
+        const sku = String(it.sku || "").toUpperCase().trim();
+        const name = String(it.name || "").trim();
+        const brand = String(it.brand || "").trim();
+        const stock = Number(stockBySku[sku] ?? 0);
+
+        return {
+          sku,
+          name,
+          brand,
+          stock,
+          searchText: `${name} ${brand}`.toUpperCase(),
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, "it"));
+  }, [itemsSafe, stockBySku]);
 
   async function loadOrders() {
     try {
@@ -63,7 +103,54 @@ export default function OrdersPage({
     loadOrders();
   }, []);
 
-  /* ---------------- CREATE ORDER ---------------- */
+  function updateLine(idx: number, patch: Partial<OrderLineDraft>) {
+    setLines((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], ...patch };
+      return next;
+    });
+  }
+
+  function addLine() {
+    setLines((prev) => [
+      ...prev,
+      { sku: "", qtyPack: 1, query: "", open: false },
+    ]);
+  }
+
+  function removeLine(idx: number) {
+    setLines((prev) => {
+      const next = [...prev];
+      next.splice(idx, 1);
+      return next.length
+        ? next
+        : [{ sku: "", qtyPack: 1, query: "", open: false }];
+    });
+  }
+
+  function selectItem(idx: number, item: { sku: string; name: string }) {
+    updateLine(idx, {
+      sku: item.sku,
+      query: item.name,
+      open: false,
+    });
+  }
+
+  function getFilteredItems(query: string, currentSku: string) {
+    const q = query.trim().toUpperCase();
+
+    let arr = itemsForSearch;
+
+    if (q) {
+      arr = arr.filter((it) => it.searchText.includes(q));
+    }
+
+    if (!q && currentSku) {
+      arr = arr.filter((it) => it.sku === currentSku);
+    }
+
+    return arr.slice(0, 12);
+  }
 
   async function createOrder() {
     setErr(null);
@@ -81,12 +168,12 @@ export default function OrdersPage({
             const packSize = Number(packSizeBySku[sku] ?? 0);
 
             if (!Number.isFinite(packSize) || packSize <= 0) {
-              throw new Error(`SKU ${sku}: packSize mancante in anagrafica`);
+              throw new Error(`Articolo selezionato non valido: ${l.query || sku}`);
             }
 
             return {
               sku,
-              qtyOrderedConf: l.qtyPack, // quantità in confezioni/casse
+              qtyOrderedConf: l.qtyPack,
             };
           }),
       };
@@ -114,7 +201,7 @@ export default function OrdersPage({
       }
 
       setNotes("");
-      setLines([{ sku: "", qtyPack: 1 }]);
+      setLines([{ sku: "", qtyPack: 1, query: "", open: false }]);
       await loadOrders();
       onReload();
     } catch (e: any) {
@@ -123,8 +210,6 @@ export default function OrdersPage({
       setLoading(false);
     }
   }
-
-  /* ---------------- RECEIVE (delegated from Drawer) ---------------- */
 
   async function postReceive(
     order: Order,
@@ -149,15 +234,13 @@ export default function OrdersPage({
       }
 
       await loadOrders();
-      onReload(); // movimenti + stock
+      onReload();
     } catch (e: any) {
       setErr(e?.message || "Errore ricezione ordine");
     } finally {
       setLoading(false);
     }
   }
-
-  /* ---------------- UI ---------------- */
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
@@ -179,7 +262,6 @@ export default function OrdersPage({
 
       {err && <div style={{ color: "red" }}>{err}</div>}
 
-      {/* -------- NEW ORDER -------- */}
       <div style={card}>
         <strong>Nuovo ordine</strong>
 
@@ -205,73 +287,83 @@ export default function OrdersPage({
             {lines.map((l, idx) => {
               const skuNorm = (l.sku || "").toUpperCase().trim();
               const ps = packSizeBySku[skuNorm];
+              const filtered = getFilteredItems(l.query, l.sku);
 
               return (
-                <div key={idx} style={{ display: "flex", gap: 8 }}>
-                  <select
-                    value={l.sku}
-                    onChange={(e) => {
-                      const next = [...lines];
-                      next[idx].sku = e.target.value;
-                      setLines(next);
-                    }}
-                    style={{ ...inp, flex: 1 }}
-                  >
-                    <option value="">SKU…</option>
-                    {items.map((it: any) => (
-                      <option key={it.sku} value={it.sku}>
-                        {it.sku} — {it.name}
-                      </option>
-                    ))}
-                  </select>
+                <div key={idx} style={{ display: "grid", gap: 6 }}>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <div style={{ position: "relative", flex: 1 }}>
+                      <input
+                        value={l.query}
+                        onChange={(e) =>
+                          updateLine(idx, {
+                            query: e.target.value,
+                            sku: "",
+                            open: true,
+                          })
+                        }
+                        onFocus={() => updateLine(idx, { open: true })}
+                        placeholder="Cerca articolo..."
+                        style={{ ...inp, width: "100%" }}
+                      />
 
-                  <input
-                    type="number"
-                    min={1}
-                    value={l.qtyPack}
-                    onChange={(e) => {
-                      const next = [...lines];
-                      next[idx].qtyPack = Number(e.target.value);
-                      setLines(next);
-                    }}
-                    style={{ ...inp, width: 110 }}
-                    title="Quantità in confezioni/casse"
-                  />
+                      {l.open && filtered.length > 0 && (
+                        <div style={dropdown}>
+                          {filtered.map((it) => (
+                            <button
+                              key={it.sku}
+                              type="button"
+                              onClick={() => selectItem(idx, it)}
+                              style={dropdownItem}
+                            >
+                              <span>{it.name}</span>
+                              <span style={stockTag(it.stock)}>
+                                disp. {it.stock}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: "#667",
-                      alignSelf: "center",
-                      minWidth: 44,
-                      textAlign: "right",
-                    }}
-                    title="Pack size (pezzi/bottiglie per confezione)"
-                  >
-                    {ps ? `x${ps}` : "—"}
-                  </span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={l.qtyPack}
+                      onChange={(e) =>
+                        updateLine(idx, { qtyPack: Number(e.target.value) })
+                      }
+                      style={{ ...inp, width: 110 }}
+                      title="Quantità in confezioni/casse"
+                    />
 
-                  <button
-                    onClick={() => {
-                      const next = [...lines];
-                      next.splice(idx, 1);
-                      setLines(next.length ? next : [{ sku: "", qtyPack: 1 }]);
-                    }}
-                    disabled={loading}
-                    style={btnGhost}
-                    title="Rimuovi riga"
-                  >
-                    ✕
-                  </button>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: "#667",
+                        alignSelf: "center",
+                        minWidth: 44,
+                        textAlign: "right",
+                      }}
+                      title="Pack size"
+                    >
+                      {ps ? `x${ps}` : "—"}
+                    </span>
+
+                    <button
+                      onClick={() => removeLine(idx)}
+                      disabled={loading}
+                      style={btnGhost}
+                      title="Rimuovi riga"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               );
             })}
 
-            <button
-              onClick={() => setLines([...lines, { sku: "", qtyPack: 1 }])}
-              disabled={loading}
-              style={btnGhost}
-            >
+            <button onClick={addLine} disabled={loading} style={btnGhost}>
               + Riga
             </button>
           </div>
@@ -282,10 +374,8 @@ export default function OrdersPage({
         </button>
       </div>
 
-      {/* -------- TABLE -------- */}
       <OrdersTable orders={orders} onOpen={(o) => setOpenOrderId(o.orderId)} />
 
-      {/* -------- DRAWER -------- */}
       <OrderDrawer
         open={!!openOrderId}
         order={openOrder}
@@ -299,8 +389,6 @@ export default function OrdersPage({
   );
 }
 
-/* ---------------- HELPERS ---------------- */
-
 async function safeJson(res: Response) {
   try {
     return await res.json();
@@ -308,8 +396,6 @@ async function safeJson(res: Response) {
     return null;
   }
 }
-
-/* ---------------- STYLES ---------------- */
 
 const card: React.CSSProperties = {
   background: "white",
@@ -349,3 +435,42 @@ const btnGhost: React.CSSProperties = {
   fontWeight: 900,
   width: "fit-content",
 };
+
+const dropdown: React.CSSProperties = {
+  position: "absolute",
+  top: "calc(100% + 4px)",
+  left: 0,
+  right: 0,
+  zIndex: 20,
+  background: "white",
+  border: "1px solid #d6dbe6",
+  borderRadius: 12,
+  boxShadow: "0 10px 24px rgba(0,0,0,0.08)",
+  maxHeight: 260,
+  overflowY: "auto",
+};
+
+const dropdownItem: React.CSSProperties = {
+  width: "100%",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: "10px 12px",
+  border: "none",
+  background: "white",
+  cursor: "pointer",
+  textAlign: "left",
+};
+
+function stockTag(stock: number): React.CSSProperties {
+  return {
+    fontSize: 12,
+    fontWeight: 700,
+    color: stock <= 0 ? "#b91c1c" : stock <= 3 ? "#92400e" : "#166534",
+    background: stock <= 0 ? "#fee2e2" : stock <= 3 ? "#fef3c7" : "#dcfce7",
+    borderRadius: 999,
+    padding: "4px 8px",
+    whiteSpace: "nowrap",
+  };
+}
