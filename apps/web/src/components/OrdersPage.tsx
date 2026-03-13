@@ -303,7 +303,7 @@ export default function OrdersPage({
                           })
                         }
                         onFocus={() => updateLine(idx, { open: true })}
-                        placeholder="Cerca articolo..."
+                        placeholder="TEST 240"
                         style={{ ...inp, width: "100%" }}
                       />
 
