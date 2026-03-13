@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+  import { useEffect, useMemo, useState } from "react";
 import OrdersTable, { type Order } from "./orders/OrdersTable";
 import OrderDrawer from "./orders/OrderDrawer";
 
@@ -37,6 +37,7 @@ export default function OrdersPage({
 
   const [supplier, setSupplier] = useState<Supplier>("DORECA");
   const [notes, setNotes] = useState("");
+
   const [lines, setLines] = useState<OrderLineDraft[]>([
     { sku: "", qtyPack: 1, query: "", open: false },
   ]);
@@ -136,17 +137,12 @@ export default function OrdersPage({
     });
   }
 
-  function getFilteredItems(query: string, currentSku: string) {
+  function getFilteredItems(query: string) {
     const q = query.trim().toUpperCase();
-
     let arr = itemsForSearch;
 
     if (q) {
       arr = arr.filter((it) => it.searchText.includes(q));
-    }
-
-    if (!q && currentSku) {
-      arr = arr.filter((it) => it.sku === currentSku);
     }
 
     return arr.slice(0, 12);
@@ -155,10 +151,8 @@ export default function OrdersPage({
   async function createOrder() {
     setErr(null);
 
-    let payload: any;
-
     try {
-      payload = {
+      const payload = {
         supplier,
         notes: notes.trim() ? notes.trim() : null,
         lines: lines
@@ -167,8 +161,8 @@ export default function OrdersPage({
             const sku = l.sku.toUpperCase().trim();
             const packSize = Number(packSizeBySku[sku] ?? 0);
 
-            if (!Number.isFinite(packSize) || packSize <= 0) {
-              throw new Error(`Articolo selezionato non valido: ${l.query || sku}`);
+            if (!packSize) {
+              throw new Error("Articolo non valido");
             }
 
             return {
@@ -177,66 +171,29 @@ export default function OrdersPage({
             };
           }),
       };
-    } catch (e: any) {
-      setErr(e?.message || "Errore: dati ordine non validi");
-      return;
-    }
 
-    if (!payload.lines.length) {
-      setErr("Inserisci almeno una riga ordine valida");
-      return;
-    }
+      if (!payload.lines.length) {
+        setErr("Inserisci almeno una riga ordine");
+        return;
+      }
 
-    setLoading(true);
-    try {
+      setLoading(true);
+
       const r = await fetch(`${API_BASE}/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      if (!r.ok) {
-        const j = await safeJson(r);
-        throw new Error(j?.error || "Errore creazione ordine");
-      }
+      if (!r.ok) throw new Error("Errore creazione ordine");
 
       setNotes("");
       setLines([{ sku: "", qtyPack: 1, query: "", open: false }]);
-      await loadOrders();
-      onReload();
-    } catch (e: any) {
-      setErr(e?.message || "Errore creazione ordine");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function postReceive(
-    order: Order,
-    payload: {
-      lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
-      note?: string;
-    }
-  ) {
-    setErr(null);
-    setLoading(true);
-
-    try {
-      const r = await fetch(`${API_BASE}/orders/${order.orderId}/receive`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!r.ok) {
-        const j = await safeJson(r);
-        throw new Error(j?.error || "Errore ricezione ordine");
-      }
 
       await loadOrders();
       onReload();
     } catch (e: any) {
-      setErr(e?.message || "Errore ricezione ordine");
+      setErr(e?.message || "Errore");
     } finally {
       setLoading(false);
     }
@@ -244,24 +201,6 @@ export default function OrdersPage({
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-          <h2 style={{ margin: 0 }}>Ordini</h2>
-          <span style={{ fontSize: 12, color: "#667" }}>
-            {orders.length} ordini
-          </span>
-        </div>
-      </div>
-
-      {err && <div style={{ color: "red" }}>{err}</div>}
-
       <div style={card}>
         <strong>Nuovo ordine</strong>
 
@@ -283,83 +222,78 @@ export default function OrdersPage({
             style={inp}
           />
 
-<div style={{ position: "relative" }}>
-  <input
-    value={l.query}
-    onChange={(e) =>
-      updateLine(idx, {
-        query: e.target.value,
-        sku: "",
-        open: true,
-      })
-    }
-    onFocus={() => updateLine(idx, { open: true })}
-    placeholder="Cerca articolo..."
-    style={{ ...inp, width: 240 }}
-  />
+          <div style={{ display: "grid", gap: 8 }}>
+            {lines.map((l, idx) => {
+              const filtered = getFilteredItems(l.query);
+              const ps = packSizeBySku[l.sku];
 
-  {l.open && filtered.length > 0 && (
-    <div style={dropdown}>
-      {filtered.map((it) => (
-        <button
-          key={it.sku}
-          type="button"
-          onClick={() => selectItem(idx, it)}
-          style={dropdownItem}
-        >
-          <span>{it.name}</span>
-          <span style={stockTag(it.stock)}>
-            disp. {it.stock}
-          </span>
-        </button>
-      ))}
-    </div>
-  )}
-</div>
+              return (
+                <div key={idx} style={{ display: "flex", gap: 8 }}>
+                  <div style={{ position: "relative" }}>
                     <input
-                      type="number"
-                      min={1}
-                      value={l.qtyPack}
+                      value={l.query}
                       onChange={(e) =>
-                        updateLine(idx, { qtyPack: Number(e.target.value) })
+                        updateLine(idx, {
+                          query: e.target.value,
+                          sku: "",
+                          open: true,
+                        })
                       }
-                      style={{ ...inp, width: 110 }}
-                      title="Quantità in confezioni/casse"
+                      onFocus={() => updateLine(idx, { open: true })}
+                      placeholder="Cerca articolo..."
+                      style={{ ...inp, width: 220 }}
                     />
 
-                    <span
-                      style={{
-                        fontSize: 12,
-                        color: "#667",
-                        alignSelf: "center",
-                        minWidth: 44,
-                        textAlign: "right",
-                      }}
-                      title="Pack size"
-                    >
-                      {ps ? `x${ps}` : "—"}
-                    </span>
-
-                    <button
-                      onClick={() => removeLine(idx)}
-                      disabled={loading}
-                      style={btnGhost}
-                      title="Rimuovi riga"
-                    >
-                      ✕
-                    </button>
+                    {l.open && filtered.length > 0 && (
+                      <div style={dropdown}>
+                        {filtered.map((it) => (
+                          <button
+                            key={it.sku}
+                            type="button"
+                            onClick={() => selectItem(idx, it)}
+                            style={dropdownItem}
+                          >
+                            <span>{it.name}</span>
+                            <span style={stockTag(it.stock)}>
+                              disp. {it.stock}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
+
+                  <input
+                    type="number"
+                    min={1}
+                    value={l.qtyPack}
+                    onChange={(e) =>
+                      updateLine(idx, { qtyPack: Number(e.target.value) })
+                    }
+                    style={{ ...inp, width: 100 }}
+                  />
+
+                  <span style={{ alignSelf: "center", fontSize: 12 }}>
+                    {ps ? `x${ps}` : "—"}
+                  </span>
+
+                  <button
+                    onClick={() => removeLine(idx)}
+                    style={btnGhost}
+                  >
+                    ✕
+                  </button>
                 </div>
               );
             })}
 
-            <button onClick={addLine} disabled={loading} style={btnGhost}>
+            <button onClick={addLine} style={btnGhost}>
               + Riga
             </button>
           </div>
         </div>
 
-        <button onClick={createOrder} disabled={loading} style={btnPrimary}>
+        <button onClick={createOrder} style={btnPrimary}>
           Crea ordine
         </button>
       </div>
@@ -372,19 +306,9 @@ export default function OrdersPage({
         items={items}
         loading={loading}
         onClose={() => setOpenOrderId(null)}
-        onReceiveSelected={(o, payload) => postReceive(o, payload)}
-        onReceiveAll={(o, payload) => postReceive(o, payload)}
       />
     </div>
   );
-}
-
-async function safeJson(res: Response) {
-  try {
-    return await res.json();
-  } catch {
-    return null;
-  }
 }
 
 const card: React.CSSProperties = {
@@ -422,8 +346,6 @@ const btnGhost: React.CSSProperties = {
   border: "1px solid #d6dbe6",
   background: "white",
   cursor: "pointer",
-  fontWeight: 900,
-  width: "fit-content",
 };
 
 const dropdown: React.CSSProperties = {
@@ -444,23 +366,19 @@ const dropdownItem: React.CSSProperties = {
   width: "100%",
   display: "flex",
   justifyContent: "space-between",
-  alignItems: "center",
-  gap: 12,
   padding: "10px 12px",
   border: "none",
   background: "white",
   cursor: "pointer",
-  textAlign: "left",
 };
 
 function stockTag(stock: number): React.CSSProperties {
   return {
     fontSize: 12,
     fontWeight: 700,
-    color: stock <= 0 ? "#b91c1c" : stock <= 3 ? "#92400e" : "#166534",
-    background: stock <= 0 ? "#fee2e2" : stock <= 3 ? "#fef3c7" : "#dcfce7",
+    color: stock <= 0 ? "#b91c1c" : "#166534",
+    background: stock <= 0 ? "#fee2e2" : "#dcfce7",
     borderRadius: 999,
     padding: "4px 8px",
-    whiteSpace: "nowrap",
   };
 }
