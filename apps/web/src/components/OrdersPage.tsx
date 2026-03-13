@@ -292,7 +292,7 @@ export default function OrdersPage({
               return (
                 <div key={idx} style={{ display: "grid", gap: 6 }}>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <div style={{ position: "relative", width: 360 }}>
+                    <div style={{ position: "relative", flex: "0 0 360px" }}>
                       <input
                         value={l.query}
                         onChange={(e) =>
