@@ -1,5 +1,4 @@
-import fs from "fs";
-import path from "path";
+import { pool } from "../db.js";
 
 export type CicPendingReason =
   | "UNMAPPED_PRODUCT"
@@ -34,37 +33,6 @@ export type CicPendingRow = {
   rawRow?: any;
 };
 
-const DATA_DIR = path.resolve(process.cwd(), "apps/api/data");
-const FILE_PATH = path.join(DATA_DIR, "cicPendingRows.json");
-
-function ensureDataFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-
-  if (!fs.existsSync(FILE_PATH)) {
-    fs.writeFileSync(FILE_PATH, "[]", "utf8");
-  }
-}
-
-export function loadPendingRows(): CicPendingRow[] {
-  ensureDataFile();
-
-  try {
-    const raw = fs.readFileSync(FILE_PATH, "utf8");
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (err) {
-    console.error("❌ loadPendingRows error:", err);
-    return [];
-  }
-}
-
-function savePendingRows(rows: CicPendingRow[]) {
-  ensureDataFile();
-  fs.writeFileSync(FILE_PATH, JSON.stringify(rows, null, 2), "utf8");
-}
-
 function buildPendingRowId(row: {
   docId: string;
   productId?: string;
@@ -79,11 +47,9 @@ function buildPendingRowId(row: {
   ].join("::");
 }
 
-export function upsertPendingRow(
+export async function upsertPendingRow(
   input: Omit<CicPendingRow, "id" | "createdAt" | "status" | "processedAt">
 ) {
-  const rows = loadPendingRows();
-
   const id = buildPendingRowId({
     docId: input.docId,
     productId: input.productId,
@@ -91,53 +57,143 @@ export function upsertPendingRow(
     reason: input.reason,
   });
 
-  const existingIndex = rows.findIndex((r) => r.id === id);
+  await pool.query(
+    `
+    INSERT INTO cic_pending_rows (
+      id,
+      doc_id,
+      operation,
+      order_date,
+      tenant_id,
+      product_id,
+      variant_id,
+      raw_resolved_sku,
+      qty,
+      total,
+      price,
+      description,
+      reason,
+      status,
+      created_at,
+      processed_at
+    )
+    VALUES (
+      $1, $2, $3, $4, $5,
+      $6, $7, $8, $9, $10,
+      $11, $12, $13, 'PENDING', NOW(), NULL
+    )
+    ON CONFLICT (id)
+    DO UPDATE SET
+      operation = EXCLUDED.operation,
+      order_date = EXCLUDED.order_date,
+      tenant_id = EXCLUDED.tenant_id,
+      product_id = EXCLUDED.product_id,
+      variant_id = EXCLUDED.variant_id,
+      raw_resolved_sku = EXCLUDED.raw_resolved_sku,
+      qty = EXCLUDED.qty,
+      total = EXCLUDED.total,
+      price = EXCLUDED.price,
+      description = EXCLUDED.description,
+      reason = EXCLUDED.reason,
+      status = 'PENDING',
+      processed_at = NULL
+    `,
+    [
+      id,
+      input.docId,
+      input.operation,
+      input.orderDate,
+      input.tenantId,
+      input.productId || null,
+      input.variantId || null,
+      input.rawResolvedSku || null,
+      input.qty,
+      input.total,
+      input.price ?? null,
+      input.description ?? null,
+      input.reason,
+    ]
+  );
 
-  const row: CicPendingRow = {
-    ...input,
+  console.log("🅿️ Pending row salvata su DB:", {
     id,
-    status: "PENDING",
-    createdAt:
-      existingIndex >= 0 ? rows[existingIndex].createdAt : new Date().toISOString(),
-    processedAt: null,
-  };
-
-  if (existingIndex >= 0) {
-    rows[existingIndex] = row;
-  } else {
-    rows.push(row);
-  }
-
-  savePendingRows(rows);
-
-  console.log("🅿️ Pending row salvata:", {
-    id: row.id,
-    docId: row.docId,
-    productId: row.productId,
-    variantId: row.variantId,
-    reason: row.reason,
+    docId: input.docId,
+    productId: input.productId,
+    variantId: input.variantId,
+    reason: input.reason,
   });
 
-  return row;
-}
-
-export function listPendingRows(status?: CicPendingStatus) {
-  const rows = loadPendingRows();
-  if (!status) return rows;
-  return rows.filter((r) => r.status === status);
-}
-
-export function markPendingRowProcessed(id: string) {
-  const rows = loadPendingRows();
-  const idx = rows.findIndex((r) => r.id === id);
-  if (idx < 0) return false;
-
-  rows[idx] = {
-    ...rows[idx],
-    status: "PROCESSED",
-    processedAt: new Date().toISOString(),
+  return {
+    ...input,
+    id,
+    status: "PENDING" as const,
+    createdAt: new Date().toISOString(),
+    processedAt: null,
   };
+}
 
-  savePendingRows(rows);
-  return true;
+export async function listPendingRows(status?: CicPendingStatus) {
+  const res = status
+    ? await pool.query(
+        `
+        SELECT
+          id,
+          doc_id as "docId",
+          operation,
+          order_date as "orderDate",
+          tenant_id as "tenantId",
+          product_id as "productId",
+          variant_id as "variantId",
+          raw_resolved_sku as "rawResolvedSku",
+          qty,
+          total,
+          price,
+          description,
+          reason,
+          status,
+          created_at as "createdAt",
+          processed_at as "processedAt"
+        FROM cic_pending_rows
+        WHERE status = $1
+        ORDER BY created_at ASC
+        `,
+        [status]
+      )
+    : await pool.query(`
+        SELECT
+          id,
+          doc_id as "docId",
+          operation,
+          order_date as "orderDate",
+          tenant_id as "tenantId",
+          product_id as "productId",
+          variant_id as "variantId",
+          raw_resolved_sku as "rawResolvedSku",
+          qty,
+          total,
+          price,
+          description,
+          reason,
+          status,
+          created_at as "createdAt",
+          processed_at as "processedAt"
+        FROM cic_pending_rows
+        ORDER BY created_at ASC
+      `);
+
+  return res.rows;
+}
+
+export async function markPendingRowProcessed(id: string) {
+  const res = await pool.query(
+    `
+    UPDATE cic_pending_rows
+    SET status = 'PROCESSED',
+        processed_at = NOW()
+    WHERE id = $1
+    `,
+    [id]
+  );
+
+  return (res.rowCount ?? 0) > 0;
 }
