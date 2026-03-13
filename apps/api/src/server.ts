@@ -839,7 +839,7 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
       "content-type": req.header("content-type") || "",
     });
 
-    appendCicWebhookDump(debugDump);
+    await appendCicWebhookDump(debugDump);
 
     const docId = "CIC-" + String(data?.document?.id || data?.id || "");
     const orderDate = new Date(
