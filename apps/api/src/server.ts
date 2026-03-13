@@ -1065,11 +1065,19 @@ app.get("/debug/cic-product-modes", (_req, res) => {
 });
 
 app.get("/debug/cic-unresolved", async (_req, res) => {
-  const rows = await listUnresolved();
-  res.json({
-    count: rows.length,
-    sample: rows.slice(0, 30),
-  });
+  try {
+    const rows = await listUnresolved();
+    res.json({
+      count: rows.length,
+      sample: rows.slice(0, 30),
+    });
+  } catch (err: any) {
+    console.error("GET /debug/cic-unresolved error:", err);
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message ?? err),
+    });
+  }
 });
 
 app.get("/debug/cic-webhook-dumps", (_req, res) => {
@@ -1112,19 +1120,35 @@ app.get("/debug/cic-products-export-sheet", async (_req, res) => {
 });
 
 app.get("/debug/cic-pending", async (_req, res) => {
-  const rows = await listPendingRows();
-  res.json({
-    count: rows.length,
-    sample: rows.slice(-50),
-  });
+  try {
+    const rows = await listPendingRows();
+    res.json({
+      count: rows.length,
+      sample: rows.slice(-50),
+    });
+  } catch (err: any) {
+    console.error("GET /debug/cic-pending error:", err);
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message ?? err),
+    });
+  }
 });
 
 app.get("/debug/cic-pending-open", async (_req, res) => {
-  const rows = await listPendingRows("PENDING");
-  res.json({
-    count: rows.length,
-    sample: rows.slice(-50),
-  });
+  try {
+    const rows = await listPendingRows("PENDING");
+    res.json({
+      count: rows.length,
+      sample: rows.slice(-50),
+    });
+  } catch (err: any) {
+    console.error("GET /debug/cic-pending-open error:", err);
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message ?? err),
+    });
+  }
 });
 
 app.get("/debug/db", async (_req, res) => {
