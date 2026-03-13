@@ -283,49 +283,39 @@ export default function OrdersPage({
             style={inp}
           />
 
-          <div style={{ display: "grid", gap: 8 }}>
-            {lines.map((l, idx) => {
-              const skuNorm = (l.sku || "").toUpperCase().trim();
-              const ps = packSizeBySku[skuNorm];
-              const filtered = getFilteredItems(l.query, l.sku);
+<div style={{ position: "relative" }}>
+  <input
+    value={l.query}
+    onChange={(e) =>
+      updateLine(idx, {
+        query: e.target.value,
+        sku: "",
+        open: true,
+      })
+    }
+    onFocus={() => updateLine(idx, { open: true })}
+    placeholder="Cerca articolo..."
+    style={{ ...inp, width: 240 }}
+  />
 
-              return (
-                <div key={idx} style={{ display: "grid", gap: 6 }}>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <div style={{ position: "relative", flex: "0 0 240px" }}>
-                      <input
-                        value={l.query}
-                        onChange={(e) =>
-                          updateLine(idx, {
-                            query: e.target.value,
-                            sku: "",
-                            open: true,
-                          })
-                        }
-                        onFocus={() => updateLine(idx, { open: true })}
-                        placeholder="TEST 240"
-                        style={{ ...inp, width: "100%" }}
-                      />
-
-                      {l.open && filtered.length > 0 && (
-                        <div style={dropdown}>
-                          {filtered.map((it) => (
-                            <button
-                              key={it.sku}
-                              type="button"
-                              onClick={() => selectItem(idx, it)}
-                              style={dropdownItem}
-                            >
-                              <span>{it.name}</span>
-                              <span style={stockTag(it.stock)}>
-                                disp. {it.stock}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
+  {l.open && filtered.length > 0 && (
+    <div style={dropdown}>
+      {filtered.map((it) => (
+        <button
+          key={it.sku}
+          type="button"
+          onClick={() => selectItem(idx, it)}
+          style={dropdownItem}
+        >
+          <span>{it.name}</span>
+          <span style={stockTag(it.stock)}>
+            disp. {it.stock}
+          </span>
+        </button>
+      ))}
+    </div>
+  )}
+</div>
                     <input
                       type="number"
                       min={1}
