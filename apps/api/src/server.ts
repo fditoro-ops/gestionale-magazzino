@@ -891,7 +891,7 @@ const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
           rawSku: sku,
         });
 
-        upsertPendingRow({
+        await upsertPendingRow({
           docId,
           operation,
           orderDate: orderDate.toISOString(),
@@ -913,7 +913,7 @@ const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
           rawRow: rawRow || null,
         });
 
-        upsertUnresolved({
+        await upsertUnresolved({
           productId: it._idProduct || undefined,
           variantId: it._idProductVariant || undefined,
           rawSku: String(sku),
@@ -956,7 +956,7 @@ const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
       if (!mode) {
         console.log("⚠️ SKU non classificato in PRODOTTI_CIC:", sku);
 
-        upsertPendingRow({
+        await upsertPendingRow({
           docId,
           operation,
           orderDate: orderDate.toISOString(),
@@ -989,7 +989,7 @@ const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
       if (mode === "RECIPE" && !hasRecipe) {
         console.log("⚠️ Ricetta non trovata per SKU RECIPE:", sku);
 
-        upsertPendingRow({
+        await upsertPendingRow({
           docId,
           operation,
           orderDate: orderDate.toISOString(),
@@ -1064,8 +1064,8 @@ app.get("/debug/cic-product-modes", (_req, res) => {
   });
 });
 
-app.get("/debug/cic-unresolved", (_req, res) => {
-  const rows = listUnresolved();
+app.get("/debug/cic-unresolved", async (_req, res) => {
+  const rows = await listUnresolved();
   res.json({
     count: rows.length,
     sample: rows.slice(0, 30),
@@ -1111,16 +1111,16 @@ app.get("/debug/cic-products-export-sheet", async (_req, res) => {
   }
 });
 
-app.get("/debug/cic-pending", (_req, res) => {
-  const rows = listPendingRows();
+app.get("/debug/cic-pending", async (_req, res) => {
+  const rows = await listPendingRows();
   res.json({
     count: rows.length,
     sample: rows.slice(-50),
   });
 });
 
-app.get("/debug/cic-pending-open", (_req, res) => {
-  const rows = listPendingRows("PENDING");
+app.get("/debug/cic-pending-open", async (_req, res) => {
+  const rows = await listPendingRows("PENDING");
   res.json({
     count: rows.length,
     sample: rows.slice(-50),
@@ -1158,7 +1158,7 @@ app.get("/debug/db", async (_req, res) => {
 
 app.post("/debug/cic-pending-reprocess", async (_req, res) => {
   try {
-    const pendingRows = listPendingRows("PENDING");
+    const pendingRows = await listPendingRows("PENDING");
 
     const cicModesBySku = Object.fromEntries(
       Object.entries(cicProductModeCache).map(([_, v]) => [v.sku, v.mode])
@@ -1209,7 +1209,7 @@ app.post("/debug/cic-pending-reprocess", async (_req, res) => {
       }
 
       if (mode === "IGNORE") {
-        markPendingRowProcessed(row.id);
+        await markPendingRowProcessed(row.id);
         results.push({
           id: row.id,
           docId: row.docId,
@@ -1249,7 +1249,7 @@ app.post("/debug/cic-pending-reprocess", async (_req, res) => {
         movementSign,
       });
 
-      markPendingRowProcessed(row.id);
+      await markPendingRowProcessed(row.id);
 
       results.push({
         id: row.id,
