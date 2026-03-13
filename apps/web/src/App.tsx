@@ -124,11 +124,12 @@ export default function App() {
           {tab === "items" && <ItemsAdmin />}
 
           {tab === "orders" && (
-            <OrdersPage
-              items={Array.isArray(items) ? items : []}
-              onReload={reload}
-            />
-          )}
+  <OrdersPage
+    items={Array.isArray(items) ? items : []}
+    warehouse={Array.isArray(warehouse) ? warehouse : []}
+    onReload={reload}
+  />
+)}
         </AppLayout>
       </div>
     </div>
