@@ -392,4 +392,27 @@ router.post("/:id/cancel", (req, res) => {
   return res.json(orders[idx]);
 });
 
+/* ---------------- DELETE /orders/:id ---------------- */
+
+router.delete("/:id", (req, res) => {
+  const idx = orders.findIndex((o) => o.orderId === req.params.id);
+
+  if (idx === -1) {
+    return res.status(404).json({ error: `Ordine ${req.params.id} non trovato` });
+  }
+
+  const ord = orders[idx];
+
+  if (ord.status !== "DRAFT") {
+    return res.status(400).json({
+      error: "Si possono eliminare solo ordini in stato DRAFT",
+    });
+  }
+
+  orders.splice(idx, 1);
+  saveOrders(orders);
+
+  return res.json({ ok: true, deletedOrderId: req.params.id });
+});
+
 export default router;
