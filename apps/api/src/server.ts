@@ -20,6 +20,7 @@ import {
 import {
   upsertPendingRow,
   listPendingRows,
+  markPendingRowProcessed,
 } from "./data/cicPendingRows.store.js";
 
 /* =========================
@@ -1148,6 +1149,126 @@ app.get("/debug/db", async (_req, res) => {
     });
   } catch (err: any) {
     console.error("GET /debug/db error:", err);
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message ?? err),
+    });
+  }
+});
+
+app.post("/debug/cic-pending-reprocess", async (_req, res) => {
+  try {
+    const pendingRows = listPendingRows("PENDING");
+
+    const cicModesBySku = Object.fromEntries(
+      Object.entries(cicProductModeCache).map(([_, v]) => [v.sku, v.mode])
+    ) as Record<string, "RECIPE" | "IGNORE">;
+
+    const results: any[] = [];
+
+    for (const row of pendingRows) {
+      const candidateIds = [
+        String(row.variantId || "").trim(),
+        String(row.productId || "").trim(),
+        String(row.rawResolvedSku || "").trim(),
+      ].filter(Boolean);
+
+      let resolvedSku = "";
+
+      for (const id of candidateIds) {
+        const resolved = cicResolveSku(id);
+        if (resolved && !resolved.includes("-")) {
+          resolvedSku = resolved;
+          break;
+        }
+      }
+
+      if (!resolvedSku) {
+        results.push({
+          id: row.id,
+          docId: row.docId,
+          status: "SKIPPED",
+          reason: "SKU_NOT_RESOLVED",
+        });
+        continue;
+      }
+
+      const mode = cicModesBySku[resolvedSku];
+      const hasRecipe =
+        Array.isArray(bomCache[resolvedSku]) && bomCache[resolvedSku].length > 0;
+
+      if (!mode) {
+        results.push({
+          id: row.id,
+          docId: row.docId,
+          sku: resolvedSku,
+          status: "SKIPPED",
+          reason: "SKU_NOT_CLASSIFIED",
+        });
+        continue;
+      }
+
+      if (mode === "IGNORE") {
+        markPendingRowProcessed(row.id);
+        results.push({
+          id: row.id,
+          docId: row.docId,
+          sku: resolvedSku,
+          status: "PROCESSED",
+          reason: "IGNORED_AS_CONFIGURED",
+        });
+        continue;
+      }
+
+      if (mode === "RECIPE" && !hasRecipe) {
+        results.push({
+          id: row.id,
+          docId: row.docId,
+          sku: resolvedSku,
+          status: "SKIPPED",
+          reason: "RECIPE_STILL_NOT_FOUND",
+        });
+        continue;
+      }
+
+      const orderDate = new Date(row.orderDate);
+      const movementSign = row.operation === "RECEIPT/DELETE" ? 1 : -1;
+
+      const inserted = await applyRecipeStock({
+        docId: row.docId,
+        tenantId: row.tenantId,
+        orderDate,
+        soldItems: [
+          {
+            sku: resolvedSku,
+            qty: Number(row.qty || 0),
+          },
+        ],
+        bom: bomCache,
+        cicProductModes: cicModesBySku,
+        movementSign,
+      });
+
+      markPendingRowProcessed(row.id);
+
+      results.push({
+        id: row.id,
+        docId: row.docId,
+        sku: resolvedSku,
+        status: "PROCESSED",
+        inserted,
+      });
+    }
+
+    res.json({
+      ok: true,
+      total: pendingRows.length,
+      processed: results.filter((r) => r.status === "PROCESSED").length,
+      skipped: results.filter((r) => r.status === "SKIPPED").length,
+      results,
+    });
+  } catch (err: any) {
+    console.error("POST /debug/cic-pending-reprocess error:", err);
     res.status(500).json({
       ok: false,
       error: String(err?.message ?? err),
