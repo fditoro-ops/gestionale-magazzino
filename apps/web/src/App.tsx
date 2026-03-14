@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Routes, Route } from "react-router-dom";
 
 import AppLayout from "./components/AppLayout";
 import type { TabKey } from "./components/AppLayout";
@@ -8,9 +9,13 @@ import MovementsList from "./components/MovementsList";
 import WarehouseTable from "./components/WarehouseTable";
 import ItemsAdmin from "./components/ItemsAdmin";
 import OrdersPage from "./components/OrdersPage";
+import SuppliersPage from "./components/SuppliersPage";
 
 import type { Movement } from "./types/movement";
-import SuppliersPage from "./components/SuppliersPage";
+
+import LoginPage from "./pages/LoginPage";
+import ProtectedRoute from "./auth/ProtectedRoute";
+import AuthBar from "./components/AuthBar";
 
 const API_BASE =
   import.meta.env.VITE_API_URL ?? "http://localhost:3001";
@@ -24,7 +29,7 @@ type WarehouseRow = {
   underMin: boolean;
 };
 
-export default function App() {
+function CoreApp() {
   const [tab, setTab] = useState<TabKey>("movements");
   const [mode, setMode] = useState<"live" | "historical">("live");
 
@@ -83,6 +88,8 @@ export default function App() {
   return (
     <div className="app-bg">
       <div className="app-bg-content min-h-screen">
+        <AuthBar />
+
         <AppLayout
           tab={tab}
           onTabChange={setTab}
@@ -125,16 +132,33 @@ export default function App() {
           {tab === "items" && <ItemsAdmin />}
 
           {tab === "orders" && (
-  <OrdersPage
-    items={Array.isArray(items) ? items : []}
-    warehouse={Array.isArray(warehouse) ? warehouse : []}
-    onReload={reload}
-  />
-)}
-{tab === "suppliers" && <SuppliersPage />}
-          
+            <OrdersPage
+              items={Array.isArray(items) ? items : []}
+              warehouse={Array.isArray(warehouse) ? warehouse : []}
+              onReload={reload}
+            />
+          )}
+
+          {tab === "suppliers" && <SuppliersPage />}
         </AppLayout>
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <CoreApp />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   );
 }
