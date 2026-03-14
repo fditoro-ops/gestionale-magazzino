@@ -21,3 +21,6 @@
     "@prisma/client": "^7.4.1"
   }
 }
+{
+  "create:user": "tsx src/scripts/create-user.ts"
+}
