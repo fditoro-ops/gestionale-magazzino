@@ -205,7 +205,37 @@ export default function OrdersPage({
       setLoading(false);
     }
   }
+async function deleteOrder(order: Order) {
+  const yes = window.confirm(
+    `Eliminare l'ordine ${order.orderId}?\nQuesta azione non si può annullare.`
+  );
 
+  if (!yes) return;
+
+  setErr(null);
+  setLoading(true);
+
+  try {
+    const r = await fetch(`${API_BASE}/orders/${order.orderId}`, {
+      method: "DELETE",
+    });
+
+    if (!r.ok) {
+      const j = await safeJson(r);
+      throw new Error(j?.error || "Errore eliminazione ordine");
+    }
+
+    if (openOrderId === order.orderId) {
+      setOpenOrderId(null);
+    }
+
+    await loadOrders();
+  } catch (e: any) {
+    setErr(e?.message || "Errore eliminazione ordine");
+  } finally {
+    setLoading(false);
+  }
+}
   async function postReceive(
     order: Order,
     payload: {
@@ -362,12 +392,16 @@ export default function OrdersPage({
           </div>
         </div>
 
-        <button onClick={createOrder} disabled={loading} style={btnPrimary}>
+        <button onClick={} disabled={loading} style={btnPrimary}>
           Crea ordine
         </button>
       </div>
 
-      <OrdersTable orders={orders} onOpen={(o) => setOpenOrderId(o.orderId)} />
+     <OrdersTable
+  orders={orders}
+  onOpen={(o) => setOpenOrderId(o.orderId)}
+  onDelete={(o) => deleteOrder(o)}
+/>
 
       <OrderDrawer
         open={!!openOrderId}
