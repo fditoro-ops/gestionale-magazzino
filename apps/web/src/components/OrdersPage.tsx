@@ -392,10 +392,9 @@ async function deleteOrder(order: Order) {
           </div>
         </div>
 
-        <button onClick={} disabled={loading} style={btnPrimary}>
-          Crea ordine
-        </button>
-      </div>
+        <button onClick={createOrder} disabled={loading} style={btnPrimary}>
+  Crea ordine
+</button>
 
      <OrdersTable
   orders={orders}
