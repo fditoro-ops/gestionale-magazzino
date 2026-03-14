@@ -74,10 +74,10 @@ export default function OrdersTable({
           </thead>
 
           <tbody>
-            {orders.map((o) => (
+           {orders.map((o, index) => (
               <tr key={o.orderId} style={{ borderTop: "1px solid #eef2f7" }}>
                 <Td>
-                  <span style={{ fontWeight: 900 }}>{o.orderId}</span>
+                  <span style={{ fontWeight: 900 }}>{formatOrderNumber(o, index)}</span>
                 </Td>
 
                 <Td style={{ color: "#334", opacity: 0.9 }}>
@@ -162,6 +162,18 @@ function statusLabel(status: OrderStatus): string {
   if (status === "RECEIVED") return "Ricevuto";
   if (status === "CANCELLED") return "Annullato";
   return status;
+}
+
+function formatOrderNumber(order: Order, index: number): string {
+  const d = new Date(order.createdAt);
+
+  const yy = String(d.getFullYear()).slice(-2);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+
+  const seq = String(index + 1).padStart(4, "0");
+
+  return `ORD-${yy}${mm}${dd}-${seq}`;
 }
 
 function Th({
