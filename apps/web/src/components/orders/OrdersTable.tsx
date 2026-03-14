@@ -24,10 +24,14 @@ export default function OrdersTable({
   orders,
   onOpen,
   onDelete,
+  onConfirm,
+  onWhatsapp,
 }: {
   orders: Order[];
   onOpen: (o: Order) => void;
   onDelete: (o: Order) => void;
+  onConfirm: (o: Order) => void;
+  onWhatsapp: (o: Order) => void;
 }) {
   return (
     <div style={card}>
@@ -92,16 +96,33 @@ export default function OrdersTable({
                   <Badge tone={statusTone(o.status)}>{statusLabel(o.status)}</Badge>
                 </Td>
 
-                <Td style={{ textAlign: "right" }}>
-  <div style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+               <Td style={{ textAlign: "right" }}>
+  <div
+    style={{
+      display: "inline-flex",
+      gap: 8,
+      flexWrap: "wrap",
+      justifyContent: "flex-end",
+    }}
+  >
     <button onClick={() => onOpen(o)} style={btnPrimary}>
       Apri
     </button>
 
     {o.status === "DRAFT" && (
-      <button onClick={() => onDelete(o)} style={btnDanger}>
-        Elimina
-      </button>
+      <>
+        <button onClick={() => onConfirm(o)} style={btnInfo}>
+          Conferma
+        </button>
+
+        <button onClick={() => onWhatsapp(o)} style={btnWhats}>
+          WhatsApp
+        </button>
+
+        <button onClick={() => onDelete(o)} style={btnDanger}>
+          Elimina
+        </button>
+      </>
     )}
   </div>
 </Td>
@@ -245,6 +266,25 @@ const btnDanger: React.CSSProperties = {
   border: "1px solid #dc2626",
   background: "white",
   color: "#b91c1c",
+  cursor: "pointer",
+  fontWeight: 900,
+};
+const btnInfo: React.CSSProperties = {
+  padding: "8px 10px",
+  borderRadius: 12,
+  border: "1px solid #2563eb",
+  background: "white",
+  color: "#1d4ed8",
+  cursor: "pointer",
+  fontWeight: 900,
+};
+
+const btnWhats: React.CSSProperties = {
+  padding: "8px 10px",
+  borderRadius: 12,
+  border: "1px solid #16a34a",
+  background: "white",
+  color: "#15803d",
   cursor: "pointer",
   fontWeight: 900,
 };
