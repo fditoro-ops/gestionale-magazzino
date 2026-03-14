@@ -1,7 +1,13 @@
 import type React from "react";
 import MartiniLogo from "./MartiniLogo"; // ✅ aggiusta il path se serve
 
-export type TabKey = "dashboard" | "movements" | "warehouse" | "items" | "orders";
+export type TabKey =
+  | "dashboard"
+  | "movements"
+  | "warehouse"
+  | "items"
+  | "orders"
+  | "suppliers";
 
 export default function AppLayout({
   tab,
@@ -56,6 +62,13 @@ export default function AppLayout({
           <SideItem active={tab === "orders"} onClick={() => onTabChange("orders")}>
             Ordini
           </SideItem>
+
+          <SideItem
+  active={tab === "suppliers"}
+  onClick={() => onTabChange("suppliers")}
+>
+  Fornitori
+</SideItem>
 
           <div style={styles.navSpacer} />
 
