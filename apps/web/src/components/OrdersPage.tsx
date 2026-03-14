@@ -462,11 +462,13 @@ async function sendOrderWhatsapp(order: Order) {
         </button>
       </div>
 
-      <OrdersTable
-        orders={orders}
-        onOpen={(o) => setOpenOrderId(o.orderId)}
-        onDelete={(o) => deleteOrder(o)}
-      />
+     <OrdersTable
+  orders={orders}
+  onOpen={(o) => setOpenOrderId(o.orderId)}
+  onDelete={(o) => deleteOrder(o)}
+  onConfirm={(o) => confirmOrder(o)}
+  onWhatsapp={(o) => sendOrderWhatsapp(o)}
+/>
 
       <OrderDrawer
         open={!!openOrderId}
