@@ -115,25 +115,36 @@ export default function OrdersPage({
   }, [itemsSafe]);
 
   const draftRows = useMemo(() => {
-    return lines
-      .filter((l) => l.sku && l.qtyPack > 0)
-      .map((l) => {
-        const sku = String(l.sku || "").toUpperCase().trim();
-        const item = itemsBySku[sku];
-        const name = String(item?.name || l.query || sku);
-        const lastCostCents = Number(item?.lastCostCents ?? 0);
-        const qtyPack = Number(l.qtyPack ?? 0);
-        const rowImponibileCents = qtyPack * lastCostCents;
+  return lines
+    .filter((l) => l.sku && l.qtyPack > 0)
+    .map((l) => {
+      const sku = String(l.sku || "").toUpperCase().trim();
+      const item = itemsBySku[sku];
 
-        return {
-          sku,
-          name,
-          qtyPack,
-          lastCostCents,
-          rowImponibileCents,
-        };
-      });
-  }, [lines, itemsBySku]);
+      const baseName = String(item?.name || l.query || sku);
+      const qtyPack = Number(l.qtyPack ?? 0);
+
+      const packSize = Number(item?.packSize ?? 1);
+      const safePackSize = Number.isFinite(packSize) && packSize > 0 ? packSize : 1;
+
+      const unitCostCents = Number(item?.lastCostCents ?? 0);
+      const costPerPackCents = unitCostCents * safePackSize;
+      const rowImponibileCents = qtyPack * costPerPackCents;
+
+      const packLabel =
+        safePackSize > 1 ? `${baseName} (${safePackSize} BOT)` : baseName;
+
+      return {
+        sku,
+        name: packLabel,
+        qtyPack,
+        packSize: safePackSize,
+        unitCostCents,
+        costPerPackCents,
+        rowImponibileCents,
+      };
+    });
+}, [lines, itemsBySku]);
 
   const totalImponibileCents = useMemo(() => {
     return draftRows.reduce((sum, row) => sum + row.rowImponibileCents, 0);
@@ -607,7 +618,7 @@ export default function OrdersPage({
                   <tr style={{ background: "#f9fafb" }}>
                     <th style={th}>Articolo</th>
                     <th style={{ ...th, textAlign: "right" }}>Q.tà</th>
-                    <th style={{ ...th, textAlign: "right" }}>Costo unitario</th>
+                    <th style={{ ...th, textAlign: "right" }}>Prezzo cassa</th>
                     <th style={{ ...th, textAlign: "right" }}>Totale riga</th>
                   </tr>
                 </thead>
@@ -621,9 +632,9 @@ export default function OrdersPage({
                         {row.qtyPack}
                       </td>
 
-                      <td style={{ ...td, textAlign: "right" }}>
-                        € {centsToEuro(row.lastCostCents)}
-                      </td>
+<td style={{ ...td, textAlign: "right" }}>
+  € {centsToEuro(row.costPerPackCents)}
+</td>
 
                       <td
                         style={{
