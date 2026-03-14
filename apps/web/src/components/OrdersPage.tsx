@@ -4,7 +4,7 @@ import OrderDrawer from "./orders/OrderDrawer";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
-type Supplier = "DORECA" | "ALPORI" | "VARI";
+type Supplier = string;
 
 type WarehouseRow = {
   itemId: string;
@@ -13,6 +13,15 @@ type WarehouseRow = {
   stockBt: number;
   minStockBt: number | null;
   underMin: boolean;
+};
+
+type SupplierRow = {
+  id: string;
+  code: string;
+  name: string;
+  contact_name?: string | null;
+  phone?: string | null;
+  vat_number?: string | null;
 };
 
 type OrderLineDraft = {
@@ -34,8 +43,9 @@ export default function OrdersPage({
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
-  const [supplier, setSupplier] = useState<Supplier>("DORECA");
+  const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
+  
+  const [supplier, setSupplier] = useState<Supplier>("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<OrderLineDraft[]>([
     { sku: "", qtyPack: 1, query: "", open: false },
@@ -99,10 +109,26 @@ export default function OrdersPage({
     }
   }
 
-  useEffect(() => {
-    loadOrders();
-  }, []);
+ useEffect(() => {
+  loadOrders();
+  loadSuppliers();
+}, []);
 
+  async function loadSuppliers() {
+  try {
+    const r = await fetch(`${API_BASE}/suppliers`);
+    const data = await r.json();
+    const rows = Array.isArray(data) ? data : [];
+    setSuppliers(rows);
+
+    if (rows.length > 0) {
+      setSupplier((prev) => prev || rows[0].code);
+    }
+  } catch {
+    setSuppliers([]);
+  }
+}  
+ 
   function updateLine(idx: number, patch: Partial<OrderLineDraft>) {
     setLines((prev) => {
       const next = [...prev];
@@ -230,6 +256,27 @@ async function confirmOrder(order: Order) {
 }
 
 async function sendOrderWhatsapp(order: Order) {
+  const supplierRow = suppliers.find(
+    (s) => String(s.code || "").toUpperCase().trim() === String(order.supplier || "").toUpperCase().trim()
+  );
+
+  if (!supplierRow) {
+    setErr(`Fornitore ${order.supplier} non trovato in anagrafica`);
+    return;
+  }
+
+  const phoneRaw = String(supplierRow.phone || "").trim();
+  if (!phoneRaw) {
+    setErr(`Il fornitore ${supplierRow.name} non ha un numero WhatsApp salvato`);
+    return;
+  }
+
+  const phone = phoneRaw.replace(/\D/g, "");
+  if (!phone) {
+    setErr(`Numero WhatsApp non valido per ${supplierRow.name}`);
+    return;
+  }
+
   const itemsBySku = Object.fromEntries(
     (Array.isArray(items) ? items : []).map((it: any) => [
       String(it.sku || "").toUpperCase().trim(),
@@ -237,26 +284,32 @@ async function sendOrderWhatsapp(order: Order) {
     ])
   ) as Record<string, any>;
 
+  const orderDate = new Date(order.createdAt).toISOString().slice(0, 10);
+
   const linesText = (order.lines || [])
     .map((l) => {
       const sku = String(l.sku || "").toUpperCase().trim();
       const item = itemsBySku[sku];
       const name = item?.name ? String(item.name) : sku;
-      return `- ${name} x${l.qtyOrderedConf}`;
+      return `• ${l.qtyOrderedConf}x ${name}`;
     })
     .join("\n");
 
+  const helloName =
+    String(supplierRow.contact_name || "").trim() || String(supplierRow.name || "").trim();
+
   const message = [
-    `Buongiorno, invio ordine ${order.orderId}`,
+    `${order.orderId} del ${orderDate}`,
+    "",
+    `Ciao ${helloName} ti mando l'ordine di oggi:`,
     "",
     linesText,
     "",
-    order.notes ? `Note: ${order.notes}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+    "Se manca qualcosa dimmelo pure",
+    "Grazieee",
+  ].join("\n");
 
-  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+  const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
   window.open(whatsappUrl, "_blank");
 
   await confirmOrder(order);
@@ -348,15 +401,17 @@ async function sendOrderWhatsapp(order: Order) {
         <strong>Nuovo ordine</strong>
 
         <div style={grid}>
-          <select
-            value={supplier}
-            onChange={(e) => setSupplier(e.target.value as Supplier)}
-            style={inp}
-          >
-            <option value="DORECA">DORECA</option>
-            <option value="ALPORI">ALPORI</option>
-            <option value="VARI">VARI</option>
-          </select>
+         <select
+  value={supplier}
+  onChange={(e) => setSupplier(e.target.value as Supplier)}
+  style={inp}
+>
+  {suppliers.map((s) => (
+    <option key={s.id} value={s.code}>
+      {s.name}
+    </option>
+  ))}
+</select>
 
           <input
             placeholder="Note (opzionali)"
