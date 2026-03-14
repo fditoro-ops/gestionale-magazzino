@@ -10,10 +10,7 @@ if (!DATABASE_URL) {
 
 export const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl:
-    process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: false }
-      : false,
+  ssl: { rejectUnauthorized: false },
 });
 
 export async function testDbConnection() {
