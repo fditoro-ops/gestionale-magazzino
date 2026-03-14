@@ -23,6 +23,8 @@ import {
   markPendingRowProcessed,
 } from "./data/cicPendingRows.store.js";
 
+import suppliersRouter from "./routes/suppliers.js";
+
 /* =========================
    BOM (Google Sheet) Reader
    ========================= */
@@ -1373,7 +1375,7 @@ app.use("/movements", movementsRouter);
 app.use("/stock-v2", stockV2Router);
 console.log("✅ Mounting /orders router");
 app.use("/orders", ordersRouter);
-
+app.use("/suppliers", suppliersRouter);
 
 /* =========================
    Static frontend
