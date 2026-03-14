@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import jwt from "jsonwebtoken";
+import jwt, { type SignOptions } from "jsonwebtoken";
 import type { UserRole } from "../lib/permissions.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -29,6 +29,8 @@ type JwtPayload = {
 };
 
 export function signAuthToken(user: AuthUser) {
+  const expiresIn = process.env.JWT_EXPIRES_IN ?? "7d";
+
   return jwt.sign(
     {
       sub: user.id,
@@ -37,10 +39,8 @@ export function signAuthToken(user: AuthUser) {
       firstName: user.firstName ?? null,
       lastName: user.lastName ?? null,
     },
-    JWT_SECRET!,
-    {
-      expiresIn: process.env.JWT_EXPIRES_IN || "7d",
-    }
+    JWT_SECRET as string,
+    { expiresIn } as SignOptions
   );
 }
 
@@ -58,7 +58,7 @@ export function requireAuth(
   const token = authHeader.slice("Bearer ".length).trim();
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET!) as JwtPayload;
+    const decoded = jwt.verify(token, JWT_SECRET as string) as JwtPayload;
 
     req.user = {
       id: decoded.sub,
@@ -77,11 +77,15 @@ export function requireAuth(
 export function requireRole(roles: UserRole[]) {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return res.status(401).json({ ok: false, error: "Utente non autenticato" });
+      return res
+        .status(401)
+        .json({ ok: false, error: "Utente non autenticato" });
     }
 
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ ok: false, error: "Permessi insufficienti" });
+      return res
+        .status(403)
+        .json({ ok: false, error: "Permessi insufficienti" });
     }
 
     next();
