@@ -24,6 +24,7 @@ import {
 } from "./data/cicPendingRows.store.js";
 
 import suppliersRouter from "./routes/suppliers.js";
+import authRouter from "./routes/auth.js";
 
 /* =========================
    BOM (Google Sheet) Reader
@@ -1370,6 +1371,7 @@ app.get("/orders/_server-test", (_req, res) => {
   res.json({ ok: true, where: "server direct /orders/_server-test" });
 });
 
+app.use("/auth", authRouter);
 app.use("/items", itemsRouter);
 app.use("/movements", movementsRouter);
 app.use("/stock-v2", stockV2Router);
