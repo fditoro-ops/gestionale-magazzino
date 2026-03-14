@@ -10,6 +10,7 @@ import ItemsAdmin from "./components/ItemsAdmin";
 import OrdersPage from "./components/OrdersPage";
 
 import type { Movement } from "./types/movement";
+import SuppliersPage from "./components/SuppliersPage";
 
 const API_BASE =
   import.meta.env.VITE_API_URL ?? "http://localhost:3001";
@@ -130,6 +131,8 @@ export default function App() {
     onReload={reload}
   />
 )}
+{tab === "suppliers" && <SuppliersPage />}
+          
         </AppLayout>
       </div>
     </div>
