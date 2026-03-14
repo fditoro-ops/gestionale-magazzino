@@ -23,9 +23,11 @@ export type Order = {
 export default function OrdersTable({
   orders,
   onOpen,
+  onDelete,
 }: {
   orders: Order[];
   onOpen: (o: Order) => void;
+  onDelete: (o: Order) => void;
 }) {
   return (
     <div style={card}>
@@ -91,10 +93,18 @@ export default function OrdersTable({
                 </Td>
 
                 <Td style={{ textAlign: "right" }}>
-                  <button onClick={() => onOpen(o)} style={btnPrimary}>
-                    Apri
-                  </button>
-                </Td>
+  <div style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+    <button onClick={() => onOpen(o)} style={btnPrimary}>
+      Apri
+    </button>
+
+    {o.status === "DRAFT" && (
+      <button onClick={() => onDelete(o)} style={btnDanger}>
+        Elimina
+      </button>
+    )}
+  </div>
+</Td>
               </tr>
             ))}
 
@@ -226,6 +236,15 @@ const btnPrimary: React.CSSProperties = {
   border: "1px solid #0B7285",
   background: "#0B7285",
   color: "white",
+  cursor: "pointer",
+  fontWeight: 900,
+};
+const btnDanger: React.CSSProperties = {
+  padding: "8px 10px",
+  borderRadius: 12,
+  border: "1px solid #dc2626",
+  background: "white",
+  color: "#b91c1c",
   cursor: "pointer",
   fontWeight: 900,
 };
