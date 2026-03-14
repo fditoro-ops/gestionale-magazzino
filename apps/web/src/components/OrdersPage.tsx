@@ -207,7 +207,60 @@ export default function OrdersPage({
       setLoading(false);
     }
   }
+async function confirmOrder(order: Order) {
+  setErr(null);
+  setLoading(true);
 
+  try {
+    const r = await fetch(`${API_BASE}/orders/${order.orderId}/send`, {
+      method: "POST",
+    });
+
+    if (!r.ok) {
+      const j = await safeJson(r);
+      throw new Error(j?.error || "Errore conferma ordine");
+    }
+
+    await loadOrders();
+  } catch (e: any) {
+    setErr(e?.message || "Errore conferma ordine");
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function sendOrderWhatsapp(order: Order) {
+  const itemsBySku = Object.fromEntries(
+    (Array.isArray(items) ? items : []).map((it: any) => [
+      String(it.sku || "").toUpperCase().trim(),
+      it,
+    ])
+  ) as Record<string, any>;
+
+  const linesText = (order.lines || [])
+    .map((l) => {
+      const sku = String(l.sku || "").toUpperCase().trim();
+      const item = itemsBySku[sku];
+      const name = item?.name ? String(item.name) : sku;
+      return `- ${name} x${l.qtyOrderedConf}`;
+    })
+    .join("\n");
+
+  const message = [
+    `Buongiorno, invio ordine ${order.orderId}`,
+    "",
+    linesText,
+    "",
+    order.notes ? `Note: ${order.notes}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+  window.open(whatsappUrl, "_blank");
+
+  await confirmOrder(order);
+}
   async function deleteOrder(order: Order) {
     const yes = window.confirm(
       `Eliminare l'ordine ${order.orderId}?\nQuesta azione non si può annullare.`
