@@ -163,7 +163,9 @@ export default function OrdersPage({
             const packSize = Number(packSizeBySku[sku] ?? 0);
 
             if (!Number.isFinite(packSize) || packSize <= 0) {
-              throw new Error(`Articolo selezionato non valido: ${l.query || sku}`);
+              throw new Error(
+                `Articolo selezionato non valido: ${l.query || sku}`
+              );
             }
 
             return {
@@ -205,37 +207,39 @@ export default function OrdersPage({
       setLoading(false);
     }
   }
-async function deleteOrder(order: Order) {
-  const yes = window.confirm(
-    `Eliminare l'ordine ${order.orderId}?\nQuesta azione non si può annullare.`
-  );
 
-  if (!yes) return;
+  async function deleteOrder(order: Order) {
+    const yes = window.confirm(
+      `Eliminare l'ordine ${order.orderId}?\nQuesta azione non si può annullare.`
+    );
 
-  setErr(null);
-  setLoading(true);
+    if (!yes) return;
 
-  try {
-    const r = await fetch(`${API_BASE}/orders/${order.orderId}`, {
-      method: "DELETE",
-    });
+    setErr(null);
+    setLoading(true);
 
-    if (!r.ok) {
-      const j = await safeJson(r);
-      throw new Error(j?.error || "Errore eliminazione ordine");
+    try {
+      const r = await fetch(`${API_BASE}/orders/${order.orderId}`, {
+        method: "DELETE",
+      });
+
+      if (!r.ok) {
+        const j = await safeJson(r);
+        throw new Error(j?.error || "Errore eliminazione ordine");
+      }
+
+      if (openOrderId === order.orderId) {
+        setOpenOrderId(null);
+      }
+
+      await loadOrders();
+    } catch (e: any) {
+      setErr(e?.message || "Errore eliminazione ordine");
+    } finally {
+      setLoading(false);
     }
-
-    if (openOrderId === order.orderId) {
-      setOpenOrderId(null);
-    }
-
-    await loadOrders();
-  } catch (e: any) {
-    setErr(e?.message || "Errore eliminazione ordine");
-  } finally {
-    setLoading(false);
   }
-}
+
   async function postReceive(
     order: Order,
     payload: {
@@ -316,7 +320,13 @@ async function deleteOrder(order: Order) {
 
               return (
                 <div key={idx} style={{ display: "grid", gap: 6 }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      alignItems: "center",
+                    }}
+                  >
                     <div style={{ position: "relative" }}>
                       <input
                         value={l.query}
@@ -342,7 +352,9 @@ async function deleteOrder(order: Order) {
                               style={dropdownItem}
                             >
                               <span>{it.name}</span>
-                              <span style={stockTag(it.stock)}>disp. {it.stock}</span>
+                              <span style={stockTag(it.stock)}>
+                                disp. {it.stock}
+                              </span>
                             </button>
                           ))}
                         </div>
@@ -393,14 +405,15 @@ async function deleteOrder(order: Order) {
         </div>
 
         <button onClick={createOrder} disabled={loading} style={btnPrimary}>
-  Crea ordine
-</button>
+          Crea ordine
+        </button>
+      </div>
 
-     <OrdersTable
-  orders={orders}
-  onOpen={(o) => setOpenOrderId(o.orderId)}
-  onDelete={(o) => deleteOrder(o)}
-/>
+      <OrdersTable
+        orders={orders}
+        onOpen={(o) => setOpenOrderId(o.orderId)}
+        onDelete={(o) => deleteOrder(o)}
+      />
 
       <OrderDrawer
         open={!!openOrderId}
