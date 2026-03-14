@@ -63,6 +63,20 @@ export async function initDb() {
 
   console.log("✅ Tabella movements pronta");
 
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS suppliers (
+    id TEXT PRIMARY KEY,
+    code TEXT UNIQUE,
+    name TEXT NOT NULL,
+    contact_name TEXT,
+    phone TEXT,
+    vat_number TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+  )
+`);
+  
+ console.log("✅ Tabella suppliers pronta"); 
+  
   /* =========================
      CIC PENDING ROWS
   ========================= */
