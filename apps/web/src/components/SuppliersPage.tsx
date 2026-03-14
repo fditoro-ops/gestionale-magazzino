@@ -133,7 +133,7 @@ export default function SuppliersPage() {
           />
 
           <input
-            placeholder="Nome fornitore"
+            placeholder="Ragione sociale"
             value={name}
             onChange={(e) => setName(e.target.value)}
             style={inp}
@@ -181,7 +181,7 @@ export default function SuppliersPage() {
               <tr style={{ background: "#f9fafb" }}>
                 <Th>ID</Th>
                 <Th>Codice</Th>
-                <Th>Nome</Th>
+                <Th>Ragione sociale</Th>
                 <Th>Referente</Th>
                 <Th>Telefono</Th>
                 <Th>P. IVA</Th>
