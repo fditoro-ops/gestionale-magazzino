@@ -105,6 +105,48 @@ export default function OrdersPage({
       .sort((a, b) => a.name.localeCompare(b.name, "it"));
   }, [itemsSafe, stockBySku, supplier]);
 
+  const itemsBySku = useMemo(() => {
+    return Object.fromEntries(
+      itemsSafe.map((it: any) => [
+        String(it.sku || "").toUpperCase().trim(),
+        it,
+      ])
+    ) as Record<string, any>;
+  }, [itemsSafe]);
+
+  const draftRows = useMemo(() => {
+    return lines
+      .filter((l) => l.sku && l.qtyPack > 0)
+      .map((l) => {
+        const sku = String(l.sku || "").toUpperCase().trim();
+        const item = itemsBySku[sku];
+        const name = String(item?.name || l.query || sku);
+        const lastCostCents = Number(item?.lastCostCents ?? 0);
+        const qtyPack = Number(l.qtyPack ?? 0);
+        const rowImponibileCents = qtyPack * lastCostCents;
+
+        return {
+          sku,
+          name,
+          qtyPack,
+          lastCostCents,
+          rowImponibileCents,
+        };
+      });
+  }, [lines, itemsBySku]);
+
+  const totalImponibileCents = useMemo(() => {
+    return draftRows.reduce((sum, row) => sum + row.rowImponibileCents, 0);
+  }, [draftRows]);
+
+  const totalIvaCents = useMemo(() => {
+    return Math.round(totalImponibileCents * 0.22);
+  }, [totalImponibileCents]);
+
+  const totalDocumentoCents = useMemo(() => {
+    return totalImponibileCents + totalIvaCents;
+  }, [totalImponibileCents, totalIvaCents]);
+
   async function loadOrders() {
     try {
       const r = await fetch(`${API_BASE}/orders`);
@@ -288,7 +330,7 @@ export default function OrdersPage({
       return;
     }
 
-    const itemsBySku = Object.fromEntries(
+    const itemsBySkuMap = Object.fromEntries(
       (Array.isArray(items) ? items : []).map((it: any) => [
         String(it.sku || "").toUpperCase().trim(),
         it,
@@ -300,7 +342,7 @@ export default function OrdersPage({
     const linesText = (order.lines || [])
       .map((l) => {
         const sku = String(l.sku || "").toUpperCase().trim();
-        const item = itemsBySku[sku];
+        const item = itemsBySkuMap[sku];
         const name = item?.name ? String(item.name) : sku;
         return `• ${l.qtyOrderedConf}x ${name}`;
       })
@@ -534,6 +576,95 @@ export default function OrdersPage({
         <button onClick={createOrder} disabled={loading} style={btnPrimary}>
           Crea ordine
         </button>
+
+        {draftRows.length > 0 && (
+          <div
+            style={{
+              marginTop: 16,
+              borderTop: "1px solid #e5e7eb",
+              paddingTop: 14,
+              display: "grid",
+              gap: 10,
+            }}
+          >
+            <strong>Riepilogo economico ordine</strong>
+
+            <div
+              style={{
+                border: "1px solid #e5e7eb",
+                borderRadius: 12,
+                overflow: "hidden",
+                background: "white",
+              }}
+            >
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                }}
+              >
+                <thead>
+                  <tr style={{ background: "#f9fafb" }}>
+                    <th style={th}>Articolo</th>
+                    <th style={{ ...th, textAlign: "right" }}>Q.tà</th>
+                    <th style={{ ...th, textAlign: "right" }}>Costo unitario</th>
+                    <th style={{ ...th, textAlign: "right" }}>Totale riga</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {draftRows.map((row) => (
+                    <tr key={row.sku} style={{ borderTop: "1px solid #eef2f7" }}>
+                      <td style={td}>{row.name}</td>
+
+                      <td style={{ ...td, textAlign: "right" }}>
+                        {row.qtyPack}
+                      </td>
+
+                      <td style={{ ...td, textAlign: "right" }}>
+                        € {centsToEuro(row.lastCostCents)}
+                      </td>
+
+                      <td
+                        style={{
+                          ...td,
+                          textAlign: "right",
+                          fontWeight: 700,
+                        }}
+                      >
+                        € {centsToEuro(row.rowImponibileCents)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div
+              style={{
+                marginLeft: "auto",
+                minWidth: 280,
+                display: "grid",
+                gap: 8,
+              }}
+            >
+              <div style={totalRow}>
+                <span>Totale imponibile</span>
+                <strong>€ {centsToEuro(totalImponibileCents)}</strong>
+              </div>
+
+              <div style={totalRow}>
+                <span>IVA 22%</span>
+                <strong>€ {centsToEuro(totalIvaCents)}</strong>
+              </div>
+
+              <div style={{ ...totalRow, fontSize: 16 }}>
+                <span>Totale documento</span>
+                <strong>€ {centsToEuro(totalDocumentoCents)}</strong>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <OrdersTable
@@ -563,6 +694,10 @@ async function safeJson(res: Response) {
   } catch {
     return null;
   }
+}
+
+function centsToEuro(cents: number): string {
+  return (cents / 100).toFixed(2).replace(".", ",");
 }
 
 const card: React.CSSProperties = {
@@ -628,6 +763,29 @@ const dropdownItem: React.CSSProperties = {
   background: "white",
   cursor: "pointer",
   textAlign: "left",
+};
+
+const th: React.CSSProperties = {
+  padding: "10px 12px",
+  textAlign: "left",
+  fontSize: 12,
+  color: "#667",
+};
+
+const td: React.CSSProperties = {
+  padding: "10px 12px",
+  fontSize: 14,
+};
+
+const totalRow: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: "10px 12px",
+  border: "1px solid #e5e7eb",
+  borderRadius: 12,
+  background: "white",
 };
 
 function stockTag(stock: number): React.CSSProperties {
