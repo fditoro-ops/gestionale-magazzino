@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import OrdersTable, { type Order } from "./orders/OrdersTable";
 import OrderDrawer from "./orders/OrderDrawer";
-
-const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+import { authFetch } from "../api/authFetch";
 
 type Supplier = string;
 
@@ -298,7 +297,7 @@ export default function OrdersPage({
     setLoading(true);
 
     try {
-      const r = await fauthFetch(`/orders/${order.orderId}/send`, {
+      const r = await authFetch(`/orders/${order.orderId}/send`, {
         method: "POST",
       });
 
