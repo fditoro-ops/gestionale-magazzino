@@ -17,6 +17,7 @@ import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import AuthBar from "./components/AuthBar";
 import { authFetch } from "./api/authFetch";
+import UsersPage from "./components/UsersPage";
 
 type WarehouseRow = {
   itemId: string;
@@ -100,7 +101,7 @@ function CoreApp() {
               <p className="m-0 text-slate-500">Coming soon…</p>
             </div>
           )}
-
+{tab === "users" && <UsersPage />}
           {tab === "movements" && (
             <div className="grid gap-4">
               <NewMovementForm
