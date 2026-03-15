@@ -14,18 +14,9 @@ type Props = {
 type UiMovement = Movement & {
   at?: string;
   kind?: string;
-  note?: string;
-  reason?: string;
-
-  // campi futuri opzionali lato backend
-  documento?: string;
   documentId?: string;
   docType?: string;
   source?: string;
-  recipeName?: string;
-  recipeSku?: string;
-  soldQty?: number;
-  lineGroup?: string;
 };
 
 type EventTypeFilter = "ALL" | "IN" | "OUT" | "ADJUST" | "INVENTORY";
@@ -54,9 +45,7 @@ function formatDateTime(value?: string) {
 }
 
 function normalizeText(value: unknown) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
+  return String(value ?? "").trim().toLowerCase();
 }
 
 function getMovementType(m: UiMovement) {
@@ -68,7 +57,7 @@ function getMovementDate(m: UiMovement) {
 }
 
 function getMovementQty(m: UiMovement) {
-  return Number(m.quantity ?? m.qty ?? 0);
+  return Number(m.quantity ?? 0);
 }
 
 function getBadgeClass(type: string) {
@@ -105,6 +94,7 @@ function getEventTypeLabel(type: string) {
 
 function isMovementInRange(dateValue: string, from: string, to: string) {
   if (!dateValue) return true;
+
   const time = new Date(dateValue).getTime();
   if (Number.isNaN(time)) return true;
 
@@ -176,8 +166,8 @@ export default function MovementsList({ movements, items }: Props) {
         m.documentId,
         m.docType,
         m.source,
-        m.recipeName,
-        m.recipeSku,
+        m.recipe_name,
+        m.recipe_sku,
         getEventTypeLabel(type),
       ]
         .map(normalizeText)
@@ -195,18 +185,14 @@ export default function MovementsList({ movements, items }: Props) {
       const dt = getMovementDate(movement);
       const isoMinute = dt ? new Date(dt).toISOString().slice(0, 16) : "no-date";
 
-      // priorità futura: documento vero
       const documentKey =
         normalizeText(movement.documento) ||
         normalizeText(movement.documentId) ||
         "";
 
-      // fallback attuale: se non abbiamo documento, non mischiamo troppo
       const fallbackKey = `${type}|${isoMinute}|${normalizeText(movement.reason)}`;
 
-      const key = documentKey
-        ? `doc:${documentKey}`
-        : `fallback:${fallbackKey}`;
+      const key = documentKey ? `doc:${documentKey}` : `fallback:${fallbackKey}`;
 
       const list = map.get(key) ?? [];
       list.push(movement);
@@ -239,18 +225,17 @@ export default function MovementsList({ movements, items }: Props) {
 
       for (const row of orderedRows) {
         const recipeKey =
-          normalizeText(row.lineGroup) ||
-          normalizeText(row.recipeSku) ||
-          normalizeText(row.recipeName) ||
+          normalizeText(row.line_group) ||
+          normalizeText(row.recipe_sku) ||
+          normalizeText(row.recipe_name) ||
           `row:${row.id ?? `${row.sku}-${getMovementDate(row)}`}`;
 
         if (!recipeMap.has(recipeKey)) {
           recipeMap.set(recipeKey, {
             key: recipeKey,
-            recipeName: row.recipeName,
-            recipeSku: row.recipeSku,
-            soldQty:
-              row.soldQty != null ? Number(row.soldQty) : undefined,
+            recipeName: row.recipe_name,
+            recipeSku: row.recipe_sku,
+            soldQty: row.sold_qty != null ? Number(row.sold_qty) : undefined,
             rows: [],
           });
         }
@@ -260,10 +245,7 @@ export default function MovementsList({ movements, items }: Props) {
 
       const recipeGroups = Array.from(recipeMap.values());
 
-      const documentLabel =
-        first.documento ||
-        first.documentId ||
-        "";
+      const documentLabel = first.documento || first.documentId || "";
 
       const title = documentLabel
         ? `${getEventTypeLabel(firstType)} • ${documentLabel}`
