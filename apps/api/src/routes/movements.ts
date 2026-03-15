@@ -16,12 +16,19 @@ const router = Router();
 router.get("/", async (_req, res) => {
   try {
     const movements = await loadMovements([]);
+
+    movements.sort(
+      (a, b) =>
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+
     res.json(movements);
   } catch (err) {
     console.error("GET /movements error:", err);
     res.status(500).json({ error: "Errore caricamento movimenti" });
   }
 });
+
 
 async function getCurrentQtyForSku(sku: string) {
   const movements = await loadMovements([]);
