@@ -413,6 +413,62 @@ export default function OrdersPage({
     }
   }
 
+async function editOrder(order: Order) {
+  if (order.status !== "DRAFT") {
+    setErr("Si possono modificare solo ordini in bozza");
+    return;
+  }
+
+  const nextLines: OrderLineDraft[] = (order.lines || []).map((line) => {
+    const sku = String(line.sku || "").toUpperCase().trim();
+    const item = itemsBySku[sku];
+
+    return {
+      sku,
+      qtyPack: Number(line.qtyOrderedConf ?? 1),
+      query: String(item?.name || sku),
+      open: false,
+    };
+  });
+
+  setSupplier(String(order.supplier || ""));
+  setNotes(String(order.notes || ""));
+  setLines(
+    nextLines.length
+      ? nextLines
+      : [{ sku: "", qtyPack: 1, query: "", open: false }]
+  );
+
+  if (openOrderId === order.orderId) {
+    setOpenOrderId(null);
+  }
+
+  setErr(null);
+  setLoading(true);
+
+  try {
+    const r = await authFetch(`/orders/${order.orderId}`, {
+      method: "DELETE",
+    });
+
+    if (!r.ok) {
+      const j = await safeJson(r);
+      throw new Error(j?.error || "Errore apertura modifica ordine");
+    }
+
+    await loadOrders();
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  } catch (e: any) {
+    setErr(e?.message || "Errore apertura modifica ordine");
+  } finally {
+    setLoading(false);
+  }
+}
+  
   async function postReceive(
     order: Order,
     payload: {
@@ -678,13 +734,13 @@ export default function OrdersPage({
       </div>
 
       <OrdersTable
-        orders={orders}
-        onOpen={(o) => setOpenOrderId(o.orderId)}
-        onDelete={(o) => deleteOrder(o)}
-        onConfirm={(o) => confirmOrder(o)}
-        onWhatsapp={(o) => sendOrderWhatsapp(o)}
-      />
-
+  orders={orders}
+  onOpen={(o) => setOpenOrderId(o.orderId)}
+  onDelete={(o) => deleteOrder(o)}
+  onConfirm={(o) => confirmOrder(o)}
+  onWhatsapp={(o) => sendOrderWhatsapp(o)}
+  onEdit={(o) => editOrder(o)}
+/>
       <OrderDrawer
         open={!!openOrderId}
         order={openOrder}
