@@ -160,7 +160,7 @@ export default function OrdersPage({
 
   async function loadOrders() {
     try {
-      const r = await fetch(`${API_BASE}/orders`);
+      const r = await authFetch(`/orders`);
       const data = await r.json();
       setOrders(Array.isArray(data) ? data : []);
     } catch {
@@ -170,7 +170,7 @@ export default function OrdersPage({
 
   async function loadSuppliers() {
     try {
-      const r = await fetch(`${API_BASE}/suppliers`);
+      const r = await authFetch(`suppliers`);
       const data = await r.json();
       const rows = Array.isArray(data) ? data : [];
       setSuppliers(rows);
@@ -271,7 +271,7 @@ export default function OrdersPage({
 
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE}/orders`, {
+      const r = await authFetch(`orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -298,7 +298,7 @@ export default function OrdersPage({
     setLoading(true);
 
     try {
-      const r = await fetch(`${API_BASE}/orders/${order.orderId}/send`, {
+      const r = await fauthFetch(`/orders/${order.orderId}/send`, {
         method: "POST",
       });
 
@@ -393,7 +393,7 @@ export default function OrdersPage({
     setLoading(true);
 
     try {
-      const r = await fetch(`${API_BASE}/orders/${order.orderId}`, {
+      const r = await authFetch(`/orders/${order.orderId}`, {
         method: "DELETE",
       });
 
@@ -425,7 +425,7 @@ export default function OrdersPage({
     setLoading(true);
 
     try {
-      const r = await fetch(`${API_BASE}/orders/${order.orderId}/receive`, {
+      const r = await authFetch(`/orders/${order.orderId}/receive`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
