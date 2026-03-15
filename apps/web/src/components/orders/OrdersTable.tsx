@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 
-type Supplier = "DORECA" | "ALPORI" | "VARI";
+type Supplier = "DORECA" | "ALPORI" | "VARI" | string;
 type OrderStatus = "DRAFT" | "SENT" | "PARTIAL" | "RECEIVED" | "CANCELLED";
 
 type OrderLine = {
@@ -26,13 +26,48 @@ export default function OrdersTable({
   onDelete,
   onConfirm,
   onWhatsapp,
+  onEdit,
 }: {
   orders: Order[];
   onOpen: (o: Order) => void;
   onDelete: (o: Order) => void;
   onConfirm: (o: Order) => void;
   onWhatsapp: (o: Order) => void;
+  onEdit: (o: Order) => void;
 }) {
+  const [openMenuOrderId, setOpenMenuOrderId] = useState<string | null>(null);
+  const menuWrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (!menuWrapRef.current) return;
+      if (!menuWrapRef.current.contains(e.target as Node)) {
+        setOpenMenuOrderId(null);
+      }
+    }
+
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpenMenuOrderId(null);
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  function toggleMenu(orderId: string) {
+    setOpenMenuOrderId((prev) => (prev === orderId ? null : orderId));
+  }
+
+  function runAndClose(fn: () => void) {
+    setOpenMenuOrderId(null);
+    fn();
+  }
+
   return (
     <div style={card}>
       <div
@@ -74,7 +109,7 @@ export default function OrdersTable({
           </thead>
 
           <tbody>
-           {orders.map((o, index) => (
+            {orders.map((o, index) => (
               <tr key={o.orderId} style={{ borderTop: "1px solid #eef2f7" }}>
                 <Td>
                   <span style={{ fontWeight: 900 }}>{formatOrderNumber(o, index)}</span>
@@ -96,36 +131,75 @@ export default function OrdersTable({
                   <Badge tone={statusTone(o.status)}>{statusLabel(o.status)}</Badge>
                 </Td>
 
-               <Td style={{ textAlign: "right" }}>
-  <div
-    style={{
-      display: "inline-flex",
-      gap: 8,
-      flexWrap: "wrap",
-      justifyContent: "flex-end",
-    }}
-  >
-    <button onClick={() => onOpen(o)} style={btnPrimary}>
-      Apri
-    </button>
+                <Td style={{ textAlign: "right" }}>
+                  <div
+                    ref={openMenuOrderId === o.orderId ? menuWrapRef : null}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "flex-end",
+                      gap: 8,
+                      position: "relative",
+                    }}
+                  >
+                    <button onClick={() => onOpen(o)} style={btnPrimary}>
+                      Apri
+                    </button>
 
-    {o.status === "DRAFT" && (
-      <>
-        <button onClick={() => onConfirm(o)} style={btnInfo}>
-          Conferma
-        </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleMenu(o.orderId)}
+                      style={btnGhostSquare}
+                      title="Altre azioni"
+                    >
+                      ⋯
+                    </button>
 
-        <button onClick={() => onWhatsapp(o)} style={btnWhats}>
-          WhatsApp
-        </button>
+                    {openMenuOrderId === o.orderId && (
+                      <div style={menu}>
+                        {o.status === "DRAFT" && (
+                          <>
+                            <button
+                              type="button"
+                              style={menuItem}
+                              onClick={() => runAndClose(() => onEdit(o))}
+                            >
+                              Modifica
+                            </button>
 
-        <button onClick={() => onDelete(o)} style={btnDanger}>
-          Elimina
-        </button>
-      </>
-    )}
-  </div>
-</Td>
+                            <button
+                              type="button"
+                              style={menuItem}
+                              onClick={() => runAndClose(() => onConfirm(o))}
+                            >
+                              Conferma
+                            </button>
+
+                            <button
+                              type="button"
+                              style={menuItem}
+                              onClick={() => runAndClose(() => onWhatsapp(o))}
+                            >
+                              WhatsApp
+                            </button>
+
+                            <button
+                              type="button"
+                              style={{ ...menuItem, color: "#b91c1c" }}
+                              onClick={() => runAndClose(() => onDelete(o))}
+                            >
+                              Elimina
+                            </button>
+                          </>
+                        )}
+
+                        {o.status !== "DRAFT" && (
+                          <div style={menuInfo}>Nessuna azione disponibile</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </Td>
               </tr>
             ))}
 
@@ -147,6 +221,17 @@ export default function OrdersTable({
   );
 }
 
+function formatOrderNumber(order: Order, index: number): string {
+  const d = new Date(order.createdAt);
+
+  const yy = String(d.getFullYear()).slice(-2);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const seq = String(index + 1).padStart(4, "0");
+
+  return `ORD-${yy}${mm}${dd}-${seq}`;
+}
+
 function statusTone(status: OrderStatus): "ok" | "warn" | "info" | "danger" | "muted" {
   if (status === "RECEIVED") return "ok";
   if (status === "PARTIAL") return "warn";
@@ -162,18 +247,6 @@ function statusLabel(status: OrderStatus): string {
   if (status === "RECEIVED") return "Ricevuto";
   if (status === "CANCELLED") return "Annullato";
   return status;
-}
-
-function formatOrderNumber(order: Order, index: number): string {
-  const d = new Date(order.createdAt);
-
-  const yy = String(d.getFullYear()).slice(-2);
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-
-  const seq = String(index + 1).padStart(4, "0");
-
-  return `ORD-${yy}${mm}${dd}-${seq}`;
 }
 
 function Th({
@@ -272,31 +345,46 @@ const btnPrimary: React.CSSProperties = {
   cursor: "pointer",
   fontWeight: 900,
 };
-const btnDanger: React.CSSProperties = {
-  padding: "8px 10px",
+
+const btnGhostSquare: React.CSSProperties = {
+  width: 36,
+  height: 36,
   borderRadius: 12,
-  border: "1px solid #dc2626",
+  border: "1px solid #d6dbe6",
   background: "white",
-  color: "#b91c1c",
   cursor: "pointer",
   fontWeight: 900,
-};
-const btnInfo: React.CSSProperties = {
-  padding: "8px 10px",
-  borderRadius: 12,
-  border: "1px solid #2563eb",
-  background: "white",
-  color: "#1d4ed8",
-  cursor: "pointer",
-  fontWeight: 900,
+  fontSize: 18,
+  lineHeight: 1,
 };
 
-const btnWhats: React.CSSProperties = {
-  padding: "8px 10px",
-  borderRadius: 12,
-  border: "1px solid #16a34a",
+const menu: React.CSSProperties = {
+  position: "absolute",
+  top: "calc(100% + 6px)",
+  right: 0,
+  minWidth: 170,
   background: "white",
-  color: "#15803d",
+  border: "1px solid #e5e7eb",
+  borderRadius: 12,
+  boxShadow: "0 12px 30px rgba(0,0,0,0.10)",
+  overflow: "hidden",
+  zIndex: 30,
+};
+
+const menuItem: React.CSSProperties = {
+  width: "100%",
+  textAlign: "left",
+  padding: "10px 12px",
+  border: "none",
+  borderBottom: "1px solid #f1f5f9",
+  background: "white",
   cursor: "pointer",
-  fontWeight: 900,
+  fontSize: 14,
+};
+
+const menuInfo: React.CSSProperties = {
+  padding: "10px 12px",
+  fontSize: 13,
+  color: "#667",
+  background: "white",
 };
