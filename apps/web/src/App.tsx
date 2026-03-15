@@ -18,9 +18,6 @@ import ProtectedRoute from "./auth/ProtectedRoute";
 import AuthBar from "./components/AuthBar";
 import { authFetch } from "./api/authFetch";
 
-const API_BASE =
-  import.meta.env.VITE_API_URL ?? "http://localhost:3001";
-
 type WarehouseRow = {
   itemId: string;
   sku: string;
