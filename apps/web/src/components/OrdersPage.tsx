@@ -169,7 +169,7 @@ export default function OrdersPage({
 
   async function loadSuppliers() {
     try {
-      const r = await authFetch(`suppliers`);
+      const r = await authFetch(`/suppliers`);
       const data = await r.json();
       const rows = Array.isArray(data) ? data : [];
       setSuppliers(rows);
@@ -270,7 +270,7 @@ export default function OrdersPage({
 
     setLoading(true);
     try {
-      const r = await authFetch(`orders`, {
+      const r = await authFetch(`/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
