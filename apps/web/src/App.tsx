@@ -16,6 +16,7 @@ import type { Movement } from "./types/movement";
 import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import AuthBar from "./components/AuthBar";
+import { authFetch } from "./api/authFetch";
 
 const API_BASE =
   import.meta.env.VITE_API_URL ?? "http://localhost:3001";
@@ -53,13 +54,13 @@ function CoreApp() {
     ) as Record<string, number>;
   }, [warehouse]);
 
-  const reload = () => {
-    fetch(`${API_BASE}/movements`)
+    const reload = () => {
+    authFetch(`/movements`)
       .then((r) => r.json())
       .then((data) => setMovements(Array.isArray(data) ? data : []))
       .catch(console.error);
 
-    fetch(`${API_BASE}/stock-v2`)
+    authFetch(`/stock-v2`)
       .then((r) => r.json())
       .then((data) => {
         const rows = Array.isArray(data)
@@ -75,12 +76,11 @@ function CoreApp() {
       })
       .catch(console.error);
 
-    fetch(`${API_BASE}/items`)
+    authFetch(`/items`)
       .then((r) => r.json())
       .then((data) => setItems(Array.isArray(data) ? data : []))
       .catch(console.error);
   };
-
   useEffect(() => {
     reload();
   }, []);
