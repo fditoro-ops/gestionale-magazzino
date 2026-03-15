@@ -1,5 +1,5 @@
 import type React from "react";
-import MartiniLogo from "./MartiniLogo"; // ✅ aggiusta il path se serve
+import MartiniLogo from "./MartiniLogo";
 
 export type TabKey =
   | "dashboard"
@@ -27,7 +27,6 @@ export default function AppLayout({
 }) {
   return (
     <div style={styles.shell}>
-      {/* SIDEBAR */}
       <aside style={styles.sidebar}>
         <div style={styles.brand}>
           <MartiniLogo size={120} />
@@ -56,20 +55,33 @@ export default function AppLayout({
             Magazzino
           </SideItem>
 
-          <SideItem active={tab === "items"} onClick={() => onTabChange("items")}>
+          <SideItem
+            active={tab === "items"}
+            onClick={() => onTabChange("items")}
+          >
             Articoli
           </SideItem>
 
-          <SideItem active={tab === "orders"} onClick={() => onTabChange("orders")}>
+          <SideItem
+            active={tab === "orders"}
+            onClick={() => onTabChange("orders")}
+          >
             Ordini
           </SideItem>
 
           <SideItem
-  active={tab === "suppliers"}
-  onClick={() => onTabChange("suppliers")}
->
-  Fornitori
-</SideItem>
+            active={tab === "suppliers"}
+            onClick={() => onTabChange("suppliers")}
+          >
+            Fornitori
+          </SideItem>
+
+          <SideItem
+            active={tab === "users"}
+            onClick={() => onTabChange("users")}
+          >
+            Utenti
+          </SideItem>
 
           <div style={styles.navSpacer} />
 
@@ -82,9 +94,7 @@ export default function AppLayout({
         </nav>
       </aside>
 
-      {/* MAIN */}
       <main style={styles.main}>
-        {/* TOPBAR */}
         <header style={styles.topbar}>
           <div style={styles.searchWrap}>
             <span style={styles.searchIcon}>⌕</span>
@@ -102,6 +112,7 @@ export default function AppLayout({
               >
                 Live
               </button>
+
               <button
                 style={{
                   ...styles.modeBtn,
@@ -127,10 +138,8 @@ export default function AppLayout({
           </div>
         </header>
 
-        {/* CONTENT */}
         <div style={styles.content}>{children}</div>
 
-        {/* FOOTER STATUS */}
         <footer style={styles.footer}>
           <span>🟢 API /health ok</span>
           <span style={styles.dot}>•</span>
@@ -180,7 +189,6 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "2px 0 18px rgba(0,0,0,0.12)",
   },
 
-  // ✅ BRAND: verticale, logo grande (SVG trasparente)
   brand: {
     display: "flex",
     flexDirection: "column",
@@ -198,7 +206,11 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.5,
   },
 
-  nav: { display: "flex", flexDirection: "column", gap: 10 },
+  nav: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  },
 
   sideItem: {
     textAlign: "left",
@@ -218,7 +230,11 @@ const styles: Record<string, React.CSSProperties> = {
 
   navSpacer: { flex: 1 },
 
-  main: { display: "flex", flexDirection: "column", background: "transparent" },
+  main: {
+    display: "flex",
+    flexDirection: "column",
+    background: "transparent",
+  },
 
   topbar: {
     display: "flex",
@@ -244,7 +260,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   searchIcon: { opacity: 0.55 },
-  search: { border: "none", outline: "none", width: "100%", fontSize: 14 },
+
+  search: {
+    border: "none",
+    outline: "none",
+    width: "100%",
+    fontSize: 14,
+  },
 
   topbarRight: {
     marginLeft: "auto",
@@ -270,7 +292,10 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#334E68",
   },
 
-  modeBtnActive: { background: "#0B7285", color: "white" },
+  modeBtnActive: {
+    background: "#0B7285",
+    color: "white",
+  },
 
   reloadBtn: {
     padding: "10px 12px",
@@ -281,12 +306,34 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
   },
 
-  user: { display: "flex", alignItems: "center", gap: 10, paddingLeft: 6 },
-  avatar: { width: 34, height: 34, borderRadius: 999, background: "#CBD5E1" },
-  userName: { fontWeight: 800, fontSize: 13, color: "#243B53" },
-  userSub: { fontSize: 11, color: "#627D98" },
+  user: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    paddingLeft: 6,
+  },
 
-  content: { padding: 18 },
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    background: "#CBD5E1",
+  },
+
+  userName: {
+    fontWeight: 800,
+    fontSize: 13,
+    color: "#243B53",
+  },
+
+  userSub: {
+    fontSize: 11,
+    color: "#627D98",
+  },
+
+  content: {
+    padding: 18,
+  },
 
   footer: {
     marginTop: "auto",
