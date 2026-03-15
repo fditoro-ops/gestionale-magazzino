@@ -20,7 +20,16 @@ export type Movement = {
   note?: string;
   date: string;
 
-  // campi extra per integrazione POS
+  // documento origine
   documento?: string;
+
+  // multi tenant
   tenant_id?: string;
+
+  // --- campi futuri POS / ricette (opzionali) ---
+
+  recipe_name?: string;   // es: Gin Tonic
+  recipe_sku?: string;    // es: SKU000205
+  sold_qty?: number;      // quanti drink venduti
+  line_group?: string;    // raggruppamento ingredienti ricetta
 };
