@@ -7,7 +7,8 @@ export type TabKey =
   | "warehouse"
   | "items"
   | "orders"
-  | "suppliers";
+  | "suppliers"
+  | "users";
 
 export default function AppLayout({
   tab,
