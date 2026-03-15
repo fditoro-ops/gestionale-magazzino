@@ -25,6 +25,7 @@ import {
 
 import suppliersRouter from "./routes/suppliers.js";
 import authRouter from "./routes/auth.js";
+import usersRouter from "./routes/users.js";
 
 /* =========================
    BOM (Google Sheet) Reader
@@ -1378,6 +1379,7 @@ app.use("/stock-v2", stockV2Router);
 console.log("✅ Mounting /orders router");
 app.use("/orders", ordersRouter);
 app.use("/suppliers", suppliersRouter);
+app.use("/users", usersRouter);
 
 /* =========================
    Static frontend
