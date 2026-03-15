@@ -68,13 +68,13 @@ router.post("/login", async (req, res) => {
     });
 
     await pool.query(
-      `
-      INSERT INTO audit_log (user_id, action, entity, entity_id)
-      VALUES ($1, 'LOGIN', 'USER', $1)
-      `,
-      [user.id]
-    );
-
+  `
+  INSERT INTO audit_log (user_id, action, entity, entity_id)
+  VALUES ($1, 'LOGIN', 'USER', $2)
+  `,
+  [user.id, user.id]
+);
+    
     return res.json({
       ok: true,
       token,
