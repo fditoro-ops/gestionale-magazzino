@@ -14,16 +14,9 @@ type Props = {
 type UiMovement = Movement & {
   at?: string;
   kind?: string;
-
-  documento?: string;
   documentId?: string;
   docType?: string;
   source?: string;
-
-  recipe_name?: string;
-  recipe_sku?: string;
-  sold_qty?: number;
-  line_group?: string;
 };
 
 type EventTypeFilter = "ALL" | "IN" | "OUT" | "ADJUST" | "INVENTORY";
