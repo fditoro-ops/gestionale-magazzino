@@ -83,13 +83,14 @@ export default function OrdersTable({
       </div>
 
       <div
-        style={{
-          marginTop: 10,
-          border: "1px solid #e5e7eb",
-          borderRadius: 12,
-          overflow: "hidden",
-        }}
-      >
+  style={{
+    marginTop: 10,
+    border: "1px solid #e5e7eb",
+    borderRadius: 12,
+    overflow: "visible",
+    position: "relative",
+  }}
+>
         <table
           style={{
             width: "100%",
