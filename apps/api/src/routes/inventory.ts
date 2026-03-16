@@ -122,6 +122,124 @@ router.get("/sessions", async (_req, res) => {
   }
 });
 
+// DASHBOARD INVENTARIO
+router.get("/dashboard", async (_req, res) => {
+  try {
+    const sessionsQ = await pool.query(
+      `
+      SELECT COUNT(*)::int AS total_sessions
+      FROM inventory_sessions
+      WHERE tenant_id = $1
+      `,
+      [TENANT_ID]
+    );
+
+    const appliedQ = await pool.query(
+      `
+      SELECT
+        id,
+        code,
+        name,
+        status,
+        effective_at,
+        created_at,
+        applied_at
+      FROM inventory_sessions
+      WHERE tenant_id = $1
+        AND status = 'APPLIED'
+      ORDER BY effective_at DESC, created_at DESC
+      LIMIT 1
+      `,
+      [TENANT_ID]
+    );
+
+    const openQ = await pool.query(
+      `
+      SELECT
+        id,
+        code,
+        name,
+        status,
+        effective_at,
+        created_at
+      FROM inventory_sessions
+      WHERE tenant_id = $1
+        AND status IN ('DRAFT', 'COUNTING', 'CLOSED')
+      ORDER BY effective_at DESC, created_at DESC
+      LIMIT 1
+      `,
+      [TENANT_ID]
+    );
+
+    const openSummaryQ = await pool.query(
+      `
+      SELECT
+        COUNT(*)::int AS total_lines,
+        COUNT(l.counted_qty_bt)::int AS counted_lines,
+        (COUNT(*) - COUNT(l.counted_qty_bt))::int AS missing_lines,
+        COUNT(*) FILTER (
+          WHERE l.counted_qty_bt IS NOT NULL
+            AND l.difference_qty_bt IS NOT NULL
+            AND l.difference_qty_bt <> 0
+        )::int AS different_lines
+      FROM inventory_lines l
+      INNER JOIN inventory_sessions s
+        ON s.id = l.session_id
+      WHERE s.tenant_id = $1
+        AND s.status IN ('DRAFT', 'COUNTING', 'CLOSED')
+      `,
+      [TENANT_ID]
+    );
+
+    const lastAppliedSummaryQ = await pool.query(
+      `
+      SELECT
+        COUNT(*)::int AS total_lines,
+        COUNT(*) FILTER (
+          WHERE counted_qty_bt IS NOT NULL
+            AND difference_qty_bt IS NOT NULL
+            AND difference_qty_bt <> 0
+        )::int AS different_lines
+      FROM inventory_lines
+      WHERE session_id = (
+        SELECT id
+        FROM inventory_sessions
+        WHERE tenant_id = $1
+          AND status = 'APPLIED'
+        ORDER BY effective_at DESC, created_at DESC
+        LIMIT 1
+      )
+      `,
+      [TENANT_ID]
+    );
+
+    res.json({
+      ok: true,
+      dashboard: {
+        total_sessions: sessionsQ.rows[0]?.total_sessions ?? 0,
+        last_applied_session: appliedQ.rows[0] ?? null,
+        last_open_session: openQ.rows[0] ?? null,
+        open_sessions_summary: openSummaryQ.rows[0] ?? {
+          total_lines: 0,
+          counted_lines: 0,
+          missing_lines: 0,
+          different_lines: 0,
+        },
+        last_applied_summary: lastAppliedSummaryQ.rows[0] ?? {
+          total_lines: 0,
+          different_lines: 0,
+        },
+      },
+    });
+  } catch (err: any) {
+    console.error("GET /inventory/dashboard error", err);
+    res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
+  }
+});
+
 // CREA SESSIONE
 router.post("/sessions", async (req, res) => {
   try {
