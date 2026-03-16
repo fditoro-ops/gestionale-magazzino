@@ -232,101 +232,103 @@ router.get("/dashboard", async (_req, res) => {
     );
 
     const lastAppliedValueQ = await pool.query(
-const openValueQ = await pool.query(
-  `
-  SELECT
-    COALESCE(SUM(difference_value), 0)::numeric AS inventory_loss_value_cents
-  FROM inventory_lines
-  WHERE session_id = (
-    SELECT id
-    FROM inventory_sessions
-    WHERE tenant_id = $1
-      AND status IN ('DRAFT', 'COUNTING', 'CLOSED')
-    ORDER BY effective_at DESC, created_at DESC
-    LIMIT 1
-  )
-  `,
-  [TENANT_ID]
-);
       `
-  SELECT
-    COALESCE(SUM(difference_value), 0)::numeric AS inventory_loss_value_cents
-  FROM inventory_lines
-  WHERE session_id = (
-    SELECT id
-    FROM inventory_sessions
-    WHERE tenant_id = $1
-      AND status = 'APPLIED'
-    ORDER BY effective_at DESC, created_at DESC
-    LIMIT 1
-  )
-  `,
-  [TENANT_ID]
-);
-    
+      SELECT
+        COALESCE(SUM(difference_value), 0)::numeric AS inventory_loss_value_cents
+      FROM inventory_lines
+      WHERE session_id = (
+        SELECT id
+        FROM inventory_sessions
+        WHERE tenant_id = $1
+          AND status = 'APPLIED'
+        ORDER BY effective_at DESC, created_at DESC
+        LIMIT 1
+      )
+      `,
+      [TENANT_ID]
+    );
+
+    const openValueQ = await pool.query(
+      `
+      SELECT
+        COALESCE(SUM(difference_value), 0)::numeric AS inventory_loss_value_cents
+      FROM inventory_lines
+      WHERE session_id = (
+        SELECT id
+        FROM inventory_sessions
+        WHERE tenant_id = $1
+          AND status IN ('DRAFT', 'COUNTING', 'CLOSED')
+        ORDER BY effective_at DESC, created_at DESC
+        LIMIT 1
+      )
+      `,
+      [TENANT_ID]
+    );
+
     const diffItemsQ = await pool.query(
-  `
-  SELECT
-    l.sku,
-    l.theoretical_qty_bt,
-    l.counted_qty_bt,
-    l.difference_qty_bt,
-    l.difference_value
-  FROM inventory_lines l
-  WHERE l.session_id = (
-    SELECT id
-    FROM inventory_sessions
-    WHERE tenant_id = $1
-      AND status IN ('DRAFT', 'COUNTING', 'CLOSED')
-    ORDER BY effective_at DESC, created_at DESC
-    LIMIT 1
-  )
-  AND l.difference_qty_bt IS NOT NULL
-  AND l.difference_qty_bt <> 0
-  ORDER BY ABS(l.difference_qty_bt) DESC
-  LIMIT 10
-  `,
-  [TENANT_ID]
-);
-    
- const lastAppliedInventoryLossValueCents = Number(
-  lastAppliedValueQ.rows[0]?.inventory_loss_value_cents ?? 0
-);
+      `
+      SELECT
+        l.sku,
+        l.theoretical_qty_bt,
+        l.counted_qty_bt,
+        l.difference_qty_bt,
+        l.difference_value
+      FROM inventory_lines l
+      WHERE l.session_id = (
+        SELECT id
+        FROM inventory_sessions
+        WHERE tenant_id = $1
+          AND status IN ('DRAFT', 'COUNTING', 'CLOSED')
+        ORDER BY effective_at DESC, created_at DESC
+        LIMIT 1
+      )
+      AND l.difference_qty_bt IS NOT NULL
+      AND l.difference_qty_bt <> 0
+      ORDER BY ABS(l.difference_qty_bt) DESC
+      LIMIT 10
+      `,
+      [TENANT_ID]
+    );
 
-const lastAppliedInventoryLossValueEur =
-  lastAppliedInventoryLossValueCents / 100;
+    const lastAppliedInventoryLossValueCents = Number(
+      lastAppliedValueQ.rows[0]?.inventory_loss_value_cents ?? 0
+    );
 
-const openInventoryLossValueCents = Number(
-  openValueQ.rows[0]?.inventory_loss_value_cents ?? 0
-);
+    const lastAppliedInventoryLossValueEur =
+      lastAppliedInventoryLossValueCents / 100;
 
-const openInventoryLossValueEur =
-  openInventoryLossValueCents / 100;
+    const openInventoryLossValueCents = Number(
+      openValueQ.rows[0]?.inventory_loss_value_cents ?? 0
+    );
 
-res.json({
-  ok: true,
-  dashboard: {
-    total_sessions: sessionsQ.rows[0]?.total_sessions ?? 0,
-    last_applied_session: appliedQ.rows[0] ?? null,
-    last_open_session: openQ.rows[0] ?? null,
-    open_sessions_summary: openSummaryQ.rows[0] ?? {
-      total_lines: 0,
-      counted_lines: 0,
-      missing_lines: 0,
-      different_lines: 0,
-    },
-    last_applied_summary: lastAppliedSummaryQ.rows[0] ?? {
-      total_lines: 0,
-      different_lines: 0,
-    },
-    top_differences: diffItemsQ.rows ?? [],
-   last_applied_inventory_loss_value_cents: lastAppliedInventoryLossValueCents,
-last_applied_inventory_loss_value_eur: lastAppliedInventoryLossValueEur,
-open_inventory_loss_value_cents: openInventoryLossValueCents,
-open_inventory_loss_value_eur: openInventoryLossValueEur,
-  },
-});
-    
+    const openInventoryLossValueEur =
+      openInventoryLossValueCents / 100;
+
+    res.json({
+      ok: true,
+      dashboard: {
+        total_sessions: sessionsQ.rows[0]?.total_sessions ?? 0,
+        last_applied_session: appliedQ.rows[0] ?? null,
+        last_open_session: openQ.rows[0] ?? null,
+        open_sessions_summary: openSummaryQ.rows[0] ?? {
+          total_lines: 0,
+          counted_lines: 0,
+          missing_lines: 0,
+          different_lines: 0,
+        },
+        last_applied_summary: lastAppliedSummaryQ.rows[0] ?? {
+          total_lines: 0,
+          different_lines: 0,
+        },
+        top_differences: diffItemsQ.rows ?? [],
+        last_applied_inventory_loss_value_cents:
+          lastAppliedInventoryLossValueCents,
+        last_applied_inventory_loss_value_eur:
+          lastAppliedInventoryLossValueEur,
+        open_inventory_loss_value_cents: openInventoryLossValueCents,
+        open_inventory_loss_value_eur: openInventoryLossValueEur,
+      },
+    });
   } catch (err: any) {
     console.error("GET /inventory/dashboard error", err);
     res.status(500).json({
