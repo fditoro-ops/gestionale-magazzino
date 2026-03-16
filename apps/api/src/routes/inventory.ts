@@ -36,33 +36,61 @@ function toNum(v: unknown): number | null {
  * sostituire questa funzione con la vera buildGiacenzeBT({ asOf })
  * o con una query coerente con la tua logica Movimentazione = source of truth
  */
-async function buildGiacenzeAsOf(_effectiveAt: string) {
+async function buildGiacenzeAsOf(effectiveAt: string) {
   const { rows } = await pool.query(
     `
     SELECT
-      i.sku,
-      COALESCE(SUM(
-        CASE
-          WHEN m.type = 'IN' THEN m.quantity::numeric
-          WHEN m.type = 'OUT' THEN -m.quantity::numeric
-          WHEN m.type = 'ADJUST' THEN m.quantity::numeric
-          ELSE 0
-        END
-      ), 0) AS theoretical_qty_bt
-    FROM items i
-    LEFT JOIN movements m
-      ON m.sku = i.sku
-    WHERE 1=1
-    GROUP BY i.sku
-    ORDER BY i.sku ASC
-    `
+      sku,
+      quantity,
+      type,
+      date
+    FROM movements
+    WHERE tenant_id = $1
+      AND date <= $2
+      AND sku IS NOT NULL
+      AND sku <> ''
+    ORDER BY sku ASC, date ASC, id ASC
+    `,
+    [TENANT_ID, effectiveAt]
   );
 
-  return rows.map((r) => ({
-    sku: r.sku,
-    theoretical_qty_bt: Number(r.theoretical_qty_bt || 0),
-    cost_snapshot: null as number | null,
-  }));
+  const bySku = new Map<string, number>();
+
+  for (const row of rows) {
+    const sku = String(row.sku);
+    const qty = Number(row.quantity || 0);
+    const type = String(row.type || "");
+
+    const current = bySku.get(sku) ?? 0;
+
+    if (type === "INVENTORY") {
+      bySku.set(sku, qty);
+      continue;
+    }
+
+    if (type === "IN") {
+      bySku.set(sku, current + qty);
+      continue;
+    }
+
+    if (type === "OUT") {
+      bySku.set(sku, current - qty);
+      continue;
+    }
+
+    if (type === "ADJUST") {
+      bySku.set(sku, current + qty);
+      continue;
+    }
+  }
+
+  return Array.from(bySku.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([sku, theoretical_qty_bt]) => ({
+      sku,
+      theoretical_qty_bt,
+      cost_snapshot: null as number | null,
+    }));
 }
 
 // LISTA SESSIONI
