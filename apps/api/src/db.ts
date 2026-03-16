@@ -119,6 +119,78 @@ await pool.query(`
 `);
 
 console.log("✅ Tabelle orders e order_lines pronte");
+
+  /* =========================
+     INVENTARIO
+  ========================= */
+
+  await pool.query(`
+  CREATE TABLE IF NOT EXISTS inventory_sessions (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    code TEXT NOT NULL,
+    name TEXT,
+    status TEXT NOT NULL, -- DRAFT | COUNTING | CLOSED | APPLIED | CANCELLED
+    effective_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_by TEXT,
+    notes TEXT
+  );
+`);
+
+await pool.query(`
+  CREATE UNIQUE INDEX IF NOT EXISTS ux_inventory_sessions_tenant_code
+  ON inventory_sessions (tenant_id, code);
+`);
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS ix_inventory_sessions_tenant_status
+  ON inventory_sessions (tenant_id, status);
+`);
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS ix_inventory_sessions_effective_at
+  ON inventory_sessions (effective_at);
+`);
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS inventory_lines (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    sku TEXT NOT NULL,
+
+    theoretical_qty_bt NUMERIC NOT NULL DEFAULT 0,
+    counted_qty_bt NUMERIC,
+    difference_qty_bt NUMERIC,
+
+    cost_snapshot NUMERIC,
+    difference_value NUMERIC,
+
+    note TEXT,
+    counted_by TEXT,
+    counted_at TIMESTAMP,
+
+    CONSTRAINT fk_inventory_lines_session
+      FOREIGN KEY (session_id) REFERENCES inventory_sessions(id)
+      ON DELETE CASCADE
+  );
+`);
+
+await pool.query(`
+  CREATE UNIQUE INDEX IF NOT EXISTS ux_inventory_lines_session_sku
+  ON inventory_lines (session_id, sku);
+`);
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS ix_inventory_lines_session_id
+  ON inventory_lines (session_id);
+`);
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS ix_inventory_lines_sku
+  ON inventory_lines (sku);
+`);
+  
   
   /* =========================
      CIC PENDING ROWS
