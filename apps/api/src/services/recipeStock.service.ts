@@ -140,10 +140,11 @@ const movement: Movement = {
   type: movementType as Movement["type"],
   reason: movementReason,
   date: orderDate.toISOString(),
-  note:
-    movementSign === 1
-      ? `Storno ricetta ${soldSku} scontrino ${receiptNumber || ""}`
-      : `Scarico ricetta ${soldSku} scontrino ${receiptNumber || ""}`,
+note:
+  movementSign === 1
+    ? `Storno ricetta ${soldSku} scontrino ${receiptNumber || ""}`
+    : `Scarico ricetta ${soldSku} scontrino ${receiptNumber || ""}`,
+
   documento: docId,
   tenant_id: tenantId,
 };
