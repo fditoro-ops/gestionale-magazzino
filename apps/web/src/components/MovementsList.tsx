@@ -269,7 +269,11 @@ export default function MovementsList({ movements, items }: Props) {
  const rawDocumentLabel = first.documento ?? first.documentId ?? undefined;
 const noteLabel = first.note ?? undefined;
 
-const documentLabel = formatDocumentoLabel(rawDocumentLabel, noteLabel);
+const noteWithReceipt =
+  orderedRows.find((r) => r.note && r.note.toLowerCase().includes("scontrino"))
+    ?.note ?? first.note;
+
+const documentLabel = formatDocumentoLabel(rawDocumentLabel, noteWithReceipt);
 
 const title = documentLabel
   ? `${getEventTypeLabel(firstType)} • ${documentLabel}`
