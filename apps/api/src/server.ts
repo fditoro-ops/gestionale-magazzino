@@ -848,6 +848,13 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
     await appendCicWebhookDump(debugDump);
 
     const docId = "CIC-" + String(data?.document?.id || data?.id || "");
+    const receiptNumber = String(
+  data?.document?.documentNumber ||
+  data?.document?.number ||
+  data?.document?.receiptNumber ||
+  data?.number ||
+  ""
+).trim();
     const orderDate = new Date(
       data?.document?.date ||
         data?.document?.creationDate ||
@@ -1028,15 +1035,16 @@ const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
 
     const movementSign = operation === "RECEIPT/DELETE" ? 1 : -1;
 
-    const inserted = await applyRecipeStock({
-      docId,
-      tenantId,
-      orderDate,
-      soldItems: finalResolvedItems,
-      bom: bomCache,
-      cicProductModes: cicModesBySku,
-      movementSign,
-    });
+const inserted = await applyRecipeStock({
+  docId,
+  receiptNumber,
+  tenantId,
+  orderDate,
+  soldItems: finalResolvedItems,
+  bom: bomCache,
+  cicProductModes: cicModesBySku,
+  movementSign,
+});
 
     console.log("✅ SCARICHI GENERATI:", inserted);
     return res.status(200).send("OK");
@@ -1264,20 +1272,21 @@ app.post("/debug/cic-pending-reprocess", async (_req, res) => {
       const orderDate = new Date(row.orderDate);
       const movementSign = row.operation === "RECEIPT/DELETE" ? 1 : -1;
 
-      const inserted = await applyRecipeStock({
-        docId: row.docId,
-        tenantId: row.tenantId,
-        orderDate,
-        soldItems: [
-          {
-            sku: resolvedSku,
-            qty: Number(row.qty || 0),
-          },
-        ],
-        bom: bomCache,
-        cicProductModes: cicModesBySku,
-        movementSign,
-      });
+const inserted = await applyRecipeStock({
+  docId: row.docId,
+  receiptNumber: row.receiptNumber || "",
+  tenantId: row.tenantId,
+  orderDate,
+  soldItems: [
+    {
+      sku: resolvedSku,
+      qty: Number(row.qty || 0),
+    },
+  ],
+  bom: bomCache,
+  cicProductModes: cicModesBySku,
+  movementSign,
+});
 
       await markPendingRowProcessed(row.id);
 
