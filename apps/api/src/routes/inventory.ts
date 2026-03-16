@@ -37,7 +37,7 @@ function toNum(v: unknown): number | null {
  * o con una query coerente con la tua logica Movimentazione = source of truth
  */
 async function buildGiacenzeAsOf(effectiveAt: string) {
-  const { rows } = await pool.query(
+  const movementsQ = await pool.query(
     `
     SELECT
       sku,
@@ -54,9 +54,27 @@ async function buildGiacenzeAsOf(effectiveAt: string) {
     [TENANT_ID, effectiveAt]
   );
 
+  const itemsQ = await pool.query(
+    `
+    SELECT
+      sku,
+      "lastCostCents"
+    FROM "Item"
+    `
+  );
+
+  const costBySku = new Map<string, number | null>(
+    itemsQ.rows.map((row: any) => [
+      String(row.sku ?? "").toUpperCase().trim(),
+      row.lastCostCents !== null && row.lastCostCents !== undefined
+        ? Number(row.lastCostCents)
+        : null,
+    ])
+  );
+
   const bySku = new Map<string, number>();
 
-  for (const row of rows) {
+  for (const row of movementsQ.rows) {
     const sku = String(row.sku);
     const qty = Number(row.quantity || 0);
     const type = String(row.type || "");
@@ -89,7 +107,7 @@ async function buildGiacenzeAsOf(effectiveAt: string) {
     .map(([sku, theoretical_qty_bt]) => ({
       sku,
       theoretical_qty_bt,
-      cost_snapshot: null as number | null,
+      cost_snapshot: costBySku.get(String(sku).toUpperCase().trim()) ?? null,
     }));
 }
 
