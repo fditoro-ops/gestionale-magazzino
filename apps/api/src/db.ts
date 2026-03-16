@@ -73,6 +73,52 @@ await pool.query(`
 `);
   
  console.log("✅ Tabella suppliers pronta"); 
+/* =========================
+     ORDERS
+  ========================= */
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS orders (
+    order_id TEXT PRIMARY KEY,
+    supplier TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    sent_at TIMESTAMPTZ,
+    received_at TIMESTAMPTZ,
+    notes TEXT
+  )
+`);
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS order_lines (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+    sku TEXT NOT NULL,
+    qty_ordered_conf NUMERIC NOT NULL,
+    qty_received_conf NUMERIC NOT NULL DEFAULT 0
+  )
+`);
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_orders_created_at
+  ON orders (created_at)
+`);
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_orders_status
+  ON orders (status)
+`);
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_order_lines_order_id
+  ON order_lines (order_id)
+`);
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_order_lines_sku
+  ON order_lines (sku)
+`);
+
+console.log("✅ Tabelle orders e order_lines pronte");
   
   /* =========================
      CIC PENDING ROWS
