@@ -15,7 +15,7 @@ type InventorySession = {
 
 const API_BASE =
   import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
-  "https://gestionale-magazzino-8cdo.onrender.com";
+  "https://gestionale-magazzino-1-2dnc.onrender.com";
 
 export default function InventoryPage() {
   const [sessions, setSessions] = useState<InventorySession[]>([]);
@@ -70,6 +70,63 @@ export default function InventoryPage() {
     }
   }
 
+  async function generateLines(id: string) {
+    try {
+      const res = await fetch(
+        `${API_BASE}/inventory/sessions/${id}/generate-lines`,
+        { method: "POST" }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Errore generazione righe");
+      }
+
+      await loadSessions();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }
+
+  async function closeSession(id: string) {
+    try {
+      const res = await fetch(
+        `${API_BASE}/inventory/sessions/${id}/close`,
+        { method: "POST" }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Errore chiusura inventario");
+      }
+
+      await loadSessions();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }
+
+  async function applySession(id: string) {
+    try {
+      const res = await fetch(
+        `${API_BASE}/inventory/sessions/${id}/apply`,
+        { method: "POST" }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Errore applicazione inventario");
+      }
+
+      await loadSessions();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }
+
   useEffect(() => {
     loadSessions();
   }, []);
@@ -108,13 +165,14 @@ export default function InventoryPage() {
                 <th style={styles.th}>Stato</th>
                 <th style={styles.th}>Data inventario</th>
                 <th style={styles.th}>Creato da</th>
+                <th style={styles.th}>Azioni</th>
               </tr>
             </thead>
 
             <tbody>
               {sessions.length === 0 ? (
                 <tr>
-                  <td style={styles.empty} colSpan={5}>
+                  <td style={styles.empty} colSpan={6}>
                     Nessuna sessione inventario trovata
                   </td>
                 </tr>
@@ -133,6 +191,37 @@ export default function InventoryPage() {
                     </td>
 
                     <td style={styles.td}>{s.created_by || "-"}</td>
+
+                    <td style={styles.td}>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {s.status === "DRAFT" && (
+                          <button
+                            style={styles.actionBtn}
+                            onClick={() => generateLines(s.id)}
+                          >
+                            Genera righe
+                          </button>
+                        )}
+
+                        {s.status === "COUNTING" && (
+                          <button
+                            style={styles.actionBtn}
+                            onClick={() => closeSession(s.id)}
+                          >
+                            Chiudi
+                          </button>
+                        )}
+
+                        {s.status === "CLOSED" && (
+                          <button
+                            style={styles.actionBtn}
+                            onClick={() => applySession(s.id)}
+                          >
+                            Applica
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -183,9 +272,7 @@ function badgeStyle(status: InventorySession["status"]): React.CSSProperties {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  page: {
-    padding: 16,
-  },
+  page: { padding: 16 },
 
   header: {
     display: "flex",
@@ -223,6 +310,16 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "10px 14px",
     cursor: "pointer",
     fontWeight: 600,
+  },
+
+  actionBtn: {
+    border: "1px solid #ddd",
+    background: "#fff",
+    borderRadius: 8,
+    padding: "6px 10px",
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: 12,
   },
 
   info: {
