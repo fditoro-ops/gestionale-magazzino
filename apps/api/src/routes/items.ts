@@ -4,8 +4,118 @@ import { items as defaultItems } from "../data/items.js";
 import { loadItems, saveItems } from "../data/items.store.js";
 import { CreateItemSchema, UpdateItemSchema } from "../schemas/item.schema.js";
 import { getStockBtForSku } from "../services/stock.service.js";
+import { pool } from "../db.js";
 
 const router = Router();
+
+// MIGRA ITEMS FILE -> DB
+router.post("/migrate-to-db", async (_req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const fileItems = loadItems(defaultItems).map(normalizeItem);
+
+    await client.query("BEGIN");
+
+    let inserted = 0;
+    let updated = 0;
+
+    for (const item of fileItems) {
+      const existing = await client.query(
+        `
+        SELECT id
+        FROM "Item"
+        WHERE sku = $1
+        LIMIT 1
+        `,
+        [item.sku]
+      );
+
+      if (existing.rows[0]) {
+        await client.query(
+          `
+          UPDATE "Item"
+          SET
+            name = $2,
+            supplier = $3,
+            "updatedAt" = NOW(),
+            "lastCostCents" = $4,
+            "costCurrency" = $5,
+            active = $6,
+            "categoryId" = $7,
+            brand = $8,
+            "packSize" = $9
+          WHERE sku = $1
+          `,
+          [
+            item.sku,
+            item.name ?? null,
+            item.supplier ?? null,
+            item.lastCostCents ?? null,
+            item.costCurrency ?? "EUR",
+            typeof item.active === "boolean" ? item.active : true,
+            item.categoryId ?? null,
+            item.brand ?? null,
+            item.packSize ?? null,
+          ]
+        );
+        updated++;
+      } else {
+        await client.query(
+          `
+          INSERT INTO "Item" (
+            id,
+            sku,
+            name,
+            supplier,
+            "createdAt",
+            "updatedAt",
+            "lastCostCents",
+            "costCurrency",
+            active,
+            "categoryId",
+            brand,
+            "packSize"
+          )
+          VALUES ($1,$2,$3,$4,NOW(),NOW(),$5,$6,$7,$8,$9,$10)
+          `,
+          [
+            item.itemId ?? `itm_${Date.now()}_${item.sku}`,
+            item.sku,
+            item.name ?? null,
+            item.supplier ?? null,
+            item.lastCostCents ?? null,
+            item.costCurrency ?? "EUR",
+            typeof item.active === "boolean" ? item.active : true,
+            item.categoryId ?? null,
+            item.brand ?? null,
+            item.packSize ?? null,
+          ]
+        );
+        inserted++;
+      }
+    }
+
+    await client.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      total: fileItems.length,
+      inserted,
+      updated,
+    });
+  } catch (err: any) {
+    await client.query("ROLLBACK");
+    console.error("POST /items/migrate-to-db error", err);
+    return res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
 
 const ALLOWED_CATEGORIES = new Set([
   "bevande",
