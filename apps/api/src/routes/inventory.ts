@@ -490,7 +490,9 @@ router.post("/sessions/:id/apply", async (req, res) => {
       });
     }
 
-    const missing = lines.filter((x) => x.counted_qty_bt === null);
+    const missing = lines.filter(
+  (x) => x.counted_qty_bt === null || x.counted_qty_bt === undefined
+);
     if (missing.length > 0) {
       await client.query("ROLLBACK");
       return res.status(400).json({
@@ -510,6 +512,25 @@ router.post("/sessions/:id/apply", async (req, res) => {
       [TENANT_ID, session.effective_at]
     );
 
+    const existingMovements = await client.query(
+  `
+  SELECT COUNT(*)::int AS c
+  FROM movements
+  WHERE tenant_id = $1
+    AND documento = $2
+    AND type = 'INVENTORY'
+  `,
+  [TENANT_ID, session.code]
+);
+
+if (Number(existingMovements.rows[0]?.c || 0) > 0) {
+  await client.query("ROLLBACK");
+  return res.status(400).json({
+    ok: false,
+    error: "Movimenti INVENTORY già presenti per questa sessione",
+  });
+}
+    
     const futureCount = Number(futureMovements.rows[0]?.c || 0);
 
     for (const line of lines) {
