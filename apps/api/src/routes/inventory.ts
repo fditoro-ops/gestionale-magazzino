@@ -232,7 +232,23 @@ router.get("/dashboard", async (_req, res) => {
     );
 
     const lastAppliedValueQ = await pool.query(
+const openValueQ = await pool.query(
   `
+  SELECT
+    COALESCE(SUM(difference_value), 0)::numeric AS inventory_loss_value_cents
+  FROM inventory_lines
+  WHERE session_id = (
+    SELECT id
+    FROM inventory_sessions
+    WHERE tenant_id = $1
+      AND status IN ('DRAFT', 'COUNTING', 'CLOSED')
+    ORDER BY effective_at DESC, created_at DESC
+    LIMIT 1
+  )
+  `,
+  [TENANT_ID]
+);
+      `
   SELECT
     COALESCE(SUM(difference_value), 0)::numeric AS inventory_loss_value_cents
   FROM inventory_lines
@@ -254,13 +270,14 @@ router.get("/dashboard", async (_req, res) => {
     l.sku,
     l.theoretical_qty_bt,
     l.counted_qty_bt,
-    l.difference_qty_bt
+    l.difference_qty_bt,
+    l.difference_value
   FROM inventory_lines l
   WHERE l.session_id = (
     SELECT id
     FROM inventory_sessions
     WHERE tenant_id = $1
-      AND status = 'APPLIED'
+      AND status IN ('DRAFT', 'COUNTING', 'CLOSED')
     ORDER BY effective_at DESC, created_at DESC
     LIMIT 1
   )
@@ -271,12 +288,20 @@ router.get("/dashboard", async (_req, res) => {
   `,
   [TENANT_ID]
 );
-
- const inventoryLossValueCents = Number(
+    
+ const lastAppliedInventoryLossValueCents = Number(
   lastAppliedValueQ.rows[0]?.inventory_loss_value_cents ?? 0
 );
 
-const inventoryLossValueEur = inventoryLossValueCents / 100;
+const lastAppliedInventoryLossValueEur =
+  lastAppliedInventoryLossValueCents / 100;
+
+const openInventoryLossValueCents = Number(
+  openValueQ.rows[0]?.inventory_loss_value_cents ?? 0
+);
+
+const openInventoryLossValueEur =
+  openInventoryLossValueCents / 100;
 
 res.json({
   ok: true,
@@ -295,8 +320,10 @@ res.json({
       different_lines: 0,
     },
     top_differences: diffItemsQ.rows ?? [],
-    inventory_loss_value_cents: inventoryLossValueCents,
-    inventory_loss_value_eur: inventoryLossValueEur,
+   last_applied_inventory_loss_value_cents: lastAppliedInventoryLossValueCents,
+last_applied_inventory_loss_value_eur: lastAppliedInventoryLossValueEur,
+open_inventory_loss_value_cents: openInventoryLossValueCents,
+open_inventory_loss_value_eur: openInventoryLossValueEur,
   },
 });
     
