@@ -432,6 +432,61 @@ router.post("/sessions/:id/close", async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+
+// RIAPRI SESSIONE
+router.post("/sessions/:id/reopen", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const s = await pool.query(
+      `
+      SELECT *
+      FROM inventory_sessions
+      WHERE id = $1
+        AND tenant_id = $2
+      LIMIT 1
+      `,
+      [id, TENANT_ID]
+    );
+
+    const session = s.rows[0];
+
+    if (!session) {
+      return res.status(404).json({
+        ok: false,
+        error: "Sessione non trovata",
+      });
+    }
+
+    if (session.status !== "CLOSED") {
+      return res.status(400).json({
+        ok: false,
+        error: "Solo una sessione CLOSED può essere riaperta",
+      });
+    }
+
+    const { rows } = await pool.query(
+      `
+      UPDATE inventory_sessions
+      SET status = 'COUNTING'
+      WHERE id = $1
+      RETURNING *
+      `,
+      [id]
+    );
+
+    res.json({
+      ok: true,
+      session: rows[0],
+    });
+
+  } catch (err:any) {
+    console.error("POST /inventory/sessions/:id/reopen error", err);
+    res.status(500).json({ ok:false, error: err.message });
+  }
+});
+
+
 // APPLICA INVENTARIO
 router.post("/sessions/:id/apply", async (req, res) => {
   const client = await pool.connect();
@@ -594,5 +649,83 @@ if (Number(existingMovements.rows[0]?.c || 0) > 0) {
     client.release();
   }
 });
+
+// ANNULLA SESSIONE
+router.post("/sessions/:id/cancel", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const s = await pool.query(
+      `
+      SELECT *
+      FROM inventory_sessions
+      WHERE id = $1
+        AND tenant_id = $2
+      LIMIT 1
+      `,
+      [id, TENANT_ID]
+    );
+
+    const session = s.rows[0];
+
+    if (!session) {
+      return res.status(404).json({
+        ok: false,
+        error: "Sessione non trovata",
+      });
+    }
+
+    if (session.status === "APPLIED") {
+      return res.status(400).json({
+        ok: false,
+        error: "Una sessione APPLIED non può essere annullata",
+      });
+    }
+
+    const { rows } = await pool.query(
+      `
+      UPDATE inventory_sessions
+      SET status = 'CANCELLED'
+      WHERE id = $1
+      RETURNING *
+      `,
+      [id]
+    );
+
+    res.json({
+      ok: true,
+      session: rows[0],
+    });
+
+  } catch (err:any) {
+    console.error("POST /inventory/sessions/:id/cancel error", err);
+    res.status(500).json({ ok:false, error: err.message });
+  }
+});
+// SUMMARY SESSIONE
+router.get("/sessions/:id/summary", async (req,res)=>{
+  try {
+
+    const { id } = req.params;
+
+    const { rows } = await pool.query(`
+      SELECT
+        COUNT(*) AS total,
+        COUNT(counted_qty_bt) AS counted,
+        COUNT(*) - COUNT(counted_qty_bt) AS missing
+      FROM inventory_lines
+      WHERE session_id = $1
+    `,[id])
+
+    res.json({
+      ok:true,
+      summary: rows[0]
+    })
+
+  } catch(err:any){
+    console.error("GET /inventory/sessions/:id/summary error",err)
+    res.status(500).json({ok:false,error:err.message})
+  }
+})
 
 export default router;
