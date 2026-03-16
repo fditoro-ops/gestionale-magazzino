@@ -213,24 +213,50 @@ router.get("/dashboard", async (_req, res) => {
       [TENANT_ID]
     );
 
-    res.json({
-      ok: true,
-      dashboard: {
-        total_sessions: sessionsQ.rows[0]?.total_sessions ?? 0,
-        last_applied_session: appliedQ.rows[0] ?? null,
-        last_open_session: openQ.rows[0] ?? null,
-        open_sessions_summary: openSummaryQ.rows[0] ?? {
-          total_lines: 0,
-          counted_lines: 0,
-          missing_lines: 0,
-          different_lines: 0,
-        },
-        last_applied_summary: lastAppliedSummaryQ.rows[0] ?? {
-          total_lines: 0,
-          different_lines: 0,
-        },
-      },
-    });
+    const diffItemsQ = await pool.query(
+  `
+  SELECT
+    l.sku,
+    l.theoretical_qty_bt,
+    l.counted_qty_bt,
+    l.difference_qty_bt
+  FROM inventory_lines l
+  WHERE l.session_id = (
+    SELECT id
+    FROM inventory_sessions
+    WHERE tenant_id = $1
+      AND status = 'APPLIED'
+    ORDER BY effective_at DESC, created_at DESC
+    LIMIT 1
+  )
+  AND l.difference_qty_bt IS NOT NULL
+  AND l.difference_qty_bt <> 0
+  ORDER BY ABS(l.difference_qty_bt) DESC
+  LIMIT 10
+  `,
+  [TENANT_ID]
+);
+    
+res.json({
+  ok: true,
+  dashboard: {
+    total_sessions: sessionsQ.rows[0]?.total_sessions ?? 0,
+    last_applied_session: appliedQ.rows[0] ?? null,
+    last_open_session: openQ.rows[0] ?? null,
+    open_sessions_summary: openSummaryQ.rows[0] ?? {
+      total_lines: 0,
+      counted_lines: 0,
+      missing_lines: 0,
+      different_lines: 0,
+    },
+    last_applied_summary: lastAppliedSummaryQ.rows[0] ?? {
+      total_lines: 0,
+      different_lines: 0,
+    },
+    top_differences: diffItemsQ.rows ?? []
+  },
+});
+    
   } catch (err: any) {
     console.error("GET /inventory/dashboard error", err);
     res.status(500).json({
