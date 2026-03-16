@@ -121,6 +121,58 @@ await pool.query(`
 console.log("✅ Tabelle orders e order_lines pronte");
 
   /* =========================
+     ITEMS
+  ========================= */
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS "Item" (
+      id TEXT PRIMARY KEY,
+      sku TEXT UNIQUE NOT NULL,
+      name TEXT,
+      supplier TEXT,
+      "createdAt" TIMESTAMP DEFAULT NOW(),
+      "updatedAt" TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    ALTER TABLE "Item"
+    ADD COLUMN IF NOT EXISTS "lastCostCents" INTEGER;
+  `);
+
+  await pool.query(`
+    ALTER TABLE "Item"
+    ADD COLUMN IF NOT EXISTS "costCurrency" TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE "Item"
+    ADD COLUMN IF NOT EXISTS "active" BOOLEAN DEFAULT true;
+  `);
+
+  await pool.query(`
+    ALTER TABLE "Item"
+    ADD COLUMN IF NOT EXISTS "categoryId" TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE "Item"
+    ADD COLUMN IF NOT EXISTS "brand" TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE "Item"
+    ADD COLUMN IF NOT EXISTS "packSize" NUMERIC;
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_item_sku
+    ON "Item" (sku)
+  `);
+
+  console.log("✅ Tabella Item pronta");
+  
+  /* =========================
      INVENTARIO
   ========================= */
 
