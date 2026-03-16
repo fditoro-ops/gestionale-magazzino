@@ -51,6 +51,20 @@ function formatDateTime(value?: string) {
   return dt.toLocaleString();
 }
 
+function formatDocumentoLabel(doc?: string, note?: string) {
+  const rawDoc = String(doc ?? "").trim();
+  if (!rawDoc) return "";
+
+  if (rawDoc.startsWith("CIC-")) {
+    const match = String(note ?? "").match(/scontrino\s+(\d+)/i);
+    if (match?.[1]) {
+      return `Scontrino ${match[1]}`;
+    }
+  }
+
+  return rawDoc;
+}
+
 function normalizeText(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
 }
@@ -252,11 +266,12 @@ export default function MovementsList({ movements, items }: Props) {
 
       const recipeGroups = Array.from(recipeMap.values());
 
-      const documentLabel = first.documento || first.documentId || "";
+ const rawDocumentLabel = first.documento || first.documentId || "";
+const documentLabel = formatDocumentoLabel(rawDocumentLabel, first.note);
 
-      const title = documentLabel
-        ? `${getEventTypeLabel(firstType)} • ${documentLabel}`
-        : `${getEventTypeLabel(firstType)} • ${formatDateTime(firstDate)}`;
+const title = documentLabel
+  ? `${getEventTypeLabel(firstType)} • ${documentLabel}`
+  : `${getEventTypeLabel(firstType)} • ${formatDateTime(firstDate)}`;
 
       const subtitleParts = [
         first.source ? `Origine: ${first.source}` : "",
