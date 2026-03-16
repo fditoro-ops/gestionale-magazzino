@@ -18,6 +18,7 @@ import ProtectedRoute from "./auth/ProtectedRoute";
 import AuthBar from "./components/AuthBar";
 import { authFetch } from "./api/authFetch";
 import UsersPage from "./components/UsersPage";
+import InventoryPage from "./components/InventoryPage";
 
 type WarehouseRow = {
   itemId: string;
@@ -129,6 +130,8 @@ function CoreApp() {
 
           {tab === "items" && <ItemsAdmin />}
 
+          {tab === "inventory" && <InventoryPage />}
+          
           {tab === "orders" && (
             <OrdersPage
               items={Array.isArray(items) ? items : []}
