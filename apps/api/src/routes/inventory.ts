@@ -619,14 +619,16 @@ if (Number(existingMovements.rows[0]?.c || 0) > 0) {
     }
 
     const updated = await client.query(
-      `
-      UPDATE inventory_sessions
-      SET status = 'APPLIED'
-      WHERE id = $1
-      RETURNING *
-      `,
-      [id]
-    );
+  `
+  UPDATE inventory_sessions
+  SET
+    status = 'APPLIED',
+    applied_at = NOW()
+  WHERE id = $1
+  RETURNING *
+  `,
+  [id]
+);
 
     await client.query("COMMIT");
 
@@ -681,7 +683,13 @@ router.post("/sessions/:id/cancel", async (req, res) => {
         error: "Una sessione APPLIED non può essere annullata",
       });
     }
-
+if (session.status === "CANCELLED") {
+  return res.status(400).json({
+    ok: false,
+    error: "La sessione è già CANCELLED",
+  });
+}
+    
     const { rows } = await pool.query(
       `
       UPDATE inventory_sessions
@@ -702,30 +710,60 @@ router.post("/sessions/:id/cancel", async (req, res) => {
     res.status(500).json({ ok:false, error: err.message });
   }
 });
-// SUMMARY SESSIONE
-router.get("/sessions/:id/summary", async (req,res)=>{
-  try {
 
+// SUMMARY SESSIONE
+router.get("/sessions/:id/summary", async (req, res) => {
+  try {
     const { id } = req.params;
 
-    const { rows } = await pool.query(`
+    const s = await pool.query(
+      `
+      SELECT *
+      FROM inventory_sessions
+      WHERE id = $1
+        AND tenant_id = $2
+      LIMIT 1
+      `,
+      [id, TENANT_ID]
+    );
+
+    const session = s.rows[0];
+
+    if (!session) {
+      return res.status(404).json({
+        ok: false,
+        error: "Sessione non trovata",
+      });
+    }
+
+    const { rows } = await pool.query(
+      `
       SELECT
-        COUNT(*) AS total,
-        COUNT(counted_qty_bt) AS counted,
-        COUNT(*) - COUNT(counted_qty_bt) AS missing
+        COUNT(*)::int AS total_lines,
+        COUNT(counted_qty_bt)::int AS counted_lines,
+        (COUNT(*) - COUNT(counted_qty_bt))::int AS missing_lines,
+        COUNT(*) FILTER (
+          WHERE counted_qty_bt IS NOT NULL
+            AND difference_qty_bt IS NOT NULL
+            AND difference_qty_bt <> 0
+        )::int AS different_lines
       FROM inventory_lines
       WHERE session_id = $1
-    `,[id])
+      `,
+      [id]
+    );
 
     res.json({
-      ok:true,
-      summary: rows[0]
-    })
-
-  } catch(err:any){
-    console.error("GET /inventory/sessions/:id/summary error",err)
-    res.status(500).json({ok:false,error:err.message})
+      ok: true,
+      session_id: id,
+      summary: rows[0],
+    });
+  } catch (err: any) {
+    console.error("GET /inventory/sessions/:id/summary error", err);
+    res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
   }
-})
-
+});
 export default router;
