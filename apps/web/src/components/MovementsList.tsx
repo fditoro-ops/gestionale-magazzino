@@ -266,8 +266,10 @@ export default function MovementsList({ movements, items }: Props) {
 
       const recipeGroups = Array.from(recipeMap.values());
 
- const rawDocumentLabel = first.documento || first.documentId || "";
-const documentLabel = formatDocumentoLabel(rawDocumentLabel, first.note);
+ const rawDocumentLabel = first.documento ?? first.documentId ?? undefined;
+const noteLabel = first.note ?? undefined;
+
+const documentLabel = formatDocumentoLabel(rawDocumentLabel, noteLabel);
 
 const title = documentLabel
   ? `${getEventTypeLabel(firstType)} • ${documentLabel}`
