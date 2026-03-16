@@ -6,6 +6,7 @@ export type TabKey =
   | "movements"
   | "warehouse"
   | "items"
+  | "inventory"
   | "orders"
   | "suppliers"
   | "users";
@@ -62,6 +63,12 @@ export default function AppLayout({
             Articoli
           </SideItem>
 
+<SideItem
+  active={tab === "inventory"}
+  onClick={() => onTabChange("inventory")}
+  label="Inventario"
+/>
+          
           <SideItem
             active={tab === "orders"}
             onClick={() => onTabChange("orders")}
