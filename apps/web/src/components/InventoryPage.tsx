@@ -42,6 +42,34 @@ export default function InventoryPage() {
     }
   }
 
+  async function createSession() {
+    try {
+      const now = new Date().toISOString();
+
+      const res = await fetch(`${API_BASE}/inventory/sessions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "Inventario manuale",
+          effective_at: now,
+          created_by: "core-ui",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Errore creazione inventario");
+      }
+
+      await loadSessions();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }
+
   useEffect(() => {
     loadSessions();
   }, []);
@@ -56,9 +84,15 @@ export default function InventoryPage() {
           </div>
         </div>
 
-        <button style={styles.reloadBtn} onClick={loadSessions}>
-          Ricarica
-        </button>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button style={styles.primaryBtn} onClick={createSession}>
+            + Nuovo inventario
+          </button>
+
+          <button style={styles.reloadBtn} onClick={loadSessions}>
+            Ricarica
+          </button>
+        </div>
       </div>
 
       {loading && <div style={styles.info}>Caricamento inventari...</div>}
@@ -76,6 +110,7 @@ export default function InventoryPage() {
                 <th style={styles.th}>Creato da</th>
               </tr>
             </thead>
+
             <tbody>
               {sessions.length === 0 ? (
                 <tr>
@@ -88,12 +123,15 @@ export default function InventoryPage() {
                   <tr key={s.id}>
                     <td style={styles.td}>{s.code}</td>
                     <td style={styles.td}>{s.name || "-"}</td>
+
                     <td style={styles.td}>
                       <span style={badgeStyle(s.status)}>{s.status}</span>
                     </td>
+
                     <td style={styles.td}>
                       {formatDateTime(s.effective_at)}
                     </td>
+
                     <td style={styles.td}>{s.created_by || "-"}</td>
                   </tr>
                 ))
@@ -114,30 +152,33 @@ function formatDateTime(value?: string | null) {
 }
 
 function badgeStyle(status: InventorySession["status"]): React.CSSProperties {
-  const common: React.CSSProperties = {
+  const base: React.CSSProperties = {
     display: "inline-block",
     padding: "4px 10px",
     borderRadius: 999,
     fontSize: 12,
     fontWeight: 700,
     border: "1px solid #ddd",
-    background: "#f7f7f7",
-    color: "#333",
   };
 
   switch (status) {
     case "DRAFT":
-      return { ...common, background: "#fff7d6", borderColor: "#f1d36b" };
+      return { ...base, background: "#fff7d6", borderColor: "#f1d36b" };
+
     case "COUNTING":
-      return { ...common, background: "#dff3ff", borderColor: "#86c8f2" };
+      return { ...base, background: "#dff3ff", borderColor: "#86c8f2" };
+
     case "CLOSED":
-      return { ...common, background: "#f3e8ff", borderColor: "#c7a5ff" };
+      return { ...base, background: "#f3e8ff", borderColor: "#c7a5ff" };
+
     case "APPLIED":
-      return { ...common, background: "#e3f7e8", borderColor: "#8ad19a" };
+      return { ...base, background: "#e3f7e8", borderColor: "#8ad19a" };
+
     case "CANCELLED":
-      return { ...common, background: "#f3f3f3", borderColor: "#cfcfcf" };
+      return { ...base, background: "#f3f3f3", borderColor: "#cfcfcf" };
+
     default:
-      return common;
+      return base;
   }
 }
 
@@ -145,6 +186,7 @@ const styles: Record<string, React.CSSProperties> = {
   page: {
     padding: 16,
   },
+
   header: {
     display: "flex",
     justifyContent: "space-between",
@@ -152,15 +194,28 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 16,
     gap: 12,
   },
+
   title: {
     margin: 0,
     fontSize: 24,
   },
+
   subtitle: {
     marginTop: 4,
     color: "#666",
     fontSize: 14,
   },
+
+  primaryBtn: {
+    border: "none",
+    background: "#0B7285",
+    color: "white",
+    borderRadius: 10,
+    padding: "10px 14px",
+    cursor: "pointer",
+    fontWeight: 700,
+  },
+
   reloadBtn: {
     border: "1px solid #ddd",
     background: "#fff",
@@ -169,11 +224,13 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontWeight: 600,
   },
+
   info: {
     padding: 12,
     borderRadius: 10,
     background: "#f7f7f7",
   },
+
   error: {
     padding: 12,
     borderRadius: 10,
@@ -181,16 +238,19 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#8a1f1f",
     border: "1px solid #f2b1b1",
   },
+
   tableWrap: {
     overflowX: "auto",
     border: "1px solid #e5e5e5",
     borderRadius: 14,
     background: "#fff",
   },
+
   table: {
     width: "100%",
     borderCollapse: "collapse",
   },
+
   th: {
     textAlign: "left",
     padding: 12,
@@ -199,11 +259,13 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#555",
     background: "#fafafa",
   },
+
   td: {
     padding: 12,
     borderBottom: "1px solid #f2f2f2",
     fontSize: 14,
   },
+
   empty: {
     padding: 20,
     textAlign: "center",
