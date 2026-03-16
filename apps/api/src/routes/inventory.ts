@@ -231,6 +231,23 @@ router.get("/dashboard", async (_req, res) => {
       [TENANT_ID]
     );
 
+    const lastAppliedValueQ = await pool.query(
+  `
+  SELECT
+    COALESCE(SUM(difference_value), 0)::numeric AS inventory_loss_value_cents
+  FROM inventory_lines
+  WHERE session_id = (
+    SELECT id
+    FROM inventory_sessions
+    WHERE tenant_id = $1
+      AND status = 'APPLIED'
+    ORDER BY effective_at DESC, created_at DESC
+    LIMIT 1
+  )
+  `,
+  [TENANT_ID]
+);
+    
     const diffItemsQ = await pool.query(
   `
   SELECT
@@ -254,7 +271,13 @@ router.get("/dashboard", async (_req, res) => {
   `,
   [TENANT_ID]
 );
-    
+
+ const inventoryLossValueCents = Number(
+  lastAppliedValueQ.rows[0]?.inventory_loss_value_cents ?? 0
+);
+
+const inventoryLossValueEur = inventoryLossValueCents / 100;
+
 res.json({
   ok: true,
   dashboard: {
@@ -271,7 +294,9 @@ res.json({
       total_lines: 0,
       different_lines: 0,
     },
-    top_differences: diffItemsQ.rows ?? []
+    top_differences: diffItemsQ.rows ?? [],
+    inventory_loss_value_cents: inventoryLossValueCents,
+    inventory_loss_value_eur: inventoryLossValueEur,
   },
 });
     
