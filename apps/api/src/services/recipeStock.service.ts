@@ -15,6 +15,7 @@ type CicProductMap = Record<string, CicProductMode>;
 
 export async function applyRecipeStock({
   docId,
+  receiptNumber,
   tenantId,
   orderDate,
   soldItems,
@@ -23,13 +24,15 @@ export async function applyRecipeStock({
   movementSign,
 }: {
   docId: string;
+  receiptNumber?: string;
   tenantId: string;
   orderDate: Date;
   soldItems: { sku: string; qty: number }[];
   bom: BomMap;
   cicProductModes: CicProductMap;
   movementSign: 1 | -1;
-}) {
+})
+
   const items = loadItems();
   const movements = await loadMovements();
 
@@ -130,20 +133,20 @@ export async function applyRecipeStock({
 
       if (!quantity || quantity <= 0) continue;
 
-      const movement: Movement = {
-        id: randomUUID(),
-        sku: ingredientSku,
-        quantity,
-        type: movementType as Movement["type"],
-        reason: movementReason,
-        date: orderDate.toISOString(),
-        note:
-          movementSign === 1
-            ? `Storno ricetta ${soldSku} doc ${docId}`
-            : `Scarico ricetta ${soldSku} doc ${docId}`,
-        documento: docId,
-        tenant_id: tenantId,
-      };
+const movement: Movement = {
+  id: randomUUID(),
+  sku: ingredientSku,
+  quantity,
+  type: movementType as Movement["type"],
+  reason: movementReason,
+  date: orderDate.toISOString(),
+  note:
+    movementSign === 1
+      ? `Storno ricetta ${soldSku} scontrino ${receiptNumber || ""}`
+      : `Scarico ricetta ${soldSku} scontrino ${receiptNumber || ""}`,
+  documento: docId,
+  tenant_id: tenantId,
+};
 
       newMovements.push(movement);
 
