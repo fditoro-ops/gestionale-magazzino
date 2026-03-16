@@ -66,8 +66,9 @@ export default function AppLayout({
 <SideItem
   active={tab === "inventory"}
   onClick={() => onTabChange("inventory")}
-  label="Inventario"
-/>
+>
+  Inventario
+</SideItem>
           
           <SideItem
             active={tab === "orders"}
