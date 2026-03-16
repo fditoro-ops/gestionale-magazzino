@@ -31,8 +31,8 @@ export async function applyRecipeStock({
   bom: BomMap;
   cicProductModes: CicProductMap;
   movementSign: 1 | -1;
-})
-
+}) {
+  
   const items = loadItems();
   const movements = await loadMovements();
 
