@@ -147,8 +147,18 @@ await pool.query(`
   CREATE INDEX IF NOT EXISTS ix_inventory_sessions_tenant_status
   ON inventory_sessions (tenant_id, status);
 `);
-
+  
 await pool.query(`
+  ALTER TABLE inventory_sessions
+  ADD COLUMN IF NOT EXISTS applied_at TIMESTAMP;
+`);
+  
+await pool.query(`
+  ALTER TABLE inventory_sessions
+  ADD COLUMN IF NOT EXISTS effective_at TIMESTAMP;
+`);
+  
+  await pool.query(`
   CREATE INDEX IF NOT EXISTS ix_inventory_sessions_effective_at
   ON inventory_sessions (effective_at);
 `);
