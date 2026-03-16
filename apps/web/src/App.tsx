@@ -128,19 +128,19 @@ function CoreApp() {
             />
           )}
 
-          {tab === "items" && <ItemsAdmin />}
+{tab === "items" && <ItemsAdmin />}
 
-          {tab === "inventory" && <InventoryPage />}
-          
-          {tab === "orders" && (
-            <OrdersPage
-              items={Array.isArray(items) ? items : []}
-              warehouse={Array.isArray(warehouse) ? warehouse : []}
-              onReload={reload}
-            />
-          )}
+{tab === "inventory" && <InventoryPage />}
 
-          {tab === "suppliers" && <SuppliersPage />}
+{tab === "orders" && (
+  <OrdersPage
+    items={Array.isArray(items) ? items : []}
+    warehouse={Array.isArray(warehouse) ? warehouse : []}
+    onReload={reload}
+  />
+)}
+
+{tab === "suppliers" && <SuppliersPage />}
         </AppLayout>
       </div>
     </div>
