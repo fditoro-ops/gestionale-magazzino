@@ -432,5 +432,146 @@ router.post("/sessions/:id/close", async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+// APPLICA INVENTARIO
+router.post("/sessions/:id/apply", async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { id } = req.params;
+
+    await client.query("BEGIN");
+
+    const s = await client.query(
+      `
+      SELECT *
+      FROM inventory_sessions
+      WHERE id = $1
+        AND tenant_id = $2
+      LIMIT 1
+      `,
+      [id, TENANT_ID]
+    );
+
+    const session = s.rows[0];
+
+    if (!session) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        ok: false,
+        error: "Sessione non trovata",
+      });
+    }
+
+    if (session.status !== "CLOSED") {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        ok: false,
+        error: "Solo una sessione CLOSED può essere applicata",
+      });
+    }
+
+    const l = await client.query(
+      `
+      SELECT *
+      FROM inventory_lines
+      WHERE session_id = $1
+      ORDER BY sku ASC
+      `,
+      [id]
+    );
+
+    const lines = l.rows;
+
+    if (!lines.length) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        ok: false,
+        error: "Nessuna riga inventario presente",
+      });
+    }
+
+    const missing = lines.filter((x) => x.counted_qty_bt === null);
+    if (missing.length > 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        ok: false,
+        error: `Ci sono ancora ${missing.length} righe non contate`,
+      });
+    }
+
+    // warning informativo: esistono movimenti successivi a effective_at
+    const futureMovements = await client.query(
+      `
+      SELECT COUNT(*)::int AS c
+      FROM movements
+      WHERE tenant_id = $1
+        AND date > $2
+      `,
+      [TENANT_ID, session.effective_at]
+    );
+
+    const futureCount = Number(futureMovements.rows[0]?.c || 0);
+
+    for (const line of lines) {
+      await client.query(
+        `
+        INSERT INTO movements (
+          id,
+          sku,
+          quantity,
+          type,
+          reason,
+          date,
+          note,
+          documento,
+          tenant_id
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        `,
+        [
+          makeId(),
+          line.sku,
+          Number(line.counted_qty_bt),
+          "INVENTORY",
+          "INVENTARIO",
+          session.effective_at,
+          `Inventario ${session.code}${line.note ? ` - ${line.note}` : ""}`,
+          session.code,
+          TENANT_ID,
+        ]
+      );
+    }
+
+    const updated = await client.query(
+      `
+      UPDATE inventory_sessions
+      SET status = 'APPLIED'
+      WHERE id = $1
+      RETURNING *
+      `,
+      [id]
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      session: updated.rows[0],
+      applied_lines: lines.length,
+      warning: futureCount > 0
+        ? `Esistono ${futureCount} movimenti successivi a effective_at. Inventario applicato retrodatando i reset.`
+        : null,
+    });
+  } catch (err: any) {
+    await client.query("ROLLBACK");
+    console.error("POST /inventory/sessions/:id/apply error", err);
+    return res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
+  } finally {
+    client.release();
+  }
+});
 
 export default router;
