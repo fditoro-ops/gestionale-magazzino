@@ -1,188 +1,83 @@
-// src/routes/items.ts
 import { Router } from "express";
-import { items as defaultItems } from "../data/items.js";
-import { loadItems, saveItems } from "../data/items.store.js";
+import { pool } from "../db.js";
 import { CreateItemSchema, UpdateItemSchema } from "../schemas/item.schema.js";
 import { getStockBtForSku } from "../services/stock.service.js";
-import { pool } from "../db.js";
 
 const router = Router();
 
-// MIGRA ITEMS FILE -> DB
-router.post("/migrate-to-db", async (_req, res) => {
-  const client = await pool.connect();
-
-  try {
-    const fileItems = loadItems(defaultItems).map(normalizeItem);
-
-    await client.query("BEGIN");
-
-    let inserted = 0;
-    let updated = 0;
-
-    for (const item of fileItems) {
-      const existing = await client.query(
-        `
-        SELECT id
-        FROM "Item"
-        WHERE sku = $1
-        LIMIT 1
-        `,
-        [item.sku]
-      );
-
-      if (existing.rows[0]) {
-        await client.query(
-          `
-          UPDATE "Item"
-          SET
-            name = $2,
-            supplier = $3,
-            "updatedAt" = NOW(),
-            "lastCostCents" = $4,
-            "costCurrency" = $5,
-            active = $6,
-            "categoryId" = $7,
-            brand = $8,
-            "packSize" = $9
-          WHERE sku = $1
-          `,
-          [
-            item.sku,
-            item.name ?? null,
-            item.supplier ?? null,
-            item.lastCostCents ?? null,
-            item.costCurrency ?? "EUR",
-            typeof item.active === "boolean" ? item.active : true,
-            item.categoryId ?? null,
-            item.brand ?? null,
-            item.packSize ?? null,
-          ]
-        );
-        updated++;
-      } else {
-        await client.query(
-          `
-          INSERT INTO "Item" (
-            id,
-            sku,
-            name,
-            supplier,
-            "createdAt",
-            "updatedAt",
-            "lastCostCents",
-            "costCurrency",
-            active,
-            "categoryId",
-            brand,
-            "packSize"
-          )
-          VALUES ($1,$2,$3,$4,NOW(),NOW(),$5,$6,$7,$8,$9,$10)
-          `,
-          [
-            item.itemId ?? `itm_${Date.now()}_${item.sku}`,
-            item.sku,
-            item.name ?? null,
-            item.supplier ?? null,
-            item.lastCostCents ?? null,
-            item.costCurrency ?? "EUR",
-            typeof item.active === "boolean" ? item.active : true,
-            item.categoryId ?? null,
-            item.brand ?? null,
-            item.packSize ?? null,
-          ]
-        );
-        inserted++;
-      }
-    }
-
-    await client.query("COMMIT");
-
-    return res.json({
-      ok: true,
-      total: fileItems.length,
-      inserted,
-      updated,
-    });
-  } catch (err: any) {
-    await client.query("ROLLBACK");
-    console.error("POST /items/migrate-to-db error", err);
-    return res.status(500).json({
-      ok: false,
-      error: err.message,
-    });
-  } finally {
-    client.release();
-  }
-});
-
-
-const ALLOWED_CATEGORIES = new Set([
-  "bevande",
-  "vino",
-  "birra",
-  "amari",
-  "distillati_altri",
-  "gin",
-  "vodka",
-  "whiskey",
-  "rhum",
-  "tequila",
-]);
-
-function normalizeItem(it: any) {
-  const rawCategory = (it.categoryId ?? "bevande").toString();
-  const mappedCategory = rawCategory === "uncategorized" ? "bevande" : rawCategory;
-  const categoryId = ALLOWED_CATEGORIES.has(mappedCategory) ? mappedCategory : "bevande";
-
-  const supplier =
-    it.supplier === "DORECA" || it.supplier === "ALPORI" || it.supplier === "VARI"
-      ? it.supplier
-      : "VARI";
-
+function mapRowToItem(row: any) {
   return {
-    itemId: it.itemId ?? `itm_${Date.now()}`,
-    sku: (it.sku ?? "").toString().toUpperCase().trim(),
-    name: (it.name ?? "").toString(),
+    itemId: row.id,
+    sku: row.sku,
+    name: row.name ?? "",
 
-    categoryId,
-    supplier,
+    categoryId: row.categoryId ?? "bevande",
+    supplier: row.supplier ?? "VARI",
 
-    active: typeof it.active === "boolean" ? it.active : true,
+    active: typeof row.active === "boolean" ? row.active : true,
 
-    stockKind: it.stockKind ?? "UNIT",
-    baseUnit: "CL",
-    minStockBt: typeof it.minStockBt === "number" ? it.minStockBt : 0,
+    stockKind: row.stockKind ?? "UNIT",
+    minStockCl: Number(row.minStockCl ?? 0),
 
-    unitToCl: it.unitToCl ?? null,
-    containerSizeCl: it.containerSizeCl ?? null,
-    containerLabel: it.containerLabel ?? null,
+    unitToCl: row.unitToCl != null ? Number(row.unitToCl) : null,
+    containerSizeCl:
+      row.containerSizeCl != null ? Number(row.containerSizeCl) : null,
+    containerLabel: row.containerLabel ?? null,
 
-    imageUrl: it.imageUrl ?? null,
+    imageUrl: row.imageUrl ?? null,
 
-    lastCostCents: typeof it.lastCostCents === "number" ? it.lastCostCents : null,
-    costCurrency: it.costCurrency ?? "EUR",
+    lastCostCents:
+      row.lastCostCents != null ? Number(row.lastCostCents) : null,
+    costCurrency: row.costCurrency ?? "EUR",
 
-    brand: it.brand ?? null,
-    packSize: typeof it.packSize === "number" ? it.packSize : null,
+    brand: row.brand ?? null,
+    packSize: row.packSize != null ? Number(row.packSize) : null,
+
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
-let items = loadItems(defaultItems).map(normalizeItem);
+// GET /items
+router.get("/", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        sku,
+        name,
+        supplier,
+        active,
+        "categoryId",
+        brand,
+        "packSize",
+        "stockKind",
+        "unitToCl",
+        "containerSizeCl",
+        "containerLabel",
+        "minStockCl",
+        "lastCostCents",
+        "costCurrency",
+        "imageUrl",
+        "createdAt",
+        "updatedAt"
+      FROM "Item"
+      ORDER BY sku ASC
+      `
+    );
 
-if (process.env.MIGRATE_ITEMS === "1") {
-  saveItems(items);
-  console.log("✅ MIGRATE_ITEMS: salvati items normalizzati");
-}
-
-type Item = (typeof items)[number];
-
-router.get("/", (_req, res) => {
-  return res.json(items);
+    return res.json(result.rows.map(mapRowToItem));
+  } catch (err: any) {
+    console.error("GET /items error", err);
+    return res.status(500).json({ error: "Errore caricamento articoli" });
+  }
 });
 
-router.post("/", (req, res) => {
+// POST /items
+router.post("/", async (req, res) => {
   const parsed = CreateItemSchema.safeParse(req.body);
+
   if (!parsed.success) {
     return res.status(400).json({
       error: "Validation error",
@@ -191,23 +86,97 @@ router.post("/", (req, res) => {
   }
 
   const data = parsed.data;
-  const exists = items.some((i: Item) => i.sku.toUpperCase() === data.sku.toUpperCase());
 
-  if (exists) {
-    return res.status(400).json({ error: `SKU ${data.sku} già esistente` });
+  try {
+    const exists = await pool.query(
+      `
+      SELECT id
+      FROM "Item"
+      WHERE sku = $1
+      LIMIT 1
+      `,
+      [data.sku]
+    );
+
+    if (exists.rowCount) {
+      return res.status(400).json({ error: `SKU ${data.sku} già esistente` });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO "Item" (
+        id,
+        sku,
+        name,
+        supplier,
+        active,
+        "categoryId",
+        brand,
+        "packSize",
+        "stockKind",
+        "unitToCl",
+        "containerSizeCl",
+        "containerLabel",
+        "minStockCl",
+        "lastCostCents",
+        "costCurrency",
+        "imageUrl",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8,
+        $9, $10, $11, $12, $13, $14, $15, $16,
+        NOW(), NOW()
+      )
+      RETURNING
+        id,
+        sku,
+        name,
+        supplier,
+        active,
+        "categoryId",
+        brand,
+        "packSize",
+        "stockKind",
+        "unitToCl",
+        "containerSizeCl",
+        "containerLabel",
+        "minStockCl",
+        "lastCostCents",
+        "costCurrency",
+        "imageUrl",
+        "createdAt",
+        "updatedAt"
+      `,
+      [
+        `itm_${Date.now()}_${data.sku}`,
+        data.sku,
+        data.name,
+        data.supplier,
+        data.active ?? true,
+        data.categoryId,
+        data.brand ?? null,
+        data.packSize ?? null,
+        data.stockKind,
+        data.stockKind === "UNIT" ? data.unitToCl ?? null : null,
+        data.stockKind === "VOLUME_CONTAINER" ? data.containerSizeCl ?? null : null,
+        data.stockKind === "VOLUME_CONTAINER" ? data.containerLabel ?? null : null,
+        data.minStockCl ?? 0,
+        data.lastCostCents ?? null,
+        data.costCurrency ?? "EUR",
+        data.imageUrl ?? null,
+      ]
+    );
+
+    return res.status(201).json(mapRowToItem(result.rows[0]));
+  } catch (err: any) {
+    console.error("POST /items error", err);
+    return res.status(500).json({ error: "Errore creazione articolo" });
   }
-
-  const newItem = normalizeItem({
-    itemId: `itm_${Date.now()}`,
-    ...data,
-  });
-
-  items.push(newItem);
-  saveItems(items);
-
-  return res.status(201).json(newItem);
 });
 
+// PATCH /items/:sku
 router.patch("/:sku", async (req, res) => {
   const parsed = UpdateItemSchema.safeParse(req.body);
 
@@ -219,29 +188,116 @@ router.patch("/:sku", async (req, res) => {
   }
 
   const sku = req.params.sku.toUpperCase().trim();
+  const patch = parsed.data;
 
-  const index = items.findIndex((i: Item) => i.sku.toUpperCase() === sku);
+  try {
+    const currentRes = await pool.query(
+      `
+      SELECT *
+      FROM "Item"
+      WHERE sku = $1
+      LIMIT 1
+      `,
+      [sku]
+    );
 
-  if (index === -1) {
-    return res.status(404).json({ error: "Item non trovato" });
+    if (!currentRes.rowCount) {
+      return res.status(404).json({ error: "Item non trovato" });
+    }
+
+    const current = currentRes.rows[0];
+
+    const nextStockKind = patch.stockKind ?? current.stockKind ?? "UNIT";
+
+    const nextUnitToCl =
+      nextStockKind === "UNIT"
+        ? patch.unitToCl !== undefined
+          ? patch.unitToCl
+          : current.unitToCl
+        : null;
+
+    const nextContainerSizeCl =
+      nextStockKind === "VOLUME_CONTAINER"
+        ? patch.containerSizeCl !== undefined
+          ? patch.containerSizeCl
+          : current.containerSizeCl
+        : null;
+
+    const nextContainerLabel =
+      nextStockKind === "VOLUME_CONTAINER"
+        ? patch.containerLabel !== undefined
+          ? patch.containerLabel
+          : current.containerLabel
+        : null;
+
+    const result = await pool.query(
+      `
+      UPDATE "Item"
+      SET
+        name = COALESCE($1, name),
+        supplier = COALESCE($2, supplier),
+        active = COALESCE($3, active),
+        "categoryId" = COALESCE($4, "categoryId"),
+        brand = $5,
+        "packSize" = $6,
+        "stockKind" = COALESCE($7, "stockKind"),
+        "unitToCl" = $8,
+        "containerSizeCl" = $9,
+        "containerLabel" = $10,
+        "minStockCl" = COALESCE($11, "minStockCl"),
+        "lastCostCents" = $12,
+        "costCurrency" = COALESCE($13, "costCurrency"),
+        "imageUrl" = $14,
+        "updatedAt" = NOW()
+      WHERE sku = $15
+      RETURNING
+        id,
+        sku,
+        name,
+        supplier,
+        active,
+        "categoryId",
+        brand,
+        "packSize",
+        "stockKind",
+        "unitToCl",
+        "containerSizeCl",
+        "containerLabel",
+        "minStockCl",
+        "lastCostCents",
+        "costCurrency",
+        "imageUrl",
+        "createdAt",
+        "updatedAt"
+      `,
+      [
+        patch.name ?? null,
+        patch.supplier ?? null,
+        patch.active ?? null,
+        patch.categoryId ?? null,
+        patch.brand ?? current.brand ?? null,
+        patch.packSize ?? current.packSize ?? null,
+        patch.stockKind ?? null,
+        nextUnitToCl,
+        nextContainerSizeCl,
+        nextContainerLabel,
+        patch.minStockCl ?? null,
+        patch.lastCostCents ?? current.lastCostCents ?? null,
+        patch.costCurrency ?? null,
+        patch.imageUrl ?? current.imageUrl ?? null,
+        sku,
+      ]
+    );
+
+    return res.json(mapRowToItem(result.rows[0]));
+  } catch (err: any) {
+    console.error("PATCH /items/:sku error", err);
+    return res.status(500).json({ error: "Errore salvataggio articolo" });
   }
-
-  const current = items[index];
-
-  const updated = normalizeItem({
-    ...current,
-    ...parsed.data,
-    itemId: current.itemId,
-    sku: current.sku,
-  });
-
-  items[index] = updated;
-  saveItems(items);
-
-  return res.json(updated);
 });
 
-router.put("/:itemId", (req, res) => {
+// PUT /items/:itemId
+router.put("/:itemId", async (req, res) => {
   const parsed = UpdateItemSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -251,55 +307,158 @@ router.put("/:itemId", (req, res) => {
     });
   }
 
-  const index = items.findIndex((i: Item) => i.itemId === req.params.itemId);
+  try {
+    const currentRes = await pool.query(
+      `
+      SELECT *
+      FROM "Item"
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [req.params.itemId]
+    );
 
-  if (index === -1) {
-    return res.status(404).json({ error: "Item non trovato" });
+    if (!currentRes.rowCount) {
+      return res.status(404).json({ error: "Item non trovato" });
+    }
+
+    const current = currentRes.rows[0];
+    const patch = parsed.data;
+    const nextStockKind = patch.stockKind ?? current.stockKind ?? "UNIT";
+
+    const nextUnitToCl =
+      nextStockKind === "UNIT"
+        ? patch.unitToCl !== undefined
+          ? patch.unitToCl
+          : current.unitToCl
+        : null;
+
+    const nextContainerSizeCl =
+      nextStockKind === "VOLUME_CONTAINER"
+        ? patch.containerSizeCl !== undefined
+          ? patch.containerSizeCl
+          : current.containerSizeCl
+        : null;
+
+    const nextContainerLabel =
+      nextStockKind === "VOLUME_CONTAINER"
+        ? patch.containerLabel !== undefined
+          ? patch.containerLabel
+          : current.containerLabel
+        : null;
+
+    const result = await pool.query(
+      `
+      UPDATE "Item"
+      SET
+        name = COALESCE($1, name),
+        supplier = COALESCE($2, supplier),
+        active = COALESCE($3, active),
+        "categoryId" = COALESCE($4, "categoryId"),
+        brand = $5,
+        "packSize" = $6,
+        "stockKind" = COALESCE($7, "stockKind"),
+        "unitToCl" = $8,
+        "containerSizeCl" = $9,
+        "containerLabel" = $10,
+        "minStockCl" = COALESCE($11, "minStockCl"),
+        "lastCostCents" = $12,
+        "costCurrency" = COALESCE($13, "costCurrency"),
+        "imageUrl" = $14,
+        "updatedAt" = NOW()
+      WHERE id = $15
+      RETURNING
+        id,
+        sku,
+        name,
+        supplier,
+        active,
+        "categoryId",
+        brand,
+        "packSize",
+        "stockKind",
+        "unitToCl",
+        "containerSizeCl",
+        "containerLabel",
+        "minStockCl",
+        "lastCostCents",
+        "costCurrency",
+        "imageUrl",
+        "createdAt",
+        "updatedAt"
+      `,
+      [
+        patch.name ?? null,
+        patch.supplier ?? null,
+        patch.active ?? null,
+        patch.categoryId ?? null,
+        patch.brand ?? current.brand ?? null,
+        patch.packSize ?? current.packSize ?? null,
+        patch.stockKind ?? null,
+        nextUnitToCl,
+        nextContainerSizeCl,
+        nextContainerLabel,
+        patch.minStockCl ?? null,
+        patch.lastCostCents ?? current.lastCostCents ?? null,
+        patch.costCurrency ?? null,
+        patch.imageUrl ?? current.imageUrl ?? null,
+        req.params.itemId,
+      ]
+    );
+
+    return res.json(mapRowToItem(result.rows[0]));
+  } catch (err: any) {
+    console.error("PUT /items/:itemId error", err);
+    return res.status(500).json({ error: "Errore aggiornamento articolo" });
   }
-
-  const current = items[index];
-
-  const incomingSku =
-    typeof (parsed.data as any).sku === "string"
-      ? (parsed.data as any).sku
-      : undefined;
-
-  const nextSku = (incomingSku ?? current.sku).toUpperCase().trim();
-
-  const duplicate = items.some(
-    (i: Item) => i.itemId !== req.params.itemId && i.sku.toUpperCase() === nextSku
-  );
-
-  if (duplicate) {
-    return res.status(400).json({ error: `SKU ${nextSku} già esistente` });
-  }
-
-  const updated = normalizeItem({
-    ...current,
-    ...parsed.data,
-    itemId: current.itemId,
-    sku: nextSku,
-  });
-
-  items[index] = updated;
-  saveItems(items);
-
-  return res.json(updated);
 });
 
+// GET /items/:itemId
 router.get("/:itemId", async (req, res) => {
-  const item = items.find((i: Item) => i.itemId === req.params.itemId);
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        sku,
+        name,
+        supplier,
+        active,
+        "categoryId",
+        brand,
+        "packSize",
+        "stockKind",
+        "unitToCl",
+        "containerSizeCl",
+        "containerLabel",
+        "minStockCl",
+        "lastCostCents",
+        "costCurrency",
+        "imageUrl",
+        "createdAt",
+        "updatedAt"
+      FROM "Item"
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [req.params.itemId]
+    );
 
-  if (!item) {
-    return res.status(404).json({ error: "Item non trovato" });
+    if (!result.rowCount) {
+      return res.status(404).json({ error: "Item non trovato" });
+    }
+
+    const item = mapRowToItem(result.rows[0]);
+    const stockBt = await getStockBtForSku(item.sku);
+
+    return res.json({
+      ...item,
+      stockBt,
+    });
+  } catch (err: any) {
+    console.error("GET /items/:itemId error", err);
+    return res.status(500).json({ error: "Errore caricamento dettaglio articolo" });
   }
-
-  const stockBt = await getStockBtForSku(item.sku);
-
-  return res.json({
-    ...item,
-    stockBt,
-  });
 });
 
 export default router;
