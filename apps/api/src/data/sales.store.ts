@@ -1,19 +1,21 @@
 import crypto from "crypto";
 import { pool } from "../db.js";
 
-type SaveSalesDocumentInput = {
+export type SalesDocumentStatus = "VALID" | "VOID";
+
+export type SaveSalesDocumentInput = {
   documentId: string;
   receiptNumber?: string;
   source?: string;
-  status: "VALID" | "VOID";
+  status: SalesDocumentStatus;
   documentDate: Date;
   totalAmount: number;
   paymentsTotal: number;
   tenantId: string;
-  rawPayload?: any;
+  rawPayload?: unknown;
 };
 
-type SaveSalesLineInput = {
+export type SaveSalesLineInput = {
   lineNo: number;
   sku?: string;
   description?: string;
@@ -78,15 +80,22 @@ export async function saveSalesDocumentWithLines(
       ]
     );
 
-    await client.query(
-      `DELETE FROM sales_lines WHERE document_id = $1`,
-      [doc.documentId]
-    );
+    await client.query(`DELETE FROM sales_lines WHERE document_id = $1`, [
+      doc.documentId,
+    ]);
 
     for (const line of lines) {
       const lineId = crypto
         .createHash("sha1")
-        .update(`${doc.documentId}:${line.lineNo}:${line.productId || ""}:${line.variantId || ""}:${line.sku || ""}`)
+        .update(
+          [
+            doc.documentId,
+            String(line.lineNo),
+            line.productId || "",
+            line.variantId || "",
+            line.sku || "",
+          ].join(":")
+        )
         .digest("hex");
 
       await client.query(
@@ -114,7 +123,7 @@ export async function saveSalesDocumentWithLines(
         [
           lineId,
           doc.documentId,
-          line.lineNo,
+          Number(line.lineNo || 0),
           line.sku || "",
           line.description || "",
           Number(line.qty || 0),
@@ -145,31 +154,27 @@ export async function saveSalesDocumentWithLines(
   }
 }
 
-export async function getSalesFeed({
-  from,
-  to,
-  tenantId,
-}: {
+export async function getSalesFeed(params?: {
   from?: string;
   to?: string;
   tenantId?: string;
 }) {
   const where: string[] = [];
-  const params: any[] = [];
+  const values: Array<string> = [];
 
-  if (tenantId) {
-    params.push(tenantId);
-    where.push(`tenant_id = $${params.length}`);
+  if (params?.tenantId) {
+    values.push(params.tenantId);
+    where.push(`tenant_id = $${values.length}`);
   }
 
-  if (from) {
-    params.push(from);
-    where.push(`document_date >= $${params.length}`);
+  if (params?.from) {
+    values.push(params.from);
+    where.push(`document_date >= $${values.length}`);
   }
 
-  if (to) {
-    params.push(to);
-    where.push(`document_date <= $${params.length}`);
+  if (params?.to) {
+    values.push(params.to);
+    where.push(`document_date <= $${values.length}`);
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -189,7 +194,7 @@ export async function getSalesFeed({
     ${whereSql}
     ORDER BY document_date DESC, document_id DESC
     `,
-    params
+    values
   );
 
   const linesRes = await pool.query(
@@ -221,7 +226,7 @@ export async function getSalesFeed({
     }
     ORDER BY document_id DESC, line_no ASC
     `,
-    params
+    values
   );
 
   return {
