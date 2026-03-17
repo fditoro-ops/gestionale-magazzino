@@ -51,7 +51,7 @@ function formatDateTime(value?: string) {
   return dt.toLocaleString();
 }
 
-function formatDocumentoLabel(doc?: string, note?: string) {
+function formatDocumentoLabel(doc?: string | null, note?: string | null) {
   const rawDoc = String(doc ?? "").trim();
   if (!rawDoc) return "";
 
@@ -266,14 +266,12 @@ export default function MovementsList({ movements, items }: Props) {
 
       const recipeGroups = Array.from(recipeMap.values());
 
- const rawDocumentLabel = first.documento ?? first.documentId ?? undefined;
-const noteLabel = first.note ?? undefined;
+const rawDocumentLabel = first.documento ?? first.documentId ?? undefined;
 
-const noteWithReceipt =
-  orderedRows.find((r) => r.note && r.note.toLowerCase().includes("scontrino"))
-    ?.note ?? first.note;
-
-const documentLabel = formatDocumentoLabel(rawDocumentLabel, noteWithReceipt);
+const documentLabel = formatDocumentoLabel(
+  rawDocumentLabel,
+  first.note ?? undefined
+);
 
 const title = documentLabel
   ? `${getEventTypeLabel(firstType)} • ${documentLabel}`
