@@ -40,6 +40,47 @@ function CoreApp() {
 
   const [items, setItems] = useState<any[]>([]);
 
+    const salesDocuments = [
+    {
+      documentId: "DOC1",
+      date: new Date().toISOString(),
+      totalAmount: 50,
+      status: "VALID" as const,
+      source: "CASSA",
+    },
+    {
+      documentId: "DOC2",
+      date: new Date().toISOString(),
+      totalAmount: 30,
+      status: "VALID" as const,
+      source: "CASSA",
+    },
+  ];
+
+  const salesLines = [
+    {
+      id: "L1",
+      documentId: "DOC1",
+      sku: "SKU001",
+      description: "Gin Tonic",
+      qty: 2,
+      unitPrice: 10,
+      lineTotal: 20,
+      hasRecipe: true,
+    },
+    {
+      id: "L2",
+      documentId: "DOC2",
+      sku: "SKU002",
+      description: "Spritz",
+      qty: 3,
+      unitPrice: 10,
+      lineTotal: 30,
+      hasRecipe: false,
+    },
+  ];
+  
+
   const packSizeBySku = useMemo(() => {
     const arr = Array.isArray(items) ? items : [];
     return Object.fromEntries(
@@ -98,11 +139,11 @@ function CoreApp() {
           onModeChange={setMode}
         >
           {tab === "dashboard" && (
-            <div className="p-4">
-              <h2 className="mt-0">Dashboard</h2>
-              <p className="m-0 text-slate-500">Coming soon…</p>
-            </div>
-          )}
+  <DashboardPage
+    salesDocuments={salesDocuments}
+    salesLines={salesLines}
+  />
+)}
 {tab === "users" && <UsersPage />}
           {tab === "movements" && (
             <div className="grid gap-4">
