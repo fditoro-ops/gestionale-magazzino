@@ -142,16 +142,13 @@ export default function ItemDetailsModal({
     active,
   };
 
-  if (stockKind === "UNIT") {
-    patch.unitToCl = Number(unitToCl ?? 0);
-    patch.containerSizeCl = null;
-    patch.containerLabel = null;
-  } else {
-    patch.unitToCl = null;
-    patch.containerSizeCl = Number(containerSizeCl ?? 0);
-    patch.containerLabel = containerLabel.trim() || "Bottiglia";
-  }
-
+if (stockKind === "UNIT") {
+  patch.unitToCl = Number(unitToCl ?? 0);
+} else {
+  patch.containerSizeCl = Number(containerSizeCl ?? 0);
+  patch.containerLabel = containerLabel.trim() || "Bottiglia";
+}
+    
   try {
     await onSavePatch(item.sku, patch);
     onClose();
