@@ -918,14 +918,19 @@ if (hasUnresolved && Date.now() - lastEmergencySyncMs > 60_000) {
 
   const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
   const unitPrice = Number(rawRow?.price ?? 0) || 0;
-  const lineTotal =
-    Number(
-      rawRow?.calculatedAmount ??
-        rawRow?.subtotal ??
-        it.total ??
-        qty * unitPrice
-    ) || 0;
+const rawCalculatedAmount = Number(rawRow?.calculatedAmount ?? NaN);
+const rawSubtotal = Number(rawRow?.subtotal ?? NaN);
+const extractedTotal = Number(it.total ?? NaN);
+const fallbackTotal = qty * unitPrice;
 
+const lineTotal = Number.isFinite(rawCalculatedAmount) && rawCalculatedAmount > 0
+  ? rawCalculatedAmount
+  : Number.isFinite(rawSubtotal) && rawSubtotal > 0
+    ? rawSubtotal
+    : Number.isFinite(extractedTotal) && extractedTotal > 0
+      ? extractedTotal
+      : fallbackTotal;
+    
   return {
     lineNo: idx + 1,
     sku,
