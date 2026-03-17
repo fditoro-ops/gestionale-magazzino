@@ -63,9 +63,6 @@ function endOfDay(date: Date) {
   return d;
 }
 
-function isSameDay(a: Date, b: Date) {
-  return startOfDay(a).getTime() === startOfDay(b).getTime();
-}
 
 function addDays(date: Date, days: number) {
   const d = new Date(date);
