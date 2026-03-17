@@ -315,16 +315,39 @@ if (stockKind === "UNIT") {
                 </div>
               </div>
 
-              {/* CL per pezzo */}
-              <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
-                <label className={labelCls}>CL per pezzo</label>
-                <input
-                  className={inputCls}
-                  type="number"
-                  value={unitToCl}
-                  onChange={(e) => setUnitToCl(Number(e.target.value))}
-                />
-              </div>
+{stockKind === "UNIT" ? (
+  <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
+    <label className={labelCls}>CL per pezzo</label>
+    <input
+      className={inputCls}
+      type="number"
+      value={unitToCl}
+      onChange={(e) => setUnitToCl(Number(e.target.value))}
+    />
+  </div>
+) : (
+  <>
+    <div className="col-span-12 md:col-span-2 min-w-0 grid gap-1">
+      <label className={labelCls}>CL contenitore</label>
+      <input
+        className={inputCls}
+        type="number"
+        value={containerSizeCl}
+        onChange={(e) => setContainerSizeCl(Number(e.target.value))}
+      />
+    </div>
+
+    <div className="col-span-12 md:col-span-2 min-w-0 grid gap-1">
+      <label className={labelCls}>Nome contenitore</label>
+      <input
+        className={inputCls}
+        value={containerLabel}
+        onChange={(e) => setContainerLabel(e.target.value)}
+        placeholder="Es. Bottiglia"
+      />
+    </div>
+  </>
+)}
 
               {/* Scorta minima */}
               <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
