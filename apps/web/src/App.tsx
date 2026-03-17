@@ -39,48 +39,9 @@ function CoreApp() {
   const [draftSku, setDraftSku] = useState<string>("");
 
   const [items, setItems] = useState<any[]>([]);
-
-    const salesDocuments = [
-    {
-      documentId: "DOC1",
-      date: new Date().toISOString(),
-      totalAmount: 50,
-      status: "VALID" as const,
-      source: "CASSA",
-    },
-    {
-      documentId: "DOC2",
-      date: new Date().toISOString(),
-      totalAmount: 30,
-      status: "VALID" as const,
-      source: "CASSA",
-    },
-  ];
-
-  const salesLines = [
-    {
-      id: "L1",
-      documentId: "DOC1",
-      sku: "SKU001",
-      description: "Gin Tonic",
-      qty: 2,
-      unitPrice: 10,
-      lineTotal: 20,
-      hasRecipe: true,
-    },
-    {
-      id: "L2",
-      documentId: "DOC2",
-      sku: "SKU002",
-      description: "Spritz",
-      qty: 3,
-      unitPrice: 10,
-      lineTotal: 30,
-      hasRecipe: false,
-    },
-  ];
-  
-
+  const [salesDocuments, setSalesDocuments] = useState<any[]>([]);
+  const [salesLines, setSalesLines] = useState<any[]>([]);
+   
   const packSizeBySku = useMemo(() => {
     const arr = Array.isArray(items) ? items : [];
     return Object.fromEntries(
@@ -120,6 +81,14 @@ function CoreApp() {
     authFetch(`/items`)
       .then((r) => r.json())
       .then((data) => setItems(Array.isArray(data) ? data : []))
+      .catch(console.error);
+
+          authFetch(`/dashboard/sales`)
+      .then((r) => r.json())
+      .then((data) => {
+        setSalesDocuments(Array.isArray(data?.documents) ? data.documents : []);
+        setSalesLines(Array.isArray(data?.lines) ? data.lines : []);
+      })
       .catch(console.error);
   };
   useEffect(() => {
