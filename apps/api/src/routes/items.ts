@@ -208,6 +208,39 @@ router.post("/", (req, res) => {
   return res.status(201).json(newItem);
 });
 
+router.patch("/:sku", async (req, res) => {
+  const parsed = UpdateItemSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Validation error",
+      details: parsed.error.format(),
+    });
+  }
+
+  const sku = req.params.sku.toUpperCase().trim();
+
+  const index = items.findIndex((i: Item) => i.sku.toUpperCase() === sku);
+
+  if (index === -1) {
+    return res.status(404).json({ error: "Item non trovato" });
+  }
+
+  const current = items[index];
+
+  const updated = normalizeItem({
+    ...current,
+    ...parsed.data,
+    itemId: current.itemId,
+    sku: current.sku,
+  });
+
+  items[index] = updated;
+  saveItems(items);
+
+  return res.json(updated);
+});
+
 router.put("/:itemId", (req, res) => {
   const parsed = UpdateItemSchema.safeParse(req.body);
 
