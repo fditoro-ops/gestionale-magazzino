@@ -333,5 +333,77 @@ await pool.query(`
   `);
 
   console.log("✅ Tabella cic_unresolved pronta");
+  /* =========================
+     SALES DOCUMENTS / SALES LINES
+  ========================= */
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sales_documents (
+      document_id TEXT PRIMARY KEY,
+      receipt_number TEXT,
+      source TEXT NOT NULL DEFAULT 'CIC',
+      status TEXT NOT NULL DEFAULT 'VALID',
+      document_date TIMESTAMPTZ NOT NULL,
+      total_amount NUMERIC NOT NULL DEFAULT 0,
+      payments_total NUMERIC NOT NULL DEFAULT 0,
+      tenant_id TEXT NOT NULL,
+      raw_payload JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_sales_documents_date
+    ON sales_documents (document_date)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_sales_documents_status
+    ON sales_documents (status)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_sales_documents_tenant
+    ON sales_documents (tenant_id)
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sales_lines (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL REFERENCES sales_documents(document_id) ON DELETE CASCADE,
+      line_no INTEGER NOT NULL,
+      sku TEXT,
+      description TEXT,
+      qty NUMERIC NOT NULL DEFAULT 0,
+      unit_price NUMERIC NOT NULL DEFAULT 0,
+      line_total NUMERIC NOT NULL DEFAULT 0,
+      product_id TEXT,
+      variant_id TEXT,
+      mode TEXT,
+      has_recipe BOOLEAN NOT NULL DEFAULT false,
+      resolved_ok BOOLEAN NOT NULL DEFAULT false,
+      tenant_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_sales_lines_document_id
+    ON sales_lines (document_id)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_sales_lines_sku
+    ON sales_lines (sku)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_sales_lines_tenant
+    ON sales_lines (tenant_id)
+  `);
+
+  console.log("✅ Tabelle sales_documents e sales_lines pronte");
+  
 }
