@@ -68,11 +68,11 @@ export const UpdateItemSchema = z.object({
   active: z.boolean().optional(),
 
   stockKind: StockKind.optional(),
-  minStockCl: z.number().min(0).optional(),
+  minStockCl: z.number().min(0).nullable().optional(),
 
-  unitToCl: z.number().positive().optional(),
-  containerSizeCl: z.number().positive().optional(),
-  containerLabel: z.string().min(1).optional(),
+  unitToCl: z.number().positive().nullable().optional(),
+  containerSizeCl: z.number().positive().nullable().optional(),
+  containerLabel: z.string().min(1).nullable().optional(),
 
   brand: z.string().trim().min(1).nullable().optional(),
   packSize: z.number().int().positive().nullable().optional(),
