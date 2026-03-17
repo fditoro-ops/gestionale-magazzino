@@ -865,6 +865,19 @@ app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
 
 let items = cicExtractItems(data);
 
+    const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
+const payments = Array.isArray(data?.document?.payments)
+  ? data.document.payments
+  : [];
+
+const documentAmount =
+  Number(data?.document?.amount ?? data?.amount ?? 0) || 0;
+
+const paymentsTotal = payments.reduce(
+  (sum: number, p: any) => sum + (Number(p?.amount ?? 0) || 0),
+  0
+);
+
 const hasUnresolved = items.some((it) => String(it.sku).includes("-"));
 
 if (hasUnresolved && Date.now() - lastEmergencySyncMs > 60_000) {
@@ -874,12 +887,76 @@ if (hasUnresolved && Date.now() - lastEmergencySyncMs > 60_000) {
   items = cicExtractItems(data);
 }
 
-const rawRows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
-
     const cicModesBySku = Object.fromEntries(
       Object.entries(cicProductModeCache).map(([_, v]) => [v.sku, v.mode])
     ) as Record<string, "RECIPE" | "IGNORE">;
 
+    const salesLinesToSave = items.map((it, idx) => {
+  const sku = String(it.sku || "").trim();
+
+  const rawRow = rawRows.find((r: any) => {
+    const rowVariant = String(r?.idProductVariant ?? "").trim();
+    const rowProduct = String(r?.idProduct ?? "").trim();
+
+    return (
+      rowVariant === String(it._idProductVariant || "").trim() ||
+      rowProduct === String(it._idProduct || "").trim()
+    );
+  });
+
+  const resolvedOk = Boolean(sku) && !sku.includes("-");
+  const mode = resolvedOk ? cicModesBySku[sku] || "" : "";
+  const hasRecipe =
+    resolvedOk && Array.isArray(bomCache[sku]) && bomCache[sku].length > 0;
+
+  const description = String(
+    rawRow?.description ||
+      rawRow?.descriptionReceipt ||
+      rawRow?.name ||
+      ""
+  ).trim();
+
+  const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
+  const unitPrice = Number(rawRow?.price ?? 0) || 0;
+  const lineTotal =
+    Number(
+      rawRow?.calculatedAmount ??
+        rawRow?.subtotal ??
+        it.total ??
+        qty * unitPrice
+    ) || 0;
+
+  return {
+    lineNo: idx + 1,
+    sku,
+    description,
+    qty,
+    unitPrice,
+    lineTotal,
+    productId: String(it._idProduct || "").trim(),
+    variantId: String(it._idProductVariant || "").trim(),
+    mode,
+    hasRecipe,
+    resolvedOk,
+    tenantId,
+  };
+});
+
+    await saveSalesDocumentWithLines(
+  {
+    documentId: docId,
+    receiptNumber,
+    source: "CIC",
+    status: operation === "RECEIPT/DELETE" ? "VOID" : "VALID",
+    documentDate: orderDate,
+    totalAmount: documentAmount,
+    paymentsTotal,
+    tenantId,
+    rawPayload: data,
+  },
+  salesLinesToSave
+);
+    
     const finalResolvedItems: Array<{ sku: string; qty: number }> = [];
 
     for (const it of items) {
@@ -1165,6 +1242,54 @@ app.get("/debug/cic-pending-open", async (_req, res) => {
   }
 });
 
+app.get("/debug/sales", async (_req, res) => {
+  try {
+    const docs = await pool.query(`
+      SELECT
+        document_id,
+        receipt_number,
+        status,
+        document_date,
+        total_amount,
+        tenant_id
+      FROM sales_documents
+      ORDER BY document_date DESC
+      LIMIT 20
+    `);
+
+    const lines = await pool.query(`
+      SELECT
+        document_id,
+        line_no,
+        sku,
+        description,
+        qty,
+        unit_price,
+        line_total,
+        mode,
+        has_recipe,
+        resolved_ok
+      FROM sales_lines
+      ORDER BY created_at DESC
+      LIMIT 50
+    `);
+
+    res.json({
+      ok: true,
+      documentsCount: docs.rows.length,
+      linesCount: lines.rows.length,
+      documents: docs.rows,
+      lines: lines.rows,
+    });
+  } catch (err: any) {
+    console.error("GET /debug/sales error:", err);
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message ?? err),
+    });
+  }
+});
+
 app.get("/debug/db", async (_req, res) => {
   try {
     const nowRes = await pool.query("SELECT NOW() as now");
@@ -1274,7 +1399,7 @@ app.post("/debug/cic-pending-reprocess", async (_req, res) => {
 
 const inserted = await applyRecipeStock({
   docId: row.docId,
-  receiptNumber: row.receiptNumber || "",
+  receiptNumber: "",
   tenantId: row.tenantId,
   orderDate,
   soldItems: [
@@ -1364,6 +1489,7 @@ if (basicAuthEnabled && user && pass) {
     if (req.path === "/debug/cic-pending-open") return next();
     if (req.path.startsWith("/webhooks/cic")) return next();
     if (req.path === "/debug/db") return next();
+    if (req.path === "/debug/sales") return next();
     return auth(req, res, next);
   });
 }
@@ -1392,6 +1518,32 @@ app.use("/orders", ordersRouter);
 app.use("/suppliers", suppliersRouter);
 app.use("/users", usersRouter);
 app.use("/inventory", inventoryRouter);
+app.get("/dashboard/sales", async (req, res) => {
+  try {
+    const tenantId = String(process.env.TENANT_ID || "IMP001");
+    const from = req.query.from ? String(req.query.from) : undefined;
+    const to = req.query.to ? String(req.query.to) : undefined;
+
+    const data = await getSalesFeed({
+      from,
+      to,
+      tenantId,
+    });
+
+    res.json({
+      ok: true,
+      documents: data.documents,
+      lines: data.lines,
+    });
+  } catch (err: any) {
+    console.error("GET /dashboard/sales error:", err);
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message ?? err),
+    });
+  }
+});
+
 
 /* =========================
    Static frontend
