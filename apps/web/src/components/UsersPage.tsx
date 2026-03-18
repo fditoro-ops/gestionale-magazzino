@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   createUserRequest,
   loadUsersRequest,
   toggleUserActiveRequest,
   type UserRow,
 } from "../api/users";
+import CicAdminTools from "./CicAdminTools";
+
 
 const ROLES = ["ADMIN", "MAGAZZINO", "OPERATORE", "CONTABILITA"] as const;
 
@@ -76,114 +78,116 @@ export default function UsersPage() {
     }
   }
 
-  return (
-    <div style={{ display: "grid", gap: 16 }}>
-      <div style={card}>
-        <h2 style={{ marginTop: 0 }}>Utenti</h2>
+return (
+  <div style={{ display: "grid", gap: 16 }}>
+    <div style={card}>
+      <h2 style={{ marginTop: 0 }}>Utenti</h2>
 
-        {err ? <div style={errorBox}>{err}</div> : null}
+      {err ? <div style={errorBox}>{err}</div> : null}
 
-        <div style={grid2}>
-          <input
-            style={inp}
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+      <div style={grid2}>
+        <input
+          style={inp}
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
 
-          <input
-            style={inp}
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+        <input
+          style={inp}
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
 
-          <input
-            style={inp}
-            placeholder="Nome"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-          />
+        <input
+          style={inp}
+          placeholder="Nome"
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+        />
 
-          <input
-            style={inp}
-            placeholder="Cognome"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-          />
+        <input
+          style={inp}
+          placeholder="Cognome"
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
+        />
 
-          <select
-            style={inp}
-            value={role}
-            onChange={(e) =>
-              setRole(
-                e.target.value as
-                  | "ADMIN"
-                  | "MAGAZZINO"
-                  | "OPERATORE"
-                  | "CONTABILITA"
-              )
-            }
-          >
-            {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <button
-          onClick={handleCreateUser}
-          disabled={loading}
-          style={btnPrimary}
+        <select
+          style={inp}
+          value={role}
+          onChange={(e) =>
+            setRole(
+              e.target.value as
+                | "ADMIN"
+                | "MAGAZZINO"
+                | "OPERATORE"
+                | "CONTABILITA"
+            )
+          }
         >
-          Crea utente
-        </button>
+          {ROLES.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
       </div>
 
-      <div style={card}>
-        <h3 style={{ marginTop: 0 }}>Elenco utenti</h3>
-
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={th}>Nome</th>
-              <th style={th}>Email</th>
-              <th style={th}>Ruolo</th>
-              <th style={th}>Stato</th>
-              <th style={th}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => {
-              const fullName = [u.first_name, u.last_name]
-                .filter(Boolean)
-                .join(" ");
-
-              return (
-                <tr key={u.id}>
-                  <td style={td}>{fullName || "-"}</td>
-                  <td style={td}>{u.email}</td>
-                  <td style={td}>{u.role}</td>
-                  <td style={td}>{u.is_active ? "Attivo" : "Disattivato"}</td>
-                  <td style={td}>
-                    <button
-                      onClick={() => handleToggleUser(u.id)}
-                      disabled={loading}
-                      style={btnGhost}
-                    >
-                      {u.is_active ? "Disattiva" : "Riattiva"}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <button
+        onClick={handleCreateUser}
+        disabled={loading}
+        style={btnPrimary}
+      >
+        Crea utente
+      </button>
     </div>
-  );
+
+    <CicAdminTools />
+
+    <div style={card}>
+      <h3 style={{ marginTop: 0 }}>Elenco utenti</h3>
+
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th style={th}>Nome</th>
+            <th style={th}>Email</th>
+            <th style={th}>Ruolo</th>
+            <th style={th}>Stato</th>
+            <th style={th}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map((u) => {
+            const fullName = [u.first_name, u.last_name]
+              .filter(Boolean)
+              .join(" ");
+
+            return (
+              <tr key={u.id}>
+                <td style={td}>{fullName || "-"}</td>
+                <td style={td}>{u.email}</td>
+                <td style={td}>{u.role}</td>
+                <td style={td}>{u.is_active ? "Attivo" : "Disattivato"}</td>
+                <td style={td}>
+                  <button
+                    onClick={() => handleToggleUser(u.id)}
+                    disabled={loading}
+                    style={btnGhost}
+                  >
+                    {u.is_active ? "Disattiva" : "Riattiva"}
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  </div>
+);
 }
 
 const card: React.CSSProperties = {
