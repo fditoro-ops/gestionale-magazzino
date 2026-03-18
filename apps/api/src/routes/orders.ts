@@ -49,7 +49,7 @@ router.get("/_debug", async (_req, res) => {
   }
 });
 
-async function getPackSizeForSku(sku: string): Promise<number> {
+async function confToBt(sku: string, qtyConf: number): Promise<number> {
   const it = await getItemBySku(sku);
 
   if (!it) {
@@ -58,13 +58,36 @@ async function getPackSizeForSku(sku: string): Promise<number> {
 
   assertItemCoreReady(it);
 
-  const p = Number(it.packSize ?? 1);
-  return Number.isFinite(p) && p > 0 ? Math.floor(p) : 1;
+  const packSizeRaw = Number(it.packSize ?? 1);
+  const packSize =
+    Number.isFinite(packSizeRaw) && packSizeRaw > 0
+      ? Math.floor(packSizeRaw)
+      : 1;
+
+  if (it.um === "PZ") {
+    return qtyConf * packSize;
+  }
+
+  if (it.um === "CL") {
+    return qtyConf * packSize * Number(it.baseQty);
+  }
+
+  throw new Error(`SKU ${sku}: um non supportata`);
 }
 
-async function confToBt(sku: string, qtyConf: number): Promise<number> {
-  const packSize = await getPackSizeForSku(sku);
-  return qtyConf * packSize;
+async function getOrderPackSizeForSku(sku: string): Promise<number> {
+  const it = await getItemBySku(sku);
+
+  if (!it) {
+    throw new Error(`SKU ${sku} non esistente in anagrafica`);
+  }
+
+  assertItemCoreReady(it);
+
+  const packSizeRaw = Number(it.packSize ?? 1);
+  return Number.isFinite(packSizeRaw) && packSizeRaw > 0
+    ? Math.floor(packSizeRaw)
+    : 1;
 }
 
 function hasDuplicateSkus(lines: Array<{ sku: string }>): boolean {
@@ -90,14 +113,14 @@ async function normalizeOrder(o: any): Promise<Order> {
         l?.qtyOrderedConf != null
           ? Number(l.qtyOrderedConf)
           : l?.qtyOrderedPz != null
-          ? Math.ceil(Number(l.qtyOrderedPz) / (await getPackSizeForSku(sku)))
+          ? Math.ceil(Number(l.qtyOrderedPz) / (await getOrderPackSizeForSku(sku)))
           : 0;
 
       const qtyReceivedConf =
         l?.qtyReceivedConf != null
           ? Number(l.qtyReceivedConf)
           : l?.qtyReceivedPz != null
-          ? Math.floor(Number(l.qtyReceivedPz) / (await getPackSizeForSku(sku)))
+          ? Math.floor(Number(l.qtyReceivedPz) / (await getOrderPackSizeForSku(sku)))
           : 0;
 
       return {
