@@ -1,144 +1,202 @@
 import { useMemo, useState } from "react";
 
 type WarehouseRow = {
-  itemId: string;
+  itemId?: string;
   sku: string;
   name: string;
-  stockBt: number;
-  minStockCl?: number;
-  underMin: boolean;
-  categoryId?: string;
-  supplier?: string;
+  stockBt: number; // nel tuo Core questa è la giacenza tecnica reale
+  minStockBt?: number | null;
+
+  // campi articolo utili per conversione "leggibile"
+  packSize?: number | null;   // es. 70, 75, 100, 3000
+  baseQty?: number | null;    // opzionale, se già usato nel tuo modello
+  um?: string | null;         // es. CL, PZ
 };
 
 export default function WarehouseTable({
   rows,
-  onPickSku,
 }: {
   rows: WarehouseRow[];
-  onPickSku?: (sku: string) => void;
 }) {
-  const [q, setQ] = useState("");
-  const [onlyUnderMin, setOnlyUnderMin] = useState(false);
+  const [search, setSearch] = useState("");
 
-  const filtered = useMemo(() => {
-    const qNorm = q.trim().toUpperCase();
-    let r = rows;
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
 
-    if (qNorm) {
-      r = r.filter((x) => {
-        return (
-          x.sku.toUpperCase().includes(qNorm) ||
-          x.name.toUpperCase().includes(qNorm)
-        );
-      });
-    }
-
-    if (onlyUnderMin) {
-      r = r.filter((x) => x.underMin);
-    }
-
-    return [...r].sort((a, b) => {
-      if (a.underMin !== b.underMin) return a.underMin ? -1 : 1;
-      return a.name.localeCompare(b.name);
+    return rows.filter((r) => {
+      return (
+        String(r.sku || "").toLowerCase().includes(q) ||
+        String(r.name || "").toLowerCase().includes(q)
+      );
     });
-  }, [rows, q, onlyUnderMin]);
+  }, [rows, search]);
+
+  function formatNumber(n: number, digits = 2) {
+    if (!Number.isFinite(n)) return "-";
+    return new Intl.NumberFormat("it-IT", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: digits,
+    }).format(n);
+  }
+
+  function getStockBoxes(row: WarehouseRow): number | null {
+    const stockTechnical = Number(row.stockBt || 0);
+
+    // Caso PZ: non ha senso dividere, il leggibile coincide
+    if (String(row.um || "").toUpperCase() === "PZ") {
+      return stockTechnical;
+    }
+
+    // packSize è il divisore principale per mostrare le "unità leggibili"
+    const packSize = Number(row.packSize || 0);
+
+    if (packSize > 0) {
+      return stockTechnical / packSize;
+    }
+
+    // fallback eventuale
+    const baseQty = Number(row.baseQty || 0);
+    if (baseQty > 0) {
+      return stockTechnical / baseQty;
+    }
+
+    return null;
+  }
+
+  function getBtLabel(row: WarehouseRow): string {
+    const um = String(row.um || "").toUpperCase();
+    if (um === "PZ") return "PZ";
+    return "BT";
+  }
 
   return (
-    <div className="grid gap-4">
-      {/* Toolbar */}
-      <div className="panel-glass p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-baseline gap-3">
-            <h2 className="text-base font-semibold text-gray-900 m-0">
-              Magazzino
-            </h2>
-            <span className="text-xs text-gray-500">
-              {filtered.length} righe
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Cerca SKU o nome..."
-              className="h-10 w-72 max-w-full rounded-lg border border-gray-200 bg-white/80 backdrop-blur-sm px-3 text-sm outline-none focus:ring-2 focus:ring-teal-600/30"
-            />
-
-            <label className="flex items-center gap-2 text-sm text-gray-700 select-none">
-              <input
-                type="checkbox"
-                checked={onlyUnderMin}
-                onChange={(e) => setOnlyUnderMin(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              Solo sotto scorta
-            </label>
-          </div>
-        </div>
+    <div style={styles.wrapper}>
+      <div style={styles.toolbar}>
+        <input
+          style={styles.search}
+          placeholder="Cerca SKU o prodotto..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
-      {/* Table */}
-      <div className="rounded-2xl border border-white/40 bg-white/70 backdrop-blur-md overflow-hidden shadow-sm">
-        <table className="table">
-          <thead className="bg-white/50 backdrop-blur-sm text-xs uppercase tracking-wide text-gray-500">
+      <div style={styles.tableWrap}>
+        <table style={styles.table}>
+          <thead>
             <tr>
-              <th className="th">SKU</th>
-              <th className="th">Nome</th>
-              <th className="th text-right">Stock (BT)</th>
-              <th className="th text-right">Min (CL)</th>
-              <th className="th">Stato</th>
+              <th style={styles.th}>SKU</th>
+              <th style={styles.th}>Prodotto</th>
+              <th style={styles.thRight}>Giacenza tecnica</th>
+              <th style={styles.thRight}>BT</th>
+              <th style={styles.thRight}>Scorta min.</th>
             </tr>
           </thead>
 
           <tbody>
-            {filtered.map((r) => (
-              <tr
-                key={r.itemId}
-                onClick={() => onPickSku?.(r.sku)}
-                className={`transition-colors ${
-                  r.underMin ? "bg-red-50/30" : ""
-                } hover:bg-white/40 ${onPickSku ? "cursor-pointer" : ""}`}
-              >
-                <td className="td">
-                  <span className="font-semibold text-gray-900">{r.sku}</span>
-                </td>
+            {filteredRows.map((row) => {
+              const stockBoxes = getStockBoxes(row);
+              const btLabel = getBtLabel(row);
 
-                <td className="td">{r.name}</td>
+              return (
+                <tr key={row.itemId || row.sku}>
+                  <td style={styles.td}>{row.sku}</td>
+                  <td style={styles.td}>{row.name}</td>
 
-                <td className="td text-right font-semibold tabular-nums text-gray-800">
-                  {r.stockBt}
-                </td>
+                  <td style={styles.tdRight}>
+                    {formatNumber(Number(row.stockBt || 0), 3)}
+                    {row.um ? ` ${row.um}` : ""}
+                  </td>
 
-                <td className="td text-right tabular-nums text-gray-700">
-                  {typeof r.minStockCl === "number" ? r.minStockCl : "-"}
-                </td>
+                  <td style={styles.tdRight}>
+                    {stockBoxes === null
+                      ? "-"
+                      : `${formatNumber(stockBoxes, 2)} ${btLabel}`}
+                  </td>
 
-                <td className="td">
-                  {r.underMin ? (
-                    <span className="pill pill-bad">Sotto scorta</span>
-                  ) : (
-                    <span className="pill pill-ok">OK</span>
-                  )}
-                </td>
-              </tr>
-            ))}
+                  <td style={styles.tdRight}>
+                    {row.minStockBt == null
+                      ? "-"
+                      : `${formatNumber(Number(row.minStockBt || 0), 2)}${
+                          row.um ? ` ${row.um}` : ""
+                        }`}
+                  </td>
+                </tr>
+              );
+            })}
 
-            {filtered.length === 0 && (
+            {!filteredRows.length ? (
               <tr>
-                <td className="td py-6 text-gray-500" colSpan={5}>
-                  Nessun risultato.
+                <td style={styles.empty} colSpan={5}>
+                  Nessun risultato
                 </td>
               </tr>
-            )}
+            ) : null}
           </tbody>
         </table>
-      </div>
-
-      <div className="text-xs text-gray-500">
-        Tip: clicca una riga per precompilare lo SKU nei movimenti.
       </div>
     </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  wrapper: {
+    display: "grid",
+    gap: 12,
+  },
+  toolbar: {
+    display: "flex",
+    gap: 12,
+  },
+  search: {
+    width: "100%",
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: "1px solid #d6dbe6",
+    background: "white",
+    fontSize: 16,
+  },
+  tableWrap: {
+    background: "white",
+    border: "1px solid #e5e7eb",
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  th: {
+    textAlign: "left",
+    padding: 14,
+    fontSize: 14,
+    color: "#475569",
+    borderBottom: "1px solid #e5e7eb",
+    background: "#f8fafc",
+  },
+  thRight: {
+    textAlign: "right",
+    padding: 14,
+    fontSize: 14,
+    color: "#475569",
+    borderBottom: "1px solid #e5e7eb",
+    background: "#f8fafc",
+  },
+  td: {
+    padding: 14,
+    borderBottom: "1px solid #f1f5f9",
+    color: "#0f172a",
+  },
+  tdRight: {
+    padding: 14,
+    textAlign: "right",
+    borderBottom: "1px solid #f1f5f9",
+    color: "#0f172a",
+    fontVariantNumeric: "tabular-nums",
+  },
+  empty: {
+    padding: 24,
+    textAlign: "center",
+    color: "#64748b",
+  },
+};
