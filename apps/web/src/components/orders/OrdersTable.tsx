@@ -68,6 +68,10 @@ export default function OrdersTable({
     fn();
   }
 
+  const sortedOrders = [...orders].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
   return (
     <div style={card}>
       <div
@@ -79,7 +83,9 @@ export default function OrdersTable({
         }}
       >
         <strong>Ordini</strong>
-        <span style={{ fontSize: 12, color: "#667" }}>{orders.length} ordini</span>
+        <span style={{ fontSize: 12, color: "#667" }}>
+          {orders.length} ordini
+        </span>
       </div>
 
       <div
@@ -87,8 +93,11 @@ export default function OrdersTable({
           marginTop: 10,
           border: "1px solid #e5e7eb",
           borderRadius: 12,
-          overflow: "visible",
+          overflowX: "auto",
+          overflowY: "auto",
+          maxHeight: 520,
           position: "relative",
+          background: "white",
         }}
       >
         <table
@@ -110,14 +119,14 @@ export default function OrdersTable({
           </thead>
 
           <tbody>
-            {orders.map((o, index) => {
-              const openUpwards = index >= orders.length - 2;
+            {sortedOrders.map((o, index) => {
+              const openUpwards = index >= sortedOrders.length - 2;
 
               return (
                 <tr key={o.orderId} style={{ borderTop: "1px solid #eef2f7" }}>
                   <Td>
                     <span style={{ fontWeight: 900 }}>
-                      {formatOrderNumber(o, index)}
+                      {formatOrderNumber(o)}
                     </span>
                   </Td>
 
@@ -134,7 +143,9 @@ export default function OrdersTable({
                   </Td>
 
                   <Td>
-                    <Badge tone={statusTone(o.status)}>{statusLabel(o.status)}</Badge>
+                    <Badge tone={statusTone(o.status)}>
+                      {statusLabel(o.status)}
+                    </Badge>
                   </Td>
 
                   <Td style={{ textAlign: "right" }}>
@@ -198,7 +209,11 @@ export default function OrdersTable({
 
                               <button
                                 type="button"
-                                style={{ ...menuItem, color: "#b91c1c", borderBottom: "none" }}
+                                style={{
+                                  ...menuItem,
+                                  color: "#b91c1c",
+                                  borderBottom: "none",
+                                }}
                                 onClick={() => runAndClose(() => onDelete(o))}
                               >
                                 Elimina
@@ -215,7 +230,7 @@ export default function OrdersTable({
               );
             })}
 
-            {orders.length === 0 && (
+            {sortedOrders.length === 0 && (
               <tr>
                 <Td colSpan={6} style={{ padding: 16, color: "#667" }}>
                   Nessun ordine.
@@ -233,14 +248,18 @@ export default function OrdersTable({
   );
 }
 
-function formatOrderNumber(order: Order, index: number): string {
+function formatOrderNumber(order: Order): string {
   const d = new Date(order.createdAt);
   const yy = String(d.getFullYear()).slice(-2);
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
-  const seq = String(index + 1).padStart(4, "0");
+  const shortId = String(order.orderId || "")
+    .replace(/^ord_/i, "")
+    .replace(/[^a-z0-9]/gi, "")
+    .slice(0, 6)
+    .toUpperCase();
 
-  return `ORD-${yy}${mm}${dd}-${seq}`;
+  return `ORD-${yy}${mm}${dd}-${shortId || "XXXXXX"}`;
 }
 
 function statusTone(
@@ -276,6 +295,10 @@ function Th({
         textAlign: "left",
         fontSize: 12,
         color: "#667",
+        position: "sticky",
+        top: 0,
+        background: "#f9fafb",
+        zIndex: 2,
         ...style,
       }}
     >
