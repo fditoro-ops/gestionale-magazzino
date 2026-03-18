@@ -1,7 +1,10 @@
 import { randomUUID } from "crypto";
-import { loadItems } from "../data/items.store.js";
 import { loadMovements, insertManyMovements } from "../data/movements.store.js";
 import type { Movement } from "../types/movement.js";
+import {
+  getItemBySku,
+  assertItemCoreReady,
+} from "./items.service.js";
 
 type BomLine = {
   ingredientSku: string;
@@ -12,6 +15,10 @@ type BomLine = {
 type BomMap = Record<string, BomLine[]>;
 type CicProductMode = "RECIPE" | "IGNORE";
 type CicProductMap = Record<string, CicProductMode>;
+
+function round3(n: number) {
+  return Math.round(n * 1000) / 1000;
+}
 
 export async function applyRecipeStock({
   docId,
@@ -32,11 +39,7 @@ export async function applyRecipeStock({
   cicProductModes: CicProductMap;
   movementSign: 1 | -1;
 }) {
-  
-  const items = loadItems();
   const movements = await loadMovements();
-
-  const bySku = new Map(items.map((i: any) => [String(i.sku).trim(), i]));
 
   const movementType = movementSign === 1 ? "IN" : "OUT";
   const movementReason =
@@ -59,7 +62,7 @@ export async function applyRecipeStock({
   const newMovements: Movement[] = [];
 
   for (const sold of soldItems) {
-    const soldSku = String(sold.sku || "").trim();
+    const soldSku = String(sold.sku || "").trim().toUpperCase();
     const soldQty = Number(sold.qty || 0);
 
     if (!soldSku || !soldQty) {
@@ -98,7 +101,7 @@ export async function applyRecipeStock({
     );
 
     for (const ing of recipe) {
-      const ingredientSku = String(ing.ingredientSku || "").trim();
+      const ingredientSku = String(ing.ingredientSku || "").trim().toUpperCase();
       const ingredientQty = Number(ing.qty || 0);
       const ingredientUm = String(ing.um || "").trim().toUpperCase();
 
@@ -107,7 +110,7 @@ export async function applyRecipeStock({
         continue;
       }
 
-      const item = bySku.get(ingredientSku);
+      const item = await getItemBySku(ingredientSku);
 
       if (!item) {
         console.log(
@@ -119,35 +122,50 @@ export async function applyRecipeStock({
         continue;
       }
 
-      let quantity = ingredientQty * soldQty;
-
-      // Conversione CL -> BT per articoli volumetrici
-      if (ingredientUm === "CL") {
-        const containerSizeCl = Number(item.containerSizeCl ?? 0);
-        if (containerSizeCl > 0) {
-          quantity = quantity / containerSizeCl;
-        }
+      try {
+        assertItemCoreReady(item);
+      } catch (e: any) {
+        console.log(
+          "❗ Ingrediente non configurato correttamente:",
+          ingredientSku,
+          "errore:",
+          e?.message ?? e
+        );
+        continue;
       }
 
-      quantity = Math.round(quantity * 1000) / 1000;
+      // Coerenza BOM ↔ anagrafica
+      if (ingredientUm && ingredientUm !== item.um) {
+        console.log("⚠️ UM BOM diversa da UM anagrafica:", {
+          soldSku,
+          ingredientSku,
+          bomUm: ingredientUm,
+          itemUm: item.um,
+        });
+        continue;
+      }
+
+      // Nel nuovo modello la BOM scarica già in BT tecnica:
+      // CL scarica CL, PZ scarica PZ. Nessuna divisione per baseQty/container.
+      let quantity = ingredientQty * soldQty;
+      quantity = round3(quantity);
 
       if (!quantity || quantity <= 0) continue;
 
-const movement: Movement = {
-  id: randomUUID(),
-  sku: ingredientSku,
-  quantity,
-  type: movementType as Movement["type"],
-  reason: movementReason,
-  date: orderDate.toISOString(),
-note:
-  movementSign === 1
-    ? `Storno ricetta ${soldSku} scontrino ${receiptNumber || ""}`
-    : `Scarico ricetta ${soldSku} scontrino ${receiptNumber || ""}`,
-
-  documento: docId,
-  tenant_id: tenantId,
-};
+      const movement: Movement = {
+        id: randomUUID(),
+        sku: ingredientSku,
+        quantity,
+        type: movementType as Movement["type"],
+        reason: movementReason,
+        date: orderDate.toISOString(),
+        note:
+          movementSign === 1
+            ? `Storno ricetta ${soldSku} scontrino ${receiptNumber || ""}`
+            : `Scarico ricetta ${soldSku} scontrino ${receiptNumber || ""}`,
+        documento: docId,
+        tenant_id: tenantId,
+      };
 
       newMovements.push(movement);
 
@@ -156,7 +174,7 @@ note:
         type: movement.type,
         sku: ingredientSku,
         quantity: movement.quantity,
-        um: ingredientUm,
+        um: item.um,
       });
     }
   }
