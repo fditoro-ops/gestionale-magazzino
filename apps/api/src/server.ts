@@ -1400,46 +1400,42 @@ app.post("/debug/cic-pending-reprocess", async (_req, res) => {
         continue;
       }
 
-      const orderDate = new Date(row.orderDate);
-      const movementSign = row.operation === "RECEIPT/DELETE" ? 1 : -1;
+      const inserted = await applyRecipeStock({
+        docId: row.docId,
+        receiptNumber: "",
+        tenantId: row.tenantId,
+        orderDate: new Date(row.orderDate),
+        soldItems: [
+          {
+            sku: resolvedSku,
+            qty: Number(row.qty || 0),
+          },
+        ],
+        bom: bomCache,
+        cicProductModes: cicModesBySku,
+        movementSign: row.operation === "RECEIPT/DELETE" ? 1 : -1,
+      });
 
-const inserted = await applyRecipeStock({
-  docId: row.docId,
-  receiptNumber: "",
-  tenantId: row.tenantId,
-  orderDate: new Date(row.orderDate),
-  soldItems: [
-    {
-      sku: resolvedSku,
-      qty: Number(row.qty || 0),
-    },
-  ],
-  bom: bomCache,
-  cicProductModes: cicModesBySku,
-  movementSign: row.operation === "RECEIPT/DELETE" ? 1 : -1,
-});
+      if (inserted > 0) {
+        await markPendingRowProcessed(row.id);
 
-if (inserted > 0) {
-  await markPendingRowProcessed(row.id);
-
-  results.push({
-    id: row.id,
-    docId: row.docId,
-    sku: resolvedSku,
-    status: "PROCESSED",
-    inserted,
-  });
-} else {
-  results.push({
-    id: row.id,
-    docId: row.docId,
-    sku: resolvedSku,
-    status: "SKIPPED",
-    reason: "NO_MOVEMENTS_CREATED",
-    inserted,
-  });
-}
-}
+        results.push({
+          id: row.id,
+          docId: row.docId,
+          sku: resolvedSku,
+          status: "PROCESSED",
+          inserted,
+        });
+      } else {
+        results.push({
+          id: row.id,
+          docId: row.docId,
+          sku: resolvedSku,
+          status: "SKIPPED",
+          reason: "NO_MOVEMENTS_CREATED",
+          inserted,
+        });
+      }
     }
 
     res.json({
