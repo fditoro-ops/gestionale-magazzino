@@ -8,23 +8,23 @@ export type Item = {
   brand?: string | null;
 
   categoryId?: string | null;
+  category?: string | null;
   supplier?: string | null;
 
-  stockKind?: "UNIT" | "VOLUME_CONTAINER";
-  unitToCl?: number | null;
+  um?: "CL" | "PZ" | null;
+  baseQty?: number | null;
 
-  containerSizeCl?: number | null;
-  containerLabel?: string | null;
-
-  minStockCl?: number | null;
   packSize?: number | null;
 
   lastCostCents?: number | null;
+  costEur?: number | null;
   costCurrency?: string | null;
 
   imageUrl?: string | null;
   active?: boolean;
 };
+
+type ItemUm = "CL" | "PZ";
 
 function centsToEuroString(cents: number | null | undefined) {
   if (typeof cents !== "number" || !Number.isFinite(cents)) return "";
@@ -42,6 +42,13 @@ function euroToCents(s: string): number | null {
 function isHttpUrl(s: string) {
   if (!s.trim()) return true;
   return /^https?:\/\/.+/i.test(s);
+}
+
+function parsePositiveNumber(raw: string): number | null {
+  if (!raw.trim()) return null;
+  const n = Number(raw.replace(",", "."));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
 }
 
 export default function ItemDetailsModal({
@@ -65,13 +72,9 @@ export default function ItemDetailsModal({
   const [categoryId, setCategoryId] = useState("");
 
   const [packSize, setPackSize] = useState<string>("");
-  const [stockKind, setStockKind] = useState<"UNIT" | "VOLUME_CONTAINER">("UNIT");
-  const [unitToCl, setUnitToCl] = useState<number>(33);
+  const [um, setUm] = useState<ItemUm>("PZ");
+  const [baseQty, setBaseQty] = useState<string>("1");
 
-  const [containerSizeCl, setContainerSizeCl] = useState<number>(70);
-  const [containerLabel, setContainerLabel] = useState<string>("Bottiglia");
-
-  const [minStockCl, setMinStockCl] = useState<number>(0);
   const [lastCostEuro, setLastCostEuro] = useState<string>("");
 
   const [imageUrl, setImageUrl] = useState<string>("");
@@ -92,20 +95,32 @@ export default function ItemDetailsModal({
     setName(item.name ?? "");
     setBrand(item.brand ?? "");
     setSupplier((item.supplier ?? "VARI") as string);
-    setCategoryId(item.categoryId ?? "");
+    setCategoryId((item.categoryId ?? item.category ?? "") as string);
 
     setPackSize(
-      typeof item.packSize === "number" && item.packSize > 0 ? String(item.packSize) : ""
+      typeof item.packSize === "number" && item.packSize > 0
+        ? String(item.packSize)
+        : ""
     );
 
-    setStockKind((item.stockKind ?? "UNIT") as any);
-    setUnitToCl(Number(item.unitToCl ?? 33));
+    const nextUm: ItemUm = item.um === "CL" ? "CL" : "PZ";
+    setUm(nextUm);
 
-    setContainerSizeCl(Number(item.containerSizeCl ?? 70));
-    setContainerLabel(item.containerLabel ?? "Bottiglia");
+    const nextBaseQty =
+      typeof item.baseQty === "number" && item.baseQty > 0
+        ? String(item.baseQty)
+        : nextUm === "PZ"
+        ? "1"
+        : "";
+    setBaseQty(nextBaseQty);
 
-    setMinStockCl(Number(item.minStockCl ?? 0));
-    setLastCostEuro(centsToEuroString(item.lastCostCents));
+    if (typeof item.lastCostCents === "number" && Number.isFinite(item.lastCostCents)) {
+      setLastCostEuro(centsToEuroString(item.lastCostCents));
+    } else if (typeof item.costEur === "number" && Number.isFinite(item.costEur)) {
+      setLastCostEuro(String(item.costEur).replace(".", ","));
+    } else {
+      setLastCostEuro("");
+    }
 
     setImageUrl(item.imageUrl ?? "");
     setActive(Boolean(item.active ?? true));
@@ -113,57 +128,82 @@ export default function ItemDetailsModal({
 
   if (!open || !item) return null;
 
+  function handleUmChange(nextUm: ItemUm) {
+    setUm(nextUm);
+
+    // assist UX, non fallback silenzioso
+    if (nextUm === "PZ") {
+      setBaseQty("1");
+    } else if (baseQty.trim() === "1") {
+      setBaseQty("");
+    }
+  }
+
   async function handleSave() {
-  setErr(null);
+    setErr(null);
 
-  if (!item) return; // ✅ FIX TS18047
+    if (!item) return;
 
-  if (!name.trim()) {
-    setErr("Nome articolo obbligatorio.");
-    return;
+    if (!name.trim()) {
+      setErr("Nome articolo obbligatorio.");
+      return;
+    }
+
+    if (!isHttpUrl(imageUrl)) {
+      setErr("URL immagine non valido (deve iniziare con http/https).");
+      return;
+    }
+
+    const parsedPackSize = parsePositiveNumber(packSize);
+    const parsedBaseQty = parsePositiveNumber(baseQty);
+
+    if (um !== "CL" && um !== "PZ") {
+      setErr("UM non valida.");
+      return;
+    }
+
+    if (parsedBaseQty == null) {
+      setErr("Quantità base non valida.");
+      return;
+    }
+
+    if (um === "PZ" && parsedBaseQty !== 1) {
+      setErr("Per gli articoli a PZ la quantità base deve essere 1.");
+      return;
+    }
+
+    const patch: any = {
+      name: name.trim(),
+      brand: brand.trim() || null,
+      supplier: supplier || "VARI",
+      categoryId: categoryId.trim() || null,
+      category: categoryId.trim() || null,
+      packSize: parsedPackSize,
+      um,
+      baseQty: parsedBaseQty,
+      costEur: lastCostEuro.trim()
+        ? Number(lastCostEuro.replace(",", "."))
+        : null,
+      lastCostCents: euroToCents(lastCostEuro),
+      costCurrency: "EUR",
+      imageUrl: imageUrl.trim() || null,
+      active,
+    };
+
+    try {
+      await onSavePatch(item.sku, patch);
+      onClose();
+    } catch (e: any) {
+      setErr(e?.message ?? "Errore salvataggio");
+    }
   }
 
-  if (!isHttpUrl(imageUrl)) {
-    setErr("URL immagine non valido (deve iniziare con http/https).");
-    return;
-  }
-
-  const patch: any = {
-    name: name.trim(),
-    brand: brand.trim() || null,
-    supplier: supplier || "VARI",
-    categoryId: categoryId.trim() || null,
-    packSize: packSize.trim() ? Number(packSize) : null,
-    stockKind,
-    minStockCl: Number(minStockCl ?? 0),
-    lastCostCents: euroToCents(lastCostEuro),
-    costCurrency: "EUR",
-    imageUrl: imageUrl.trim() || null,
-    active,
-  };
-
-if (stockKind === "UNIT") {
-  patch.unitToCl = Number(unitToCl ?? 0);
-} else {
-  patch.containerSizeCl = Number(containerSizeCl ?? 0);
-  patch.containerLabel = containerLabel.trim() || "Bottiglia";
-}
-    
-  try {
-    await onSavePatch(item.sku, patch);
-    onClose();
-  } catch (e: any) {
-    setErr(e?.message ?? "Errore salvataggio");
-  }
-}
   const labelCls = "text-xs font-medium text-gray-600";
   const helpCls = "text-xs text-gray-500";
 
-  // ✅ stessa altezza OVUNQUE
   const inputCls =
     "w-full h-9 rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-900 shadow-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-teal-600/20";
 
-  // ✅ select “vero” ma identico all’input (freccia custom)
   const selectCls =
     "w-full h-9 rounded-lg border border-gray-200 bg-white px-2.5 pr-8 text-sm text-gray-900 shadow-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-teal-600/20 appearance-none";
 
@@ -177,7 +217,6 @@ if (stockKind === "UNIT") {
           role="dialog"
           aria-modal="true"
         >
-          {/* header */}
           <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-200 bg-white">
             <div>
               <div className="text-base font-semibold text-gray-900">
@@ -212,14 +251,10 @@ if (stockKind === "UNIT") {
             </div>
           </div>
 
-          {/* BODY */}
           <div className="p-5">
-            {err && (
-              <div className="mb-3 text-sm text-red-600">{err}</div>
-            )}
+            {err && <div className="mb-3 text-sm text-red-600">{err}</div>}
 
             <div className="grid grid-cols-12 gap-x-6 gap-y-4 items-start">
-              {/* Nome articolo */}
               <div className="col-span-12 md:col-span-6 min-w-0 grid gap-1">
                 <label className={labelCls}>Nome articolo</label>
                 <input
@@ -229,7 +264,6 @@ if (stockKind === "UNIT") {
                 />
               </div>
 
-              {/* Brand */}
               <div className="col-span-12 md:col-span-3 min-w-0 grid gap-1">
                 <label className={labelCls}>Brand</label>
                 <input
@@ -240,10 +274,8 @@ if (stockKind === "UNIT") {
                 />
               </div>
 
-              {/* Fornitore */}
               <div className="col-span-12 md:col-span-3 min-w-0 grid gap-1">
                 <label className={labelCls}>Fornitore</label>
-
                 <div className="relative">
                   <select
                     className={selectCls}
@@ -259,7 +291,6 @@ if (stockKind === "UNIT") {
                 </div>
               </div>
 
-              {/* Categoria */}
               <div className="col-span-12 md:col-span-6 min-w-0 grid gap-1">
                 <label className={labelCls}>Categoria</label>
                 <input
@@ -268,22 +299,22 @@ if (stockKind === "UNIT") {
                   onChange={(e) => setCategoryId(e.target.value)}
                 />
                 <div className={helpCls}>
-                  Per ora testo libero (poi lo colleghiamo alla select).
+                  Per ora testo libero, poi lo colleghiamo alla select.
                 </div>
               </div>
 
-              {/* Pezzi per cassa */}
               <div className="col-span-12 md:col-span-2 min-w-0 grid gap-1">
                 <label className={labelCls}>Pezzi per cassa</label>
                 <input
                   className={inputCls}
                   type="number"
+                  min={1}
+                  step="any"
                   value={packSize}
                   onChange={(e) => setPackSize(e.target.value)}
                 />
               </div>
 
-              {/* Ultimo costo */}
               <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
                 <label className={labelCls}>Ultimo costo (EUR)</label>
                 <input
@@ -294,74 +325,44 @@ if (stockKind === "UNIT") {
                 />
               </div>
 
-              {/* Gestione stock */}
-              <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
-                <label className={labelCls}>Gestione stock</label>
-
+              <div className="col-span-12 md:col-span-3 min-w-0 grid gap-1">
+                <label className={labelCls}>UM</label>
                 <div className="relative">
                   <select
                     className={selectCls}
-                    value={stockKind}
-                    onChange={(e) => setStockKind(e.target.value as any)}
+                    value={um}
+                    onChange={(e) => handleUmChange(e.target.value as ItemUm)}
                   >
-                    <option value="UNIT">Pezzi (PZ)</option>
-                    <option value="VOLUME_CONTAINER">Volume (CL)</option>
+                    <option value="PZ">Pezzi (PZ)</option>
+                    <option value="CL">Centilitri (CL)</option>
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
                 </div>
 
                 <div className={helpCls}>
-                  PZ: lattine/bottiglie. CL: bottiglie da spillare.
+                  PZ per articoli contati a pezzi. CL per liquidi.
                 </div>
               </div>
 
-{stockKind === "UNIT" ? (
-  <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
-    <label className={labelCls}>CL per pezzo</label>
-    <input
-      className={inputCls}
-      type="number"
-      value={unitToCl}
-      onChange={(e) => setUnitToCl(Number(e.target.value))}
-    />
-  </div>
-) : (
-  <>
-    <div className="col-span-12 md:col-span-2 min-w-0 grid gap-1">
-      <label className={labelCls}>CL contenitore</label>
-      <input
-        className={inputCls}
-        type="number"
-        value={containerSizeCl}
-        onChange={(e) => setContainerSizeCl(Number(e.target.value))}
-      />
-    </div>
-
-    <div className="col-span-12 md:col-span-2 min-w-0 grid gap-1">
-      <label className={labelCls}>Nome contenitore</label>
-      <input
-        className={inputCls}
-        value={containerLabel}
-        onChange={(e) => setContainerLabel(e.target.value)}
-        placeholder="Es. Bottiglia"
-      />
-    </div>
-  </>
-)}
-
-              {/* Scorta minima */}
-              <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
-                <label className={labelCls}>Scorta minima (CL)</label>
+              <div className="col-span-12 md:col-span-3 min-w-0 grid gap-1">
+                <label className={labelCls}>Quantità base</label>
                 <input
                   className={inputCls}
                   type="number"
-                  value={minStockCl}
-                  onChange={(e) => setMinStockCl(Number(e.target.value))}
+                  min={1}
+                  step="any"
+                  value={baseQty}
+                  onChange={(e) => setBaseQty(e.target.value)}
+                  placeholder={um === "PZ" ? "1" : "Es. 70"}
                 />
+                <div className={helpCls}>
+                  {um === "PZ"
+                    ? "Per gli articoli a pezzi deve essere 1."
+                    : "Inserisci la quantità reale in CL."}
+                </div>
               </div>
 
-              {/* URL immagine */}
-              <div className="col-span-12 md:col-span-7 min-w-0 grid gap-1">
+              <div className="col-span-12 md:col-span-6 min-w-0 grid gap-1">
                 <label className={labelCls}>URL immagine</label>
                 <input
                   className={inputCls}
@@ -369,10 +370,11 @@ if (stockKind === "UNIT") {
                   value={imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
                 />
-                <div className={helpCls}>Opzionale. Deve iniziare con http/https.</div>
+                <div className={helpCls}>
+                  Opzionale. Deve iniziare con http/https.
+                </div>
               </div>
 
-              {/* Anteprima */}
               <div className="col-span-12 md:col-span-5 min-w-0 grid gap-1">
                 <label className={labelCls}>Anteprima</label>
                 <div className="h-[132px] rounded-xl border border-gray-200 bg-white flex items-center justify-center overflow-hidden">
@@ -390,7 +392,6 @@ if (stockKind === "UNIT") {
             </div>
           </div>
 
-          {/* footer */}
           <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-200 bg-white">
             <button className="btn-ghost" onClick={onClose} disabled={loading}>
               Annulla
