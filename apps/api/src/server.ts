@@ -1439,6 +1439,7 @@ if (inserted > 0) {
     inserted,
   });
 }
+}
     }
 
     res.json({
@@ -1605,15 +1606,26 @@ app.post("/admin/cic/reprocess-pending", async (_req, res) => {
         movementSign: row.operation === "RECEIPT/DELETE" ? 1 : -1,
       });
 
-      await markPendingRowProcessed(row.id);
+      if (inserted > 0) {
+        await markPendingRowProcessed(row.id);
 
-      results.push({
-        id: row.id,
-        docId: row.docId,
-        sku: resolvedSku,
-        status: "PROCESSED",
-        inserted,
-      });
+        results.push({
+          id: row.id,
+          docId: row.docId,
+          sku: resolvedSku,
+          status: "PROCESSED",
+          inserted,
+        });
+      } else {
+        results.push({
+          id: row.id,
+          docId: row.docId,
+          sku: resolvedSku,
+          status: "SKIPPED",
+          reason: "NO_MOVEMENTS_CREATED",
+          inserted,
+        });
+      }
     }
 
     res.json({
