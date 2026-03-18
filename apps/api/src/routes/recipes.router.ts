@@ -8,6 +8,13 @@ import {
   updateRecipeStatus,
 } from "../data/recipes.store.js";
 
+import {
+  listRecipeIngredients,
+  addRecipeIngredient,
+  updateRecipeIngredient,
+  deleteRecipeIngredient,
+} from "../data/recipeIngredients.store.js";
+
 const router = Router();
 
 // =========================
@@ -22,6 +29,148 @@ router.get("/", async (req, res) => {
     res.json({ ok: true, data: recipes });
   } catch (err) {
     console.error("GET /recipes error", err);
+    res.status(500).json({ ok: false, error: "Internal error" });
+  }
+});
+
+// =========================
+// GET INGREDIENTS
+// =========================
+router.get("/:id/ingredients", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const recipe = await getRecipeById(id);
+    if (!recipe) {
+      return res.status(404).json({ ok: false, error: "Recipe not found" });
+    }
+
+    const ingredients = await listRecipeIngredients(id);
+
+    res.json({ ok: true, data: ingredients });
+  } catch (err) {
+    console.error("GET /recipes/:id/ingredients error", err);
+    res.status(500).json({ ok: false, error: "Internal error" });
+  }
+});
+
+// =========================
+// ADD INGREDIENT
+// =========================
+router.post("/:id/ingredients", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const recipe = await getRecipeById(id);
+    if (!recipe) {
+      return res.status(404).json({ ok: false, error: "Recipe not found" });
+    }
+
+    const {
+      ingredient_sku,
+      ingredient_name_snapshot,
+      quantity,
+      um,
+      sort_order,
+      is_optional,
+      waste_pct,
+      notes,
+    } = req.body;
+
+    const qty = Number(quantity);
+
+    if (!ingredient_sku || !um || !Number.isFinite(qty) || qty <= 0) {
+      return res.status(400).json({
+        ok: false,
+        error: "ingredient_sku, quantity > 0 and um are required",
+      });
+    }
+
+    const ingredient = await addRecipeIngredient({
+      recipe_id: id,
+      ingredient_sku,
+      ingredient_name_snapshot,
+      quantity: qty,
+      um,
+      sort_order: sort_order != null ? Number(sort_order) : 0,
+      is_optional: is_optional != null ? Boolean(is_optional) : false,
+      waste_pct: waste_pct != null ? Number(waste_pct) : null,
+      notes,
+    });
+
+    res.json({ ok: true, data: ingredient });
+  } catch (err) {
+    console.error("POST /recipes/:id/ingredients error", err);
+    res.status(500).json({ ok: false, error: "Internal error" });
+  }
+});
+
+// =========================
+// UPDATE INGREDIENT
+// =========================
+router.put("/:id/ingredients/:ingredientId", async (req, res) => {
+  try {
+    const { id, ingredientId } = req.params;
+
+    const recipe = await getRecipeById(id);
+    if (!recipe) {
+      return res.status(404).json({ ok: false, error: "Recipe not found" });
+    }
+
+    const {
+      ingredient_sku,
+      ingredient_name_snapshot,
+      quantity,
+      um,
+      sort_order,
+      is_optional,
+      waste_pct,
+      notes,
+    } = req.body;
+
+    const ingredient = await updateRecipeIngredient(ingredientId, {
+      ingredient_sku,
+      ingredient_name_snapshot,
+      quantity: quantity != null ? Number(quantity) : undefined,
+      um,
+      sort_order: sort_order != null ? Number(sort_order) : undefined,
+      is_optional: is_optional != null ? Boolean(is_optional) : undefined,
+      waste_pct: waste_pct != null ? Number(waste_pct) : undefined,
+      notes,
+    });
+
+    if (!ingredient) {
+      return res.status(404).json({ ok: false, error: "Ingredient not found" });
+    }
+
+    res.json({ ok: true, data: ingredient });
+  } catch (err) {
+    console.error("PUT /recipes/:id/ingredients/:ingredientId error", err);
+    res.status(500).json({ ok: false, error: "Internal error" });
+  }
+});
+
+// =========================
+// DELETE INGREDIENT
+// =========================
+router.delete("/:id/ingredients/:ingredientId", async (req, res) => {
+  try {
+    const { id, ingredientId } = req.params;
+
+    const recipe = await getRecipeById(id);
+    if (!recipe) {
+      return res.status(404).json({ ok: false, error: "Recipe not found" });
+    }
+
+    const deleted = await deleteRecipeIngredient(ingredientId);
+
+    if (!deleted) {
+      return res.status(404).json({ ok: false, error: "Ingredient not found" });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("DELETE /recipes/:id/ingredients/:ingredientId error", err);
     res.status(500).json({ ok: false, error: "Internal error" });
   }
 });
@@ -72,7 +221,6 @@ router.post("/", async (req, res) => {
   } catch (err: any) {
     console.error("POST /recipes error", err);
 
-    // gestione unique SKU
     if (err.code === "23505") {
       return res.status(400).json({
         ok: false,
@@ -90,7 +238,6 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-
     const { name, product_sku } = req.body;
 
     const recipe = await updateRecipe(id, {
@@ -103,8 +250,16 @@ router.put("/:id", async (req, res) => {
     }
 
     res.json({ ok: true, data: recipe });
-  } catch (err) {
+  } catch (err: any) {
     console.error("PUT /recipes/:id error", err);
+
+    if (err.code === "23505") {
+      return res.status(400).json({
+        ok: false,
+        error: "Recipe already exists for this product_sku",
+      });
+    }
+
     res.status(500).json({ ok: false, error: "Internal error" });
   }
 });
