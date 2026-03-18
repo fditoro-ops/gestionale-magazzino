@@ -1,19 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { Order } from "./OrdersTable";
 
-function getOrderDisplayNumber(order: Order): string {
-  const d = new Date(order.createdAt);
-  const yy = String(d.getFullYear()).slice(-2);
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const shortId = String(order.orderId || "")
-    .replace(/^ord_/i, "")
-    .replace(/[^a-z0-9]/gi, "")
-    .slice(0, 6)
-    .toUpperCase();
-
-  return `ORD-${yy}${mm}${dd}-${shortId || "XXXXXX"}`;
-}
 type DrawerOrderLine = Order["lines"][number];
 
 export default function OrderDrawer({
@@ -132,7 +119,7 @@ export default function OrderDrawer({
         <div style={panelHeader}>
           <div style={{ display: "grid", gap: 2 }}>
 <div style={{ fontWeight: 1000, fontSize: 16 }}>
-  {o ? getOrderDisplayNumber(o) : "Ordine"}
+  {o?.orderId ?? "Ordine"}
 </div>
             <div style={{ fontSize: 12, color: "#667" }}>
               {o
