@@ -13,75 +13,88 @@ export const CategoryId = z.enum([
   "tequila",
 ]);
 
-const StockKind = z.enum(["UNIT", "VOLUME_CONTAINER"]);
 const Supplier = z.enum(["DORECA", "ALPORI", "VARI"]);
+const ItemUm = z.enum(["CL", "PZ"]);
+
+const nullableTrimmedString = z
+  .string()
+  .transform((s) => s.trim())
+  .pipe(z.string().min(1))
+  .nullable()
+  .optional();
 
 export const CreateItemSchema = z
   .object({
     sku: z.string().min(1).transform((s) => s.toUpperCase().trim()),
-    name: z.string().min(1),
+    name: z.string().min(1).transform((s) => s.trim()),
 
-    categoryId: CategoryId,
+    categoryId: CategoryId.optional(),
+    category: z.string().trim().min(1).optional(),
+
     supplier: Supplier.default("VARI"),
-
     active: z.boolean().default(true),
 
-    stockKind: StockKind,
+    um: ItemUm,
+    baseQty: z.coerce.number().positive(),
 
-    minStockCl: z.number().min(0).default(0),
-
-    unitToCl: z.number().positive().optional(),
-    containerSizeCl: z.number().positive().optional(),
-    containerLabel: z.string().min(1).optional(),
-
-    brand: z.string().trim().min(1).nullable().optional(),
-    packSize: z.number().int().positive().nullable().optional(),
+    brand: nullableTrimmedString,
+    packSize: z.coerce.number().positive().nullable().optional(),
 
     imageUrl: z.string().url().nullable().optional(),
 
-    lastCostCents: z.number().min(0).int().nullable().optional(),
+    costEur: z.coerce.number().min(0).nullable().optional(),
+    lastCostCents: z.coerce.number().int().min(0).nullable().optional(),
     costCurrency: z.literal("EUR").default("EUR"),
   })
   .superRefine((data, ctx) => {
-    if (data.stockKind === "UNIT" && !data.unitToCl) {
+    if (data.um === "PZ" && data.baseQty !== 1) {
       ctx.addIssue({
-        path: ["unitToCl"],
+        path: ["baseQty"],
         code: z.ZodIssueCode.custom,
-        message: "unitToCl obbligatorio per stockKind=UNIT",
+        message: "Per gli articoli PZ baseQty deve essere 1",
       });
     }
 
-    if (data.stockKind === "VOLUME_CONTAINER" && !data.containerSizeCl) {
+    if (!data.categoryId && !data.category) {
       ctx.addIssue({
-        path: ["containerSizeCl"],
+        path: ["categoryId"],
         code: z.ZodIssueCode.custom,
-        message: "containerSizeCl obbligatorio per stockKind=VOLUME_CONTAINER",
+        message: "categoryId o category è obbligatorio",
       });
     }
   });
 
-export const UpdateItemSchema = z.object({
-  name: z.string().min(1).optional(),
-  categoryId: CategoryId.optional(),
-  supplier: Supplier.optional(),
+export const UpdateItemSchema = z
+  .object({
+    name: z.string().min(1).transform((s) => s.trim()).optional(),
 
-  active: z.boolean().optional(),
+    categoryId: CategoryId.optional(),
+    category: z.string().trim().min(1).nullable().optional(),
 
-  stockKind: StockKind.optional(),
-  minStockCl: z.number().min(0).nullable().optional(),
+    supplier: Supplier.optional(),
+    active: z.boolean().optional(),
 
-  unitToCl: z.number().positive().nullable().optional(),
-  containerSizeCl: z.number().positive().nullable().optional(),
-  containerLabel: z.string().min(1).nullable().optional(),
+    um: ItemUm.optional(),
+    baseQty: z.coerce.number().positive().nullable().optional(),
 
-  brand: z.string().trim().min(1).nullable().optional(),
-  packSize: z.number().int().positive().nullable().optional(),
+    brand: nullableTrimmedString,
+    packSize: z.coerce.number().positive().nullable().optional(),
 
-  imageUrl: z.string().url().nullable().optional(),
+    imageUrl: z.string().url().nullable().optional(),
 
-  lastCostCents: z.number().min(0).int().nullable().optional(),
-  costCurrency: z.literal("EUR").optional(),
-});
+    costEur: z.coerce.number().min(0).nullable().optional(),
+    lastCostCents: z.coerce.number().int().min(0).nullable().optional(),
+    costCurrency: z.literal("EUR").optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.um === "PZ" && data.baseQty != null && data.baseQty !== 1) {
+      ctx.addIssue({
+        path: ["baseQty"],
+        code: z.ZodIssueCode.custom,
+        message: "Per gli articoli PZ baseQty deve essere 1",
+      });
+    }
+  });
 
 export type CreateItemInput = z.infer<typeof CreateItemSchema>;
 export type UpdateItemInput = z.infer<typeof UpdateItemSchema>;
