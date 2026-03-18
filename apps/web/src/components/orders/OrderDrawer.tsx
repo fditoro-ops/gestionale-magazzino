@@ -1,6 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { Order } from "./OrdersTable";
 
+function getOrderDisplayNumber(order: Order): string {
+  const d = new Date(order.createdAt);
+  const yy = String(d.getFullYear()).slice(-2);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const shortId = String(order.orderId || "")
+    .replace(/^ord_/i, "")
+    .replace(/[^a-z0-9]/gi, "")
+    .slice(0, 6)
+    .toUpperCase();
+
+  return `ORD-${yy}${mm}${dd}-${shortId || "XXXXXX"}`;
+}
 type DrawerOrderLine = Order["lines"][number];
 
 export default function OrderDrawer({
@@ -118,9 +131,9 @@ export default function OrderDrawer({
       <div style={panel} onMouseDown={(e) => e.stopPropagation()}>
         <div style={panelHeader}>
           <div style={{ display: "grid", gap: 2 }}>
-            <div style={{ fontWeight: 1000, fontSize: 16 }}>
-              {o?.orderId ?? "Ordine"}
-            </div>
+<div style={{ fontWeight: 1000, fontSize: 16 }}>
+  {o ? getOrderDisplayNumber(o) : "Ordine"}
+</div>
             <div style={{ fontSize: 12, color: "#667" }}>
               {o
                 ? `${o.supplier} • ${new Date(o.createdAt).toLocaleString()} • ${o.status}`
@@ -138,7 +151,16 @@ export default function OrderDrawer({
             Nessun ordine selezionato.
           </div>
         ) : (
-          <div style={{ padding: 14, display: "grid", gap: 12 }}>
+         <div
+  style={{
+    padding: 14,
+    display: "grid",
+    gap: 12,
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+  }}
+>
             {o.notes && (
               <div style={{ fontSize: 13, color: "#334", opacity: 0.9 }}>
                 <b>Note:</b> {o.notes}
@@ -281,6 +303,10 @@ function Th({
         textAlign: "left",
         fontSize: 12,
         color: "#667",
+        position: "sticky",
+        top: 0,
+        background: "#f9fafb",
+        zIndex: 1,
         ...style,
       }}
     >
@@ -326,6 +352,7 @@ const panel: React.CSSProperties = {
   boxShadow: "-12px 0 30px rgba(0,0,0,0.18)",
   display: "flex",
   flexDirection: "column",
+  minHeight: 0,
 };
 
 const panelHeader: React.CSSProperties = {
