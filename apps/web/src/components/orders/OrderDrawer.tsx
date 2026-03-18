@@ -228,7 +228,7 @@ export default function OrderDrawer({
               </table>
             </div>
 
-            {canReceive && !isClosed && (
+                      {canReceive && !isClosed && (
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <button
                   onClick={() => {
@@ -265,6 +265,7 @@ export default function OrderDrawer({
             )}
           </div>
         )}
+      </div>
     </div>
   );
 }
