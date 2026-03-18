@@ -138,16 +138,9 @@ export default function OrderDrawer({
             Nessun ordine selezionato.
           </div>
         ) : (
-         <div
-  style={{
-    padding: 14,
-    display: "grid",
-    gap: 12,
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-  }}
->
+
+      <div style={panelBody}>
+  
             {o.notes && (
               <div style={{ fontSize: 13, color: "#334", opacity: 0.9 }}>
                 <b>Note:</b> {o.notes}
@@ -163,12 +156,16 @@ export default function OrderDrawer({
               />
             )}
 
-            <div
-              style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: 12,
-                overflow: "hidden",
-              }}
+<div
+  style={{
+    border: "1px solid #e5e7eb",
+    borderRadius: 12,
+    overflowX: "auto",
+    overflowY: "visible",
+    background: "white",
+    flexShrink: 0,
+  }}
+>
             >
               <table
                 style={{
@@ -333,13 +330,14 @@ const overlay: React.CSSProperties = {
 
 const panel: React.CSSProperties = {
   width: "min(720px, 92vw)",
-  height: "100%",
+  height: "100vh",
   background: "#F7FAFC",
   borderLeft: "1px solid #D9E2EC",
   boxShadow: "-12px 0 30px rgba(0,0,0,0.18)",
   display: "flex",
   flexDirection: "column",
   minHeight: 0,
+  overflow: "hidden",
 };
 
 const panelHeader: React.CSSProperties = {
@@ -350,6 +348,18 @@ const panelHeader: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "space-between",
   gap: 12,
+};
+
+const panelBody: React.CSSProperties = {
+  padding: 14,
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+  flex: 1,
+  minHeight: 0,
+  overflowY: "auto",
+  overflowX: "hidden",
+  WebkitOverflowScrolling: "touch",
 };
 
 const inp: React.CSSProperties = {
