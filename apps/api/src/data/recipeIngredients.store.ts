@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { pool } from "../src/db.js";
+import { pool } from "../db.js";
 
 export type RecipeIngredient = {
   id: string;
