@@ -1154,6 +1154,17 @@ if (inserted > 0) {
     inserted,
   });
 }
+    
+} else {
+  results.push({
+    id: row.id,
+    docId: row.docId,
+    sku: resolvedSku,
+    status: "SKIPPED",
+    reason: "NO_MOVEMENTS_CREATED",
+    inserted,
+  });
+}
 
     console.log("✅ SCARICHI GENERATI:", inserted);
     return res.status(200).send("OK");
