@@ -23,25 +23,57 @@ const NullableNotesSchema = z.preprocess(
 
 const OrderLineCreateSchema = z.object({
   sku: SkuSchema,
-  qtyOrderedConf: z.number().int().positive(),
+  qtyOrderedConf: z.coerce.number().int().positive(),
 });
 
-export const CreateOrderSchema = z.object({
-  supplier: SupplierSchema,
-  notes: NullableNotesSchema.optional(),
-  lines: z.array(OrderLineCreateSchema).min(1),
-});
+export const CreateOrderSchema = z
+  .object({
+    supplier: SupplierSchema,
+    notes: NullableNotesSchema.optional(),
+    lines: z.array(OrderLineCreateSchema).min(1),
+  })
+  .superRefine((data, ctx) => {
+    const seen = new Set<string>();
+
+    for (const [index, line] of data.lines.entries()) {
+      if (seen.has(line.sku)) {
+        ctx.addIssue({
+          path: ["lines", index, "sku"],
+          code: z.ZodIssueCode.custom,
+          message: `SKU duplicata nello stesso ordine: ${line.sku}`,
+        });
+      }
+      seen.add(line.sku);
+    }
+  });
 
 const OrderLinePatchSchema = z.object({
   sku: SkuSchema,
-  qtyOrderedConf: z.number().int().positive(),
+  qtyOrderedConf: z.coerce.number().int().positive(),
 });
 
-export const UpdateOrderSchema = z.object({
-  supplier: SupplierSchema.optional(),
-  notes: NullableNotesSchema.optional(),
-  lines: z.array(OrderLinePatchSchema).min(1).optional(),
-});
+export const UpdateOrderSchema = z
+  .object({
+    supplier: SupplierSchema.optional(),
+    notes: NullableNotesSchema.optional(),
+    lines: z.array(OrderLinePatchSchema).min(1).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!Array.isArray(data.lines)) return;
+
+    const seen = new Set<string>();
+
+    for (const [index, line] of data.lines.entries()) {
+      if (seen.has(line.sku)) {
+        ctx.addIssue({
+          path: ["lines", index, "sku"],
+          code: z.ZodIssueCode.custom,
+          message: `SKU duplicata nello stesso ordine: ${line.sku}`,
+        });
+      }
+      seen.add(line.sku);
+    }
+  });
 
 export const ReceiveOrderSchema = z.object({
   note: z.preprocess(
@@ -56,7 +88,7 @@ export const ReceiveOrderSchema = z.object({
     .array(
       z.object({
         sku: SkuSchema,
-        qtyReceivedNowConf: z.number().int().positive(),
+        qtyReceivedNowConf: z.coerce.number().int().positive(),
       })
     )
     .min(1),
