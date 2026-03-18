@@ -1115,59 +1115,22 @@ const lineTotal = Number.isFinite(rawCalculatedAmount) && rawCalculatedAmount > 
         qty: Number(it.qty || 0),
       });
     }
-
-    const movementSign = operation === "RECEIPT/DELETE" ? 1 : -1;
+const movementSign = operation === "RECEIPT/DELETE" ? 1 : -1;
 
 const inserted = await applyRecipeStock({
-  docId: row.docId,
-  receiptNumber: "",
-  tenantId: row.tenantId,
-  orderDate: new Date(row.orderDate),
-  soldItems: [
-    {
-      sku: resolvedSku,
-      qty: Number(row.qty || 0),
-    },
-  ],
+  docId,
+  receiptNumber,
+  tenantId,
+  orderDate,
+  soldItems: finalResolvedItems,
   bom: bomCache,
   cicProductModes: cicModesBySku,
-  movementSign: row.operation === "RECEIPT/DELETE" ? 1 : -1,
+  movementSign,
 });
 
-if (inserted > 0) {
-  await markPendingRowProcessed(row.id);
-
-  results.push({
-    id: row.id,
-    docId: row.docId,
-    sku: resolvedSku,
-    status: "PROCESSED",
-    inserted,
-  });
-} else {
-  results.push({
-    id: row.id,
-    docId: row.docId,
-    sku: resolvedSku,
-    status: "SKIPPED",
-    reason: "NO_MOVEMENTS_CREATED",
-    inserted,
-  });
-}
-    
-} else {
-  results.push({
-    id: row.id,
-    docId: row.docId,
-    sku: resolvedSku,
-    status: "SKIPPED",
-    reason: "NO_MOVEMENTS_CREATED",
-    inserted,
-  });
-}
-
-    console.log("✅ SCARICHI GENERATI:", inserted);
-    return res.status(200).send("OK");
+console.log("✅ SCARICHI GENERATI:", inserted);
+return res.status(200).send("OK");
+      
   } catch (err) {
     console.error("CIC webhook error:", err);
     return res.status(500).send("Webhook error");
@@ -1444,7 +1407,7 @@ const inserted = await applyRecipeStock({
   docId: row.docId,
   receiptNumber: "",
   tenantId: row.tenantId,
-  orderDate,
+  orderDate: new Date(row.orderDate),
   soldItems: [
     {
       sku: resolvedSku,
@@ -1453,18 +1416,29 @@ const inserted = await applyRecipeStock({
   ],
   bom: bomCache,
   cicProductModes: cicModesBySku,
-  movementSign,
+  movementSign: row.operation === "RECEIPT/DELETE" ? 1 : -1,
 });
 
-      await markPendingRowProcessed(row.id);
+if (inserted > 0) {
+  await markPendingRowProcessed(row.id);
 
-      results.push({
-        id: row.id,
-        docId: row.docId,
-        sku: resolvedSku,
-        status: "PROCESSED",
-        inserted,
-      });
+  results.push({
+    id: row.id,
+    docId: row.docId,
+    sku: resolvedSku,
+    status: "PROCESSED",
+    inserted,
+  });
+} else {
+  results.push({
+    id: row.id,
+    docId: row.docId,
+    sku: resolvedSku,
+    status: "SKIPPED",
+    reason: "NO_MOVEMENTS_CREATED",
+    inserted,
+  });
+}
     }
 
     res.json({
