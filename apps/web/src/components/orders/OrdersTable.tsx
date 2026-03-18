@@ -124,12 +124,11 @@ export default function OrdersTable({
 
               return (
                 <tr key={o.orderId} style={{ borderTop: "1px solid #eef2f7" }}>
-                  <Td>
-                    <span style={{ fontWeight: 900 }}>
-                      {formatOrderNumber(o)}
-                    </span>
-                  </Td>
-
+<Td>
+  <span style={{ fontWeight: 900 }}>
+    {o.orderId}
+  </span>
+</Td>
                   <Td style={{ color: "#334", opacity: 0.9 }}>
                     {new Date(o.createdAt).toLocaleString()}
                   </Td>
@@ -248,19 +247,6 @@ export default function OrdersTable({
   );
 }
 
-function formatOrderNumber(order: Order): string {
-  const d = new Date(order.createdAt);
-  const yy = String(d.getFullYear()).slice(-2);
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const shortId = String(order.orderId || "")
-    .replace(/^ord_/i, "")
-    .replace(/[^a-z0-9]/gi, "")
-    .slice(0, 6)
-    .toUpperCase();
-
-  return `ORD-${yy}${mm}${dd}-${shortId || "XXXXXX"}`;
-}
 
 function statusTone(
   status: OrderStatus
