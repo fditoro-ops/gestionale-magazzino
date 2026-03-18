@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import ItemDetailsModal, { type Item } from "./ItemDetailsModal";
 import { RefreshCw, Plus, Pencil, X } from "lucide-react";
 
-const API_BASE =
-  import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
-type StockKind = "UNIT" | "VOLUME_CONTAINER";
 type Supplier = "DORECA" | "ALPORI" | "VARI";
+type ItemUm = "CL" | "PZ";
 
 const CATEGORIES = [
   { id: "bevande", label: "Bevande" },
@@ -23,9 +22,11 @@ const CATEGORIES = [
 
 const CATEGORY_IDS = CATEGORIES.map((c) => c.id) as readonly string[];
 
-function normalizeCategoryId(raw: any): (typeof CATEGORIES)[number]["id"] {
-  const s = (raw ?? "").toString();
-  return (CATEGORY_IDS as readonly string[]).includes(s) ? (s as any) : "bevande";
+function normalizeCategoryId(raw: unknown): (typeof CATEGORIES)[number]["id"] {
+  const s = String(raw ?? "");
+  return (CATEGORY_IDS as readonly string[]).includes(s)
+    ? (s as (typeof CATEGORIES)[number]["id"])
+    : "bevande";
 }
 
 const SUPPLIERS = [
@@ -50,13 +51,30 @@ function isHttpUrl(s: string) {
   return /^https?:\/\/.+/i.test(s);
 }
 
+function parsePositiveNumber(raw: string): number | null {
+  if (!raw.trim()) return null;
+  const n = Number(raw.replace(",", "."));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+function formatItemMeasure(item: any) {
+  const um = item?.um;
+  const baseQty = Number(item?.baseQty);
+
+  if ((um !== "CL" && um !== "PZ") || !Number.isFinite(baseQty) || baseQty <= 0) {
+    return "DATI MANCANTI";
+  }
+
+  return `${baseQty} ${um}`;
+}
+
 export default function ItemsAdmin() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
 
-  // ✅ accordion create
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   // CREATE STATE
@@ -64,18 +82,12 @@ export default function ItemsAdmin() {
   const [newName, setNewName] = useState("");
   const [newBrand, setNewBrand] = useState("");
   const [newPackSize, setNewPackSize] = useState("");
-
   const [newCategoryId, setNewCategoryId] = useState<
     (typeof CATEGORIES)[number]["id"]
   >("bevande");
-
   const [newSupplier, setNewSupplier] = useState<Supplier>("VARI");
-
-  const [newStockKind, setNewStockKind] = useState<StockKind>("UNIT");
-  const [newUnitToCl, setNewUnitToCl] = useState(33);
-  const [newContainerSizeCl, setNewContainerSizeCl] = useState(70);
-  const [newContainerLabel, setNewContainerLabel] = useState("Bottiglia");
-  const [newMinStockCl, setNewMinStockCl] = useState(0);
+  const [newUm, setNewUm] = useState<ItemUm>("PZ");
+  const [newBaseQty, setNewBaseQty] = useState("1");
   const [newLastCostEuro, setNewLastCostEuro] = useState("");
   const [newImageUrl, setNewImageUrl] = useState("");
 
@@ -109,10 +121,10 @@ export default function ItemsAdmin() {
   const filtered = useMemo(() => {
     const qq = q.trim().toUpperCase();
     if (!qq) return items;
-    return items.filter((i) => {
-      const sku = (i.sku ?? "").toUpperCase();
-      const name = (i.name ?? "").toUpperCase();
-      const brand = (i.brand ?? "").toUpperCase();
+    return items.filter((i: any) => {
+      const sku = String(i.sku ?? "").toUpperCase();
+      const name = String(i.name ?? "").toUpperCase();
+      const brand = String(i.brand ?? "").toUpperCase();
       return sku.includes(qq) || name.includes(qq) || brand.includes(qq);
     });
   }, [items, q]);
@@ -124,21 +136,45 @@ export default function ItemsAdmin() {
     setNewPackSize("");
     setNewCategoryId("bevande");
     setNewSupplier("VARI");
-    setNewStockKind("UNIT");
-    setNewUnitToCl(33);
-    setNewContainerSizeCl(70);
-    setNewContainerLabel("Bottiglia");
-    setNewMinStockCl(0);
+    setNewUm("PZ");
+    setNewBaseQty("1");
     setNewLastCostEuro("");
     setNewImageUrl("");
+  }
+
+  function handleUmChange(nextUm: ItemUm) {
+    setNewUm(nextUm);
+
+    // UX assistita, non fallback nascosto
+    if (nextUm === "PZ" && (!newBaseQty.trim() || newBaseQty === "0")) {
+      setNewBaseQty("1");
+    }
   }
 
   async function createItem() {
     setErr(null);
 
     const sku = normalizeSku(newSku);
+    const baseQty = parsePositiveNumber(newBaseQty);
+    const packSize = parsePositiveNumber(newPackSize);
+
     if (!sku || !newName.trim()) {
       setErr("SKU e Nome articolo sono obbligatori.");
+      return;
+    }
+
+    if (newUm !== "CL" && newUm !== "PZ") {
+      setErr("UM non valida.");
+      return;
+    }
+
+    if (baseQty == null) {
+      setErr("Quantità base non valida.");
+      return;
+    }
+
+    if (newUm === "PZ" && baseQty !== 1) {
+      setErr("Per gli articoli a PZ la quantità base deve essere 1.");
       return;
     }
 
@@ -147,28 +183,24 @@ export default function ItemsAdmin() {
       return;
     }
 
-    const payload: any = {
+    const payload = {
       sku,
       name: newName.trim(),
       categoryId: newCategoryId,
+      category: newCategoryId,
       supplier: newSupplier,
       active: true,
-      stockKind: newStockKind,
-      baseUnit: "CL",
-      minStockCl: newMinStockCl,
       brand: newBrand.trim() || null,
-      packSize: newPackSize.trim() ? Number(newPackSize) : null,
+      packSize,
+      um: newUm,
+      baseQty,
+      costEur: newLastCostEuro.trim()
+        ? Number(newLastCostEuro.replace(",", "."))
+        : null,
       lastCostCents: euroToCents(newLastCostEuro),
       costCurrency: "EUR",
       imageUrl: newImageUrl.trim() || null,
     };
-
-    if (newStockKind === "UNIT") {
-      payload.unitToCl = newUnitToCl;
-    } else {
-      payload.containerSizeCl = newContainerSizeCl;
-      payload.containerLabel = newContainerLabel;
-    }
 
     setLoading(true);
     try {
@@ -184,8 +216,6 @@ export default function ItemsAdmin() {
       }
 
       await reload();
-
-      // ✅ reset + close accordion
       resetCreateForm();
       setIsCreateOpen(false);
     } catch (e: any) {
@@ -212,12 +242,11 @@ export default function ItemsAdmin() {
 
   return (
     <div className="grid gap-4">
-      {/* HEADER */}
       <div className="flex items-end justify-between gap-3">
         <div>
           <h2 className="m-0">Anagrafica articoli</h2>
           <div className="text-xs text-gray-500">
-            Crea e gestisci SKU, fornitori, categorie e parametri stock
+            Crea e gestisci SKU, fornitori, categorie e unità reali di stock
           </div>
         </div>
 
@@ -232,7 +261,6 @@ export default function ItemsAdmin() {
         </button>
       </div>
 
-      {/* SEARCH */}
       <div className="card">
         <div className="card-body grid gap-2">
           <label className={labelCls}>Cerca</label>
@@ -247,7 +275,6 @@ export default function ItemsAdmin() {
 
       {err && <div className="text-sm text-red-600">{err}</div>}
 
-      {/* ✅ CREATE (COLLAPSIBLE) */}
       <div className="card">
         <div className="card-header">
           <div>
@@ -271,7 +298,6 @@ export default function ItemsAdmin() {
         {isCreateOpen && (
           <div className="card-body">
             <div className="grid grid-cols-12 gap-3">
-              {/* SKU */}
               <div className="col-span-12 md:col-span-3 grid gap-1">
                 <label className={labelCls}>SKU</label>
                 <input
@@ -282,7 +308,6 @@ export default function ItemsAdmin() {
                 />
               </div>
 
-              {/* Nome */}
               <div className="col-span-12 md:col-span-6 grid gap-1">
                 <label className={labelCls}>Nome articolo</label>
                 <input
@@ -293,7 +318,6 @@ export default function ItemsAdmin() {
                 />
               </div>
 
-              {/* Brand */}
               <div className="col-span-12 md:col-span-3 grid gap-1">
                 <label className={labelCls}>Brand</label>
                 <input
@@ -304,7 +328,6 @@ export default function ItemsAdmin() {
                 />
               </div>
 
-              {/* Pack size */}
               <div className="col-span-12 md:col-span-3 grid gap-1">
                 <label className={labelCls}>Pezzi per cassa</label>
                 <input
@@ -317,8 +340,7 @@ export default function ItemsAdmin() {
                 />
               </div>
 
-              {/* Categoria */}
-              <div className="col-span-12 md:col-span-4 grid gap-1">
+              <div className="col-span-12 md:col-span-3 grid gap-1">
                 <label className={labelCls}>Categoria</label>
                 <select
                   className={inputCls}
@@ -333,8 +355,7 @@ export default function ItemsAdmin() {
                 </select>
               </div>
 
-              {/* Fornitore */}
-              <div className="col-span-12 md:col-span-2 grid gap-1">
+              <div className="col-span-12 md:col-span-3 grid gap-1">
                 <label className={labelCls}>Fornitore</label>
                 <select
                   className={inputCls}
@@ -349,74 +370,39 @@ export default function ItemsAdmin() {
                 </select>
               </div>
 
-              {/* Stock kind */}
               <div className="col-span-12 md:col-span-3 grid gap-1">
-                <label className={labelCls}>Gestione stock</label>
+                <label className={labelCls}>UM</label>
                 <select
                   className={inputCls}
-                  value={newStockKind}
-                  onChange={(e) => setNewStockKind(e.target.value as StockKind)}
+                  value={newUm}
+                  onChange={(e) => handleUmChange(e.target.value as ItemUm)}
                 >
-                  <option value="UNIT">Pezzi (PZ)</option>
-                  <option value="VOLUME_CONTAINER">Volume (CL)</option>
+                  <option value="PZ">Pezzi (PZ)</option>
+                  <option value="CL">Centilitri (CL)</option>
                 </select>
                 <div className={helpCls}>
-                  PZ: lattine/bottiglie. CL: bottiglie da spillare.
+                  PZ per articoli contati a pezzi. CL per liquidi.
                 </div>
               </div>
 
-              {/* Stock detail */}
-              {newStockKind === "UNIT" ? (
-                <div className="col-span-12 md:col-span-3 grid gap-1">
-                  <label className={labelCls}>CL per pezzo</label>
-                  <input
-                    className={inputCls}
-                    type="number"
-                    value={newUnitToCl}
-                    onChange={(e) => setNewUnitToCl(Number(e.target.value))}
-                    placeholder="Es. 33"
-                  />
-                </div>
-              ) : (
-                <>
-                  <div className="col-span-12 md:col-span-3 grid gap-1">
-                    <label className={labelCls}>CL contenitore</label>
-                    <input
-                      className={inputCls}
-                      type="number"
-                      value={newContainerSizeCl}
-                      onChange={(e) =>
-                        setNewContainerSizeCl(Number(e.target.value))
-                      }
-                      placeholder="Es. 70"
-                    />
-                  </div>
-
-                  <div className="col-span-12 md:col-span-3 grid gap-1">
-                    <label className={labelCls}>Nome contenitore</label>
-                    <input
-                      className={inputCls}
-                      value={newContainerLabel}
-                      onChange={(e) => setNewContainerLabel(e.target.value)}
-                      placeholder="Es. Bottiglia"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* Min stock */}
               <div className="col-span-12 md:col-span-3 grid gap-1">
-                <label className={labelCls}>Scorta minima (CL)</label>
+                <label className={labelCls}>Quantità base</label>
                 <input
                   className={inputCls}
                   type="number"
-                  value={newMinStockCl}
-                  onChange={(e) => setNewMinStockCl(Number(e.target.value))}
-                  placeholder="Es. 0"
+                  min={1}
+                  step="any"
+                  value={newBaseQty}
+                  onChange={(e) => setNewBaseQty(e.target.value)}
+                  placeholder={newUm === "PZ" ? "1" : "Es. 70"}
                 />
+                <div className={helpCls}>
+                  {newUm === "PZ"
+                    ? "Per gli articoli a pezzi deve essere 1."
+                    : "Inserisci la quantità reale in CL."}
+                </div>
               </div>
 
-              {/* Cost */}
               <div className="col-span-12 md:col-span-3 grid gap-1">
                 <label className={labelCls}>Ultimo costo (EUR)</label>
                 <input
@@ -427,7 +413,6 @@ export default function ItemsAdmin() {
                 />
               </div>
 
-              {/* Image */}
               <div className="col-span-12 md:col-span-6 grid gap-1">
                 <label className={labelCls}>URL immagine</label>
                 <input
@@ -442,7 +427,6 @@ export default function ItemsAdmin() {
               </div>
             </div>
 
-            {/* actions */}
             <div className="mt-4 flex items-center justify-end gap-2">
               <button
                 className="btn-ghost"
@@ -468,7 +452,6 @@ export default function ItemsAdmin() {
         )}
       </div>
 
-      {/* LIST */}
       <div className="card">
         <div className="card-header">
           <div>
@@ -487,27 +470,25 @@ export default function ItemsAdmin() {
                 <th className="th">Nome</th>
                 <th className="th">Categoria</th>
                 <th className="th">Fornitore</th>
-                <th className="th">Tipo</th>
+                <th className="th">UM</th>
+                <th className="th">Quantità base</th>
                 <th className="th text-right">Azioni</th>
               </tr>
             </thead>
 
             <tbody>
-              {filtered.map((it) => (
+              {filtered.map((it: any) => (
                 <tr key={it.itemId ?? it.sku} className="tr-hover">
                   <td className="td font-medium text-gray-900">{it.sku}</td>
                   <td className="td text-gray-700">{it.name}</td>
                   <td className="td text-gray-700">
                     {CATEGORIES.find(
-                      (c) => c.id === normalizeCategoryId((it as any).categoryId)
-                    )?.label ?? (it as any).categoryId}
+                      (c) => c.id === normalizeCategoryId(it.categoryId ?? it.category)
+                    )?.label ?? it.categoryId ?? it.category}
                   </td>
-                  <td className="td text-gray-700">
-                    {(it as any).supplier ?? "VARI"}
-                  </td>
-                  <td className="td text-gray-700">
-                    {(it as any).stockKind === "UNIT" ? "PZ" : "CL"}
-                  </td>
+                  <td className="td text-gray-700">{it.supplier ?? "VARI"}</td>
+                  <td className="td text-gray-700">{it.um ?? "DATI MANCANTI"}</td>
+                  <td className="td text-gray-700">{formatItemMeasure(it)}</td>
 
                   <td className="td text-right">
                     <button
@@ -528,7 +509,7 @@ export default function ItemsAdmin() {
 
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td className="td text-gray-500" colSpan={6}>
+                  <td className="td text-gray-500" colSpan={7}>
                     Nessun articolo trovato.
                   </td>
                 </tr>
