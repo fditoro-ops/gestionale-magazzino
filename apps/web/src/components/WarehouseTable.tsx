@@ -4,19 +4,19 @@ type WarehouseRow = {
   itemId?: string;
   sku: string;
   name: string;
-  stockBt: number; // nel tuo Core questa è la giacenza tecnica reale
+  stockBt: number;
   minStockBt?: number | null;
-
-  // campi articolo utili per conversione "leggibile"
-  packSize?: number | null;   // es. 70, 75, 100, 3000
-  baseQty?: number | null;    // opzionale, se già usato nel tuo modello
-  um?: string | null;         // es. CL, PZ
+  packSize?: number | null;
+  baseQty?: number | null;
+  um?: string | null;
 };
 
 export default function WarehouseTable({
   rows,
+  onPickSku,
 }: {
   rows: WarehouseRow[];
+  onPickSku?: (sku: string) => void;
 }) {
   const [search, setSearch] = useState("");
 
@@ -43,23 +43,15 @@ export default function WarehouseTable({
   function getStockBoxes(row: WarehouseRow): number | null {
     const stockTechnical = Number(row.stockBt || 0);
 
-    // Caso PZ: non ha senso dividere, il leggibile coincide
     if (String(row.um || "").toUpperCase() === "PZ") {
       return stockTechnical;
     }
 
-    // packSize è il divisore principale per mostrare le "unità leggibili"
     const packSize = Number(row.packSize || 0);
+    if (packSize > 0) return stockTechnical / packSize;
 
-    if (packSize > 0) {
-      return stockTechnical / packSize;
-    }
-
-    // fallback eventuale
     const baseQty = Number(row.baseQty || 0);
-    if (baseQty > 0) {
-      return stockTechnical / baseQty;
-    }
+    if (baseQty > 0) return stockTechnical / baseQty;
 
     return null;
   }
@@ -99,7 +91,13 @@ export default function WarehouseTable({
               const btLabel = getBtLabel(row);
 
               return (
-                <tr key={row.itemId || row.sku}>
+                <tr
+                  key={row.itemId || row.sku}
+                  onClick={() => onPickSku?.(row.sku)}
+                  style={{
+                    cursor: onPickSku ? "pointer" : "default",
+                  }}
+                >
                   <td style={styles.td}>{row.sku}</td>
                   <td style={styles.td}>{row.name}</td>
 
