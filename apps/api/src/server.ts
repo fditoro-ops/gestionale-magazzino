@@ -1446,6 +1446,182 @@ const inserted = await applyRecipeStock({
   }
 });
 
+app.post("/admin/cic/sync-products", async (_req, res) => {
+  try {
+    await syncCicProducts();
+
+    res.json({
+      ok: true,
+      message: "Prodotti CIC ricaricati",
+      lastSyncAt: cicProductsLastSyncAt,
+      count: Object.keys(cicIdToSkuMap).length,
+    });
+  } catch (err: any) {
+    console.error("POST /admin/cic/sync-products error:", err);
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message ?? err),
+    });
+  }
+});
+
+app.post("/admin/cic/sync-product-modes", async (_req, res) => {
+  try {
+    await syncCicProductModes();
+
+    res.json({
+      ok: true,
+      message: "PRODOTTI_CIC ricaricati",
+      lastSyncAt: cicProductModeLastSyncAt,
+      count: Object.keys(cicProductModeCache).length,
+    });
+  } catch (err: any) {
+    console.error("POST /admin/cic/sync-product-modes error:", err);
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message ?? err),
+    });
+  }
+});
+
+app.post("/admin/cic/sync-bom", async (_req, res) => {
+  try {
+    await syncBom();
+
+    res.json({
+      ok: true,
+      message: "BOM ricaricata",
+      lastSyncAt: bomLastSyncAt,
+      count: Object.keys(bomCache).length,
+    });
+  } catch (err: any) {
+    console.error("POST /admin/cic/sync-bom error:", err);
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message ?? err),
+    });
+  }
+});
+
+app.post("/admin/cic/reprocess-pending", async (_req, res) => {
+  try {
+    const pendingRows = await listPendingRows("PENDING");
+
+    const cicModesBySku = Object.fromEntries(
+      Object.entries(cicProductModeCache).map(([_, v]) => [v.sku, v.mode])
+    ) as Record<string, "RECIPE" | "IGNORE">;
+
+    const results: any[] = [];
+
+    for (const row of pendingRows) {
+      const candidateIds = [
+        String(row.variantId || "").trim(),
+        String(row.productId || "").trim(),
+        String(row.rawResolvedSku || "").trim(),
+      ].filter(Boolean);
+
+      let resolvedSku = "";
+
+      for (const id of candidateIds) {
+        const resolved = cicResolveSku(id);
+        if (resolved && !resolved.includes("-")) {
+          resolvedSku = resolved;
+          break;
+        }
+      }
+
+      if (!resolvedSku) {
+        results.push({
+          id: row.id,
+          docId: row.docId,
+          status: "SKIPPED",
+          reason: "SKU_NOT_RESOLVED",
+        });
+        continue;
+      }
+
+      const mode = cicModesBySku[resolvedSku];
+      const hasRecipe =
+        Array.isArray(bomCache[resolvedSku]) && bomCache[resolvedSku].length > 0;
+
+      if (!mode) {
+        results.push({
+          id: row.id,
+          docId: row.docId,
+          sku: resolvedSku,
+          status: "SKIPPED",
+          reason: "SKU_NOT_CLASSIFIED",
+        });
+        continue;
+      }
+
+      if (mode === "IGNORE") {
+        await markPendingRowProcessed(row.id);
+        results.push({
+          id: row.id,
+          docId: row.docId,
+          sku: resolvedSku,
+          status: "PROCESSED",
+          reason: "IGNORED_AS_CONFIGURED",
+        });
+        continue;
+      }
+
+      if (mode === "RECIPE" && !hasRecipe) {
+        results.push({
+          id: row.id,
+          docId: row.docId,
+          sku: resolvedSku,
+          status: "SKIPPED",
+          reason: "RECIPE_STILL_NOT_FOUND",
+        });
+        continue;
+      }
+
+      const inserted = await applyRecipeStock({
+        docId: row.docId,
+        receiptNumber: "",
+        tenantId: row.tenantId,
+        orderDate: new Date(row.orderDate),
+        soldItems: [
+          {
+            sku: resolvedSku,
+            qty: Number(row.qty || 0),
+          },
+        ],
+        bom: bomCache,
+        cicProductModes: cicModesBySku,
+        movementSign: row.operation === "RECEIPT/DELETE" ? 1 : -1,
+      });
+
+      await markPendingRowProcessed(row.id);
+
+      results.push({
+        id: row.id,
+        docId: row.docId,
+        sku: resolvedSku,
+        status: "PROCESSED",
+        inserted,
+      });
+    }
+
+    res.json({
+      ok: true,
+      message: "Rielaborazione pending completata",
+      total: pendingRows.length,
+      processed: results.filter((r) => r.status === "PROCESSED").length,
+      skipped: results.filter((r) => r.status === "SKIPPED").length,
+      results,
+    });
+  } catch (err: any) {
+    console.error("POST /admin/cic/reprocess-pending error:", err);
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message ?? err),
+    });
+  }
+});
+
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
