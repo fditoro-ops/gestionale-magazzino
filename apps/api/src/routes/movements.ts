@@ -6,7 +6,10 @@ import {
   insertMovement,
 } from "../data/movements.store.js";
 import { CreateMovementSchema } from "../schemas/movement.schema.js";
-import { getItemBySku } from "../services/items.service.js";
+import {
+  getItemBySku,
+  assertItemCoreReady,
+} from "../services/items.service.js";
 
 const router = Router();
 
@@ -28,7 +31,6 @@ router.get("/", async (_req, res) => {
     res.status(500).json({ error: "Errore caricamento movimenti" });
   }
 });
-
 
 async function getCurrentQtyForSku(sku: string) {
   const movements = await loadMovements([]);
@@ -59,7 +61,7 @@ router.post("/", async (req, res) => {
     const sku = parsed.data.sku.toUpperCase().trim();
     const { quantity, type, reason, note } = parsed.data;
 
-    const item = getItemBySku(sku);
+    const item = await getItemBySku(sku);
 
     if (!item) {
       return res.status(400).json({
@@ -67,9 +69,11 @@ router.post("/", async (req, res) => {
       });
     }
 
-    if (item.active === false) {
+    try {
+      assertItemCoreReady(item);
+    } catch (e: any) {
       return res.status(400).json({
-        error: `SKU ${sku} è disattivato`,
+        error: e?.message ?? `SKU ${sku} non configurato correttamente`,
       });
     }
 
