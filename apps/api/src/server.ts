@@ -28,6 +28,7 @@ import authRouter from "./routes/auth.js";
 import usersRouter from "./routes/users.js";
 import inventoryRouter from "./routes/inventory.js";
 import { saveSalesDocumentWithLines, getSalesFeed } from "./data/sales.store.js";
+import recipesRouter from "./routes/recipes.router.js";
 
 /* =========================
    BOM (Google Sheet) Reader
@@ -1523,6 +1524,7 @@ app.use("/orders", ordersRouter);
 app.use("/suppliers", suppliersRouter);
 app.use("/users", usersRouter);
 app.use("/inventory", inventoryRouter);
+app.use("/recipes", recipesRouter);
 app.get("/dashboard/sales", async (req, res) => {
   try {
     const tenantId = String(process.env.TENANT_ID || "IMP001");
