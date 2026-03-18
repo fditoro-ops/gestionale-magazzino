@@ -5,37 +5,97 @@ import { getStockBtForSku } from "../services/stock.service.js";
 
 const router = Router();
 
+type ItemUm = "CL" | "PZ";
+
+function assertValidUm(um: unknown): um is ItemUm {
+  return um === "CL" || um === "PZ";
+}
+
+function normalizeItemMeasure(row: any) {
+  const um = row.um;
+  const baseQty = row.baseQty != null ? Number(row.baseQty) : null;
+
+  if (!assertValidUm(um)) {
+    throw new Error(`Item ${row.sku}: um non valida`);
+  }
+
+  if (!Number.isFinite(baseQty) || baseQty == null || baseQty <= 0) {
+    throw new Error(`Item ${row.sku}: baseQty non valida`);
+  }
+
+  return {
+    um,
+    baseQty,
+  };
+}
+
+function deriveLegacyFieldsFromCore(input: {
+  um: ItemUm;
+  baseQty: number;
+}) {
+  return {
+    stockKind: input.um === "CL" ? "VOLUME_CONTAINER" : "UNIT",
+    unitToCl: null,
+    containerSizeCl: input.um === "CL" ? input.baseQty : null,
+    containerLabel: input.um === "CL" ? `${input.baseQty} CL` : "1 PZ",
+    minStockCl: input.um === "CL" ? 0 : 0,
+  };
+}
+
 function mapRowToItem(row: any) {
   return {
     itemId: row.id,
     sku: row.sku,
     name: row.name ?? "",
 
-    categoryId: row.categoryId ?? "bevande",
+    categoryId: row.categoryId ?? row.category ?? "bevande",
+    category: row.category ?? row.categoryId ?? "bevande",
     supplier: row.supplier ?? "VARI",
 
     active: typeof row.active === "boolean" ? row.active : true,
 
-    stockKind: row.stockKind ?? "UNIT",
-    minStockCl: Number(row.minStockCl ?? 0),
-
-    unitToCl: row.unitToCl != null ? Number(row.unitToCl) : null,
-    containerSizeCl:
-      row.containerSizeCl != null ? Number(row.containerSizeCl) : null,
-    containerLabel: row.containerLabel ?? null,
-
-    imageUrl: row.imageUrl ?? null,
-
-    lastCostCents:
-      row.lastCostCents != null ? Number(row.lastCostCents) : null,
-    costCurrency: row.costCurrency ?? "EUR",
+    um: row.um ?? null,
+    baseQty: row.baseQty != null ? Number(row.baseQty) : null,
 
     brand: row.brand ?? null,
     packSize: row.packSize != null ? Number(row.packSize) : null,
 
+    costEur: row.costEur != null ? Number(row.costEur) : null,
+    lastCostCents:
+      row.lastCostCents != null ? Number(row.lastCostCents) : null,
+    costCurrency: row.costCurrency ?? "EUR",
+
+    imageUrl: row.imageUrl ?? null,
+
+    // compat legacy temporanea, utile se qualche pezzo frontend la legge ancora
+    stockKind: row.stockKind ?? null,
+    unitToCl: row.unitToCl != null ? Number(row.unitToCl) : null,
+    containerSizeCl:
+      row.containerSizeCl != null ? Number(row.containerSizeCl) : null,
+    containerLabel: row.containerLabel ?? null,
+    minStockCl: row.minStockCl != null ? Number(row.minStockCl) : 0,
+
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+async function getItemBySkuOrThrow(sku: string) {
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM "Item"
+    WHERE sku = $1
+    LIMIT 1
+    `,
+    [sku]
+  );
+
+  if (!result.rowCount) {
+    throw new Error("ITEM_NOT_FOUND");
+  }
+
+  return result.rows[0];
 }
 
 // GET /items
@@ -50,16 +110,20 @@ router.get("/", async (_req, res) => {
         supplier,
         active,
         "categoryId",
+        category,
         brand,
         "packSize",
+        um,
+        "baseQty",
+        "costEur",
+        "lastCostCents",
+        "costCurrency",
+        "imageUrl",
         "stockKind",
         "unitToCl",
         "containerSizeCl",
         "containerLabel",
         "minStockCl",
-        "lastCostCents",
-        "costCurrency",
-        "imageUrl",
         "createdAt",
         "updatedAt"
       FROM "Item"
@@ -102,6 +166,26 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: `SKU ${data.sku} già esistente` });
     }
 
+    if (!assertValidUm(data.um)) {
+      return res.status(400).json({ error: "UM non valida" });
+    }
+
+    if (!Number.isFinite(Number(data.baseQty)) || Number(data.baseQty) <= 0) {
+      return res.status(400).json({ error: "baseQty non valida" });
+    }
+
+    if (data.um === "PZ" && Number(data.baseQty) !== 1) {
+      return res
+        .status(400)
+        .json({ error: "Per gli articoli PZ baseQty deve essere 1" });
+    }
+
+    const baseQty = Number(data.baseQty);
+    const legacy = deriveLegacyFieldsFromCore({
+      um: data.um,
+      baseQty,
+    });
+
     const result = await pool.query(
       `
       INSERT INTO "Item" (
@@ -111,22 +195,26 @@ router.post("/", async (req, res) => {
         supplier,
         active,
         "categoryId",
+        category,
         brand,
         "packSize",
+        um,
+        "baseQty",
+        "costEur",
+        "lastCostCents",
+        "costCurrency",
+        "imageUrl",
         "stockKind",
         "unitToCl",
         "containerSizeCl",
         "containerLabel",
         "minStockCl",
-        "lastCostCents",
-        "costCurrency",
-        "imageUrl",
         "createdAt",
         "updatedAt"
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8,
-        $9, $10, $11, $12, $13, $14, $15, $16,
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+        $12, $13, $14, $15, $16, $17, $18, $19, $20,
         NOW(), NOW()
       )
       RETURNING
@@ -136,16 +224,20 @@ router.post("/", async (req, res) => {
         supplier,
         active,
         "categoryId",
+        category,
         brand,
         "packSize",
+        um,
+        "baseQty",
+        "costEur",
+        "lastCostCents",
+        "costCurrency",
+        "imageUrl",
         "stockKind",
         "unitToCl",
         "containerSizeCl",
         "containerLabel",
         "minStockCl",
-        "lastCostCents",
-        "costCurrency",
-        "imageUrl",
         "createdAt",
         "updatedAt"
       `,
@@ -155,17 +247,21 @@ router.post("/", async (req, res) => {
         data.name,
         data.supplier,
         data.active ?? true,
-        data.categoryId,
+        data.categoryId ?? data.category ?? "bevande",
+        data.category ?? data.categoryId ?? "bevande",
         data.brand ?? null,
         data.packSize ?? null,
-        data.stockKind,
-        data.stockKind === "UNIT" ? data.unitToCl ?? null : null,
-        data.stockKind === "VOLUME_CONTAINER" ? data.containerSizeCl ?? null : null,
-        data.stockKind === "VOLUME_CONTAINER" ? data.containerLabel ?? null : null,
-        data.minStockCl ?? 0,
+        data.um,
+        baseQty,
+        data.costEur ?? null,
         data.lastCostCents ?? null,
         data.costCurrency ?? "EUR",
         data.imageUrl ?? null,
+        legacy.stockKind,
+        legacy.unitToCl,
+        legacy.containerSizeCl,
+        legacy.containerLabel,
+        legacy.minStockCl,
       ]
     );
 
@@ -191,44 +287,34 @@ router.patch("/:sku", async (req, res) => {
   const patch = parsed.data;
 
   try {
-    const currentRes = await pool.query(
-      `
-      SELECT *
-      FROM "Item"
-      WHERE sku = $1
-      LIMIT 1
-      `,
-      [sku]
-    );
+    const current = await getItemBySkuOrThrow(sku);
 
-    if (!currentRes.rowCount) {
-      return res.status(404).json({ error: "Item non trovato" });
+    const nextUm = patch.um ?? current.um;
+    const nextBaseQty =
+      patch.baseQty !== undefined && patch.baseQty !== null
+        ? Number(patch.baseQty)
+        : current.baseQty != null
+        ? Number(current.baseQty)
+        : null;
+
+    if (!assertValidUm(nextUm)) {
+      return res.status(400).json({ error: "UM non valida" });
     }
 
-    const current = currentRes.rows[0];
+    if (!Number.isFinite(nextBaseQty) || nextBaseQty == null || nextBaseQty <= 0) {
+      return res.status(400).json({ error: "baseQty non valida" });
+    }
 
-    const nextStockKind = patch.stockKind ?? current.stockKind ?? "UNIT";
+    if (nextUm === "PZ" && nextBaseQty !== 1) {
+      return res
+        .status(400)
+        .json({ error: "Per gli articoli PZ baseQty deve essere 1" });
+    }
 
-    const nextUnitToCl =
-      nextStockKind === "UNIT"
-        ? patch.unitToCl !== undefined
-          ? patch.unitToCl
-          : current.unitToCl
-        : null;
-
-    const nextContainerSizeCl =
-      nextStockKind === "VOLUME_CONTAINER"
-        ? patch.containerSizeCl !== undefined
-          ? patch.containerSizeCl
-          : current.containerSizeCl
-        : null;
-
-    const nextContainerLabel =
-      nextStockKind === "VOLUME_CONTAINER"
-        ? patch.containerLabel !== undefined
-          ? patch.containerLabel
-          : current.containerLabel
-        : null;
+    const legacy = deriveLegacyFieldsFromCore({
+      um: nextUm,
+      baseQty: nextBaseQty,
+    });
 
     const result = await pool.query(
       `
@@ -238,18 +324,22 @@ router.patch("/:sku", async (req, res) => {
         supplier = COALESCE($2, supplier),
         active = COALESCE($3, active),
         "categoryId" = COALESCE($4, "categoryId"),
-        brand = $5,
-        "packSize" = $6,
-        "stockKind" = COALESCE($7, "stockKind"),
-        "unitToCl" = $8,
-        "containerSizeCl" = $9,
-        "containerLabel" = $10,
-        "minStockCl" = COALESCE($11, "minStockCl"),
-        "lastCostCents" = $12,
-        "costCurrency" = COALESCE($13, "costCurrency"),
-        "imageUrl" = $14,
+        category = COALESCE($5, category),
+        brand = $6,
+        "packSize" = $7,
+        um = $8,
+        "baseQty" = $9,
+        "costEur" = $10,
+        "lastCostCents" = $11,
+        "costCurrency" = COALESCE($12, "costCurrency"),
+        "imageUrl" = $13,
+        "stockKind" = $14,
+        "unitToCl" = $15,
+        "containerSizeCl" = $16,
+        "containerLabel" = $17,
+        "minStockCl" = $18,
         "updatedAt" = NOW()
-      WHERE sku = $15
+      WHERE sku = $19
       RETURNING
         id,
         sku,
@@ -257,16 +347,20 @@ router.patch("/:sku", async (req, res) => {
         supplier,
         active,
         "categoryId",
+        category,
         brand,
         "packSize",
+        um,
+        "baseQty",
+        "costEur",
+        "lastCostCents",
+        "costCurrency",
+        "imageUrl",
         "stockKind",
         "unitToCl",
         "containerSizeCl",
         "containerLabel",
         "minStockCl",
-        "lastCostCents",
-        "costCurrency",
-        "imageUrl",
         "createdAt",
         "updatedAt"
       `,
@@ -275,22 +369,30 @@ router.patch("/:sku", async (req, res) => {
         patch.supplier ?? null,
         patch.active ?? null,
         patch.categoryId ?? null,
+        patch.category ?? patch.categoryId ?? null,
         patch.brand ?? current.brand ?? null,
         patch.packSize ?? current.packSize ?? null,
-        patch.stockKind ?? null,
-        nextUnitToCl,
-        nextContainerSizeCl,
-        nextContainerLabel,
-        patch.minStockCl ?? null,
+        nextUm,
+        nextBaseQty,
+        patch.costEur ?? current.costEur ?? null,
         patch.lastCostCents ?? current.lastCostCents ?? null,
         patch.costCurrency ?? null,
         patch.imageUrl ?? current.imageUrl ?? null,
+        legacy.stockKind,
+        legacy.unitToCl,
+        legacy.containerSizeCl,
+        legacy.containerLabel,
+        legacy.minStockCl,
         sku,
       ]
     );
 
     return res.json(mapRowToItem(result.rows[0]));
   } catch (err: any) {
+    if (err?.message === "ITEM_NOT_FOUND") {
+      return res.status(404).json({ error: "Item non trovato" });
+    }
+
     console.error("PATCH /items/:sku error", err);
     return res.status(500).json({ error: "Errore salvataggio articolo" });
   }
@@ -324,28 +426,33 @@ router.put("/:itemId", async (req, res) => {
 
     const current = currentRes.rows[0];
     const patch = parsed.data;
-    const nextStockKind = patch.stockKind ?? current.stockKind ?? "UNIT";
 
-    const nextUnitToCl =
-      nextStockKind === "UNIT"
-        ? patch.unitToCl !== undefined
-          ? patch.unitToCl
-          : current.unitToCl
+    const nextUm = patch.um ?? current.um;
+    const nextBaseQty =
+      patch.baseQty !== undefined && patch.baseQty !== null
+        ? Number(patch.baseQty)
+        : current.baseQty != null
+        ? Number(current.baseQty)
         : null;
 
-    const nextContainerSizeCl =
-      nextStockKind === "VOLUME_CONTAINER"
-        ? patch.containerSizeCl !== undefined
-          ? patch.containerSizeCl
-          : current.containerSizeCl
-        : null;
+    if (!assertValidUm(nextUm)) {
+      return res.status(400).json({ error: "UM non valida" });
+    }
 
-    const nextContainerLabel =
-      nextStockKind === "VOLUME_CONTAINER"
-        ? patch.containerLabel !== undefined
-          ? patch.containerLabel
-          : current.containerLabel
-        : null;
+    if (!Number.isFinite(nextBaseQty) || nextBaseQty == null || nextBaseQty <= 0) {
+      return res.status(400).json({ error: "baseQty non valida" });
+    }
+
+    if (nextUm === "PZ" && nextBaseQty !== 1) {
+      return res
+        .status(400)
+        .json({ error: "Per gli articoli PZ baseQty deve essere 1" });
+    }
+
+    const legacy = deriveLegacyFieldsFromCore({
+      um: nextUm,
+      baseQty: nextBaseQty,
+    });
 
     const result = await pool.query(
       `
@@ -355,18 +462,22 @@ router.put("/:itemId", async (req, res) => {
         supplier = COALESCE($2, supplier),
         active = COALESCE($3, active),
         "categoryId" = COALESCE($4, "categoryId"),
-        brand = $5,
-        "packSize" = $6,
-        "stockKind" = COALESCE($7, "stockKind"),
-        "unitToCl" = $8,
-        "containerSizeCl" = $9,
-        "containerLabel" = $10,
-        "minStockCl" = COALESCE($11, "minStockCl"),
-        "lastCostCents" = $12,
-        "costCurrency" = COALESCE($13, "costCurrency"),
-        "imageUrl" = $14,
+        category = COALESCE($5, category),
+        brand = $6,
+        "packSize" = $7,
+        um = $8,
+        "baseQty" = $9,
+        "costEur" = $10,
+        "lastCostCents" = $11,
+        "costCurrency" = COALESCE($12, "costCurrency"),
+        "imageUrl" = $13,
+        "stockKind" = $14,
+        "unitToCl" = $15,
+        "containerSizeCl" = $16,
+        "containerLabel" = $17,
+        "minStockCl" = $18,
         "updatedAt" = NOW()
-      WHERE id = $15
+      WHERE id = $19
       RETURNING
         id,
         sku,
@@ -374,16 +485,20 @@ router.put("/:itemId", async (req, res) => {
         supplier,
         active,
         "categoryId",
+        category,
         brand,
         "packSize",
+        um,
+        "baseQty",
+        "costEur",
+        "lastCostCents",
+        "costCurrency",
+        "imageUrl",
         "stockKind",
         "unitToCl",
         "containerSizeCl",
         "containerLabel",
         "minStockCl",
-        "lastCostCents",
-        "costCurrency",
-        "imageUrl",
         "createdAt",
         "updatedAt"
       `,
@@ -392,16 +507,20 @@ router.put("/:itemId", async (req, res) => {
         patch.supplier ?? null,
         patch.active ?? null,
         patch.categoryId ?? null,
+        patch.category ?? patch.categoryId ?? null,
         patch.brand ?? current.brand ?? null,
         patch.packSize ?? current.packSize ?? null,
-        patch.stockKind ?? null,
-        nextUnitToCl,
-        nextContainerSizeCl,
-        nextContainerLabel,
-        patch.minStockCl ?? null,
+        nextUm,
+        nextBaseQty,
+        patch.costEur ?? current.costEur ?? null,
         patch.lastCostCents ?? current.lastCostCents ?? null,
         patch.costCurrency ?? null,
         patch.imageUrl ?? current.imageUrl ?? null,
+        legacy.stockKind,
+        legacy.unitToCl,
+        legacy.containerSizeCl,
+        legacy.containerLabel,
+        legacy.minStockCl,
         req.params.itemId,
       ]
     );
@@ -425,16 +544,20 @@ router.get("/:itemId", async (req, res) => {
         supplier,
         active,
         "categoryId",
+        category,
         brand,
         "packSize",
+        um,
+        "baseQty",
+        "costEur",
+        "lastCostCents",
+        "costCurrency",
+        "imageUrl",
         "stockKind",
         "unitToCl",
         "containerSizeCl",
         "containerLabel",
         "minStockCl",
-        "lastCostCents",
-        "costCurrency",
-        "imageUrl",
         "createdAt",
         "updatedAt"
       FROM "Item"
@@ -449,6 +572,15 @@ router.get("/:itemId", async (req, res) => {
     }
 
     const item = mapRowToItem(result.rows[0]);
+
+    try {
+      normalizeItemMeasure(result.rows[0]);
+    } catch (e: any) {
+      return res.status(500).json({
+        error: `Articolo ${item.sku} non configurato correttamente`,
+      });
+    }
+
     const stockBt = await getStockBtForSku(item.sku);
 
     return res.json({
