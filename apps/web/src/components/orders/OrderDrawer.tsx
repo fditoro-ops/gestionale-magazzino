@@ -138,9 +138,7 @@ export default function OrderDrawer({
             Nessun ordine selezionato.
           </div>
         ) : (
-
-      <div style={panelBody}>
-  
+          <div style={panelBody}>
             {o.notes && (
               <div style={{ fontSize: 13, color: "#334", opacity: 0.9 }}>
                 <b>Note:</b> {o.notes}
@@ -156,16 +154,15 @@ export default function OrderDrawer({
               />
             )}
 
-<div
-  style={{
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    overflowX: "auto",
-    overflowY: "visible",
-    background: "white",
-    flexShrink: 0,
-  }}
->
+            <div
+              style={{
+                border: "1px solid #e5e7eb",
+                borderRadius: 12,
+                overflowX: "auto",
+                overflowY: "visible",
+                background: "white",
+                flexShrink: 0,
+              }}
             >
               <table
                 style={{
@@ -268,7 +265,6 @@ export default function OrderDrawer({
             )}
           </div>
         )}
-      </div>
     </div>
   );
 }
