@@ -46,6 +46,27 @@ export async function getRecipeById(id: string): Promise<Recipe | null> {
 }
 
 // =========================
+// GET BY PRODUCT SKU
+// =========================
+export async function getRecipeByProductSku(
+  tenantId: string,
+  productSku: string
+): Promise<Recipe | null> {
+  const res = await pool.query(
+    `
+    SELECT *
+    FROM recipes
+    WHERE tenant_id = $1
+      AND product_sku = $2
+    LIMIT 1
+    `,
+    [tenantId, productSku]
+  );
+
+  return res.rows[0] ?? null;
+}
+
+// =========================
 // CREATE
 // =========================
 export async function createRecipe(input: {
@@ -77,8 +98,8 @@ export async function updateRecipe(
     product_sku?: string;
   }
 ) {
-  const fields = [];
-  const values = [];
+  const fields: string[] = [];
+  const values: unknown[] = [];
   let i = 1;
 
   if (input.name !== undefined) {
