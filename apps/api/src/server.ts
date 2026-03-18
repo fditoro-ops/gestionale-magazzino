@@ -1119,15 +1119,41 @@ const lineTotal = Number.isFinite(rawCalculatedAmount) && rawCalculatedAmount > 
     const movementSign = operation === "RECEIPT/DELETE" ? 1 : -1;
 
 const inserted = await applyRecipeStock({
-  docId,
-  receiptNumber,
-  tenantId,
-  orderDate,
-  soldItems: finalResolvedItems,
+  docId: row.docId,
+  receiptNumber: "",
+  tenantId: row.tenantId,
+  orderDate: new Date(row.orderDate),
+  soldItems: [
+    {
+      sku: resolvedSku,
+      qty: Number(row.qty || 0),
+    },
+  ],
   bom: bomCache,
   cicProductModes: cicModesBySku,
-  movementSign,
+  movementSign: row.operation === "RECEIPT/DELETE" ? 1 : -1,
 });
+
+if (inserted > 0) {
+  await markPendingRowProcessed(row.id);
+
+  results.push({
+    id: row.id,
+    docId: row.docId,
+    sku: resolvedSku,
+    status: "PROCESSED",
+    inserted,
+  });
+} else {
+  results.push({
+    id: row.id,
+    docId: row.docId,
+    sku: resolvedSku,
+    status: "SKIPPED",
+    reason: "NO_MOVEMENTS_CREATED",
+    inserted,
+  });
+}
 
     console.log("✅ SCARICHI GENERATI:", inserted);
     return res.status(200).send("OK");
