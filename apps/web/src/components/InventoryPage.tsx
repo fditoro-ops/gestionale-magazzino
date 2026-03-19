@@ -48,6 +48,16 @@ type ItemLite = {
   name?: string;
 };
 
+function makeLocalDateTimeInputValue(date = new Date()) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const yyyy = date.getFullYear();
+  const mm = pad(date.getMonth() + 1);
+  const dd = pad(date.getDate());
+  const hh = pad(date.getHours());
+  const mi = pad(date.getMinutes());
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+}
+
 export default function InventoryPage() {
   const [sessions, setSessions] = useState<InventorySession[]>([]);
   const [items, setItems] = useState<ItemLite[]>([]);
@@ -65,6 +75,11 @@ export default function InventoryPage() {
   const [draftNoteByLineId, setDraftNoteByLineId] = useState<Record<string, string>>({});
   const [savingLineId, setSavingLineId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+
+  const [newSessionName, setNewSessionName] = useState("Inventario manuale");
+  const [newSessionDateTime, setNewSessionDateTime] = useState(
+    makeLocalDateTimeInputValue(new Date())
+  );
 
   const itemNameBySku = useMemo(() => {
     const map = new Map<string, string>();
@@ -158,7 +173,12 @@ export default function InventoryPage() {
     try {
       setBusyAction("create");
 
-      const now = new Date().toISOString();
+      if (!newSessionDateTime) {
+        alert("Inserisci Data e ora conta");
+        return;
+      }
+
+      const effectiveAt = new Date(newSessionDateTime).toISOString();
 
       const res = await authFetch(`/inventory/sessions`, {
         method: "POST",
@@ -166,8 +186,8 @@ export default function InventoryPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: "Inventario manuale",
-          effective_at: now,
+          name: newSessionName?.trim() || "Inventario manuale",
+          effective_at: effectiveAt,
           created_by: "core-ui",
         }),
       });
@@ -371,6 +391,21 @@ export default function InventoryPage() {
         </div>
 
         <div style={styles.headerActions}>
+          <input
+            style={styles.topInput}
+            value={newSessionName}
+            onChange={(e) => setNewSessionName(e.target.value)}
+            placeholder="Nome inventario"
+          />
+
+          <input
+            style={styles.topInput}
+            type="datetime-local"
+            value={newSessionDateTime}
+            onChange={(e) => setNewSessionDateTime(e.target.value)}
+            title="Data e ora conta"
+          />
+
           <button
             style={styles.primaryBtn}
             onClick={createSession}
@@ -514,7 +549,7 @@ export default function InventoryPage() {
                     </span>
                   </div>
                   <div style={styles.detailMeta}>
-                    Data inventario: {formatDateTime(selectedSession.effective_at)}
+                    Data e ora conta: {formatDateTime(selectedSession.effective_at)}
                   </div>
                   <div style={styles.detailMeta}>
                     Creato da: {selectedSession.created_by || "-"}
@@ -724,11 +759,14 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     marginBottom: 16,
     gap: 12,
+    flexWrap: "wrap",
   },
 
   headerActions: {
     display: "flex",
     gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
   },
 
   title: {
@@ -740,6 +778,15 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 4,
     color: "#666",
     fontSize: 14,
+  },
+
+  topInput: {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid #d9e2ec",
+    fontSize: 14,
+    outline: "none",
+    background: "#fff",
   },
 
   layout: {
