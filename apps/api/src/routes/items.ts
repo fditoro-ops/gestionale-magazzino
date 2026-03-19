@@ -225,6 +225,14 @@ router.post("/", async (req, res) => {
       baseQty,
     });
 
+    const supplierRow = await resolveSupplier({
+  supplierId: (data as any).supplierId ?? null,
+  supplier: data.supplier ?? null,
+});
+
+const supplierId = supplierRow?.id ?? null;
+const supplierCode = supplierRow?.code ?? data.supplier ?? "VARI";
+
     const result = await pool.query(
       `
       INSERT INTO "Item" (
@@ -232,6 +240,7 @@ router.post("/", async (req, res) => {
         sku,
         name,
         supplier,
+        "supplierId",
         active,
         "categoryId",
         category,
@@ -252,15 +261,16 @@ router.post("/", async (req, res) => {
         "updatedAt"
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-        $12, $13, $14, $15, $16, $17, $18, $19, $20,
-        NOW(), NOW()
-      )
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+  $12, $13, $14, $15, $16, $17, $18, $19, $20,
+  $21, NOW(), NOW()
+)
       RETURNING
         id,
         sku,
         name,
         supplier,
+        "supplierId",
         active,
         "categoryId",
         category,
@@ -280,28 +290,29 @@ router.post("/", async (req, res) => {
         "createdAt",
         "updatedAt"
       `,
-      [
-        `itm_${Date.now()}_${data.sku}`,
-        data.sku,
-        data.name,
-        data.supplier,
-        data.active ?? true,
-        data.categoryId ?? data.category ?? "bevande",
-        data.category ?? data.categoryId ?? "bevande",
-        data.brand ?? null,
-        data.packSize ?? null,
-        data.um,
-        baseQty,
-        data.costEur ?? null,
-        data.lastCostCents ?? null,
-        data.costCurrency ?? "EUR",
-        data.imageUrl ?? null,
-        legacy.stockKind,
-        legacy.unitToCl,
-        legacy.containerSizeCl,
-        legacy.containerLabel,
-        legacy.minStockCl,
-      ]
+[
+  `itm_${Date.now()}_${data.sku}`,
+  data.sku,
+  data.name,
+  supplierCode,
+  supplierId,
+  data.active ?? true,
+  data.categoryId ?? data.category ?? "bevande",
+  data.category ?? data.categoryId ?? "bevande",
+  data.brand ?? null,
+  data.packSize ?? null,
+  data.um,
+  baseQty,
+  data.costEur ?? null,
+  data.lastCostCents ?? null,
+  data.costCurrency ?? "EUR",
+  data.imageUrl ?? null,
+  legacy.stockKind,
+  legacy.unitToCl,
+  legacy.containerSizeCl,
+  legacy.containerLabel,
+  legacy.minStockCl,
+]
     );
 
     return res.status(201).json(mapRowToItem(result.rows[0]));
@@ -384,6 +395,7 @@ router.patch("/:sku", async (req, res) => {
         sku,
         name,
         supplier,
+        "supplierId",
         active,
         "categoryId",
         category,
@@ -522,6 +534,7 @@ router.put("/:itemId", async (req, res) => {
         sku,
         name,
         supplier,
+        "supplierId",
         active,
         "categoryId",
         category,
