@@ -19,10 +19,8 @@ function normalizeItemMeasure(row: any) {
   const baseQty = row.baseQty != null ? Number(row.baseQty) : null;
 
   if (!assertValidUm(um)) throw new Error("UM non valida");
-  if (!Number.isFinite(baseQty) || baseQty <= 0)
-    throw new Error("baseQty non valida");
-
-  return { um, baseQty };
+  if (baseQty == null || !Number.isFinite(baseQty) || baseQty <= 0) {
+  throw new Error(`Item ${row.sku}: baseQty non valida`);
 }
 
 function deriveLegacyFieldsFromCore(input: {
