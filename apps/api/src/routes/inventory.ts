@@ -58,58 +58,71 @@ async function buildGiacenzeAsOf(effectiveAt: string) {
     `
     SELECT
       sku,
-      "lastCostCents"
+      "lastCostCents",
+      active
     FROM "Item"
+    WHERE active = true
+      AND sku IS NOT NULL
+      AND sku <> ''
+    ORDER BY sku ASC
     `
   );
 
-  const costBySku = new Map<string, number | null>(
-    itemsQ.rows.map((row: any) => [
-      String(row.sku ?? "").toUpperCase().trim(),
+  const costBySku = new Map<string, number | null>();
+  const stockBySku = new Map<string, number>();
+
+  for (const row of itemsQ.rows) {
+    const sku = String(row.sku ?? "").toUpperCase().trim();
+    const lastCost =
       row.lastCostCents !== null && row.lastCostCents !== undefined
         ? Number(row.lastCostCents)
-        : null,
-    ])
-  );
+        : null;
 
-  const bySku = new Map<string, number>();
+    costBySku.set(sku, lastCost);
+    stockBySku.set(sku, 0);
+  }
 
   for (const row of movementsQ.rows) {
-    const sku = String(row.sku);
+    const sku = String(row.sku ?? "").toUpperCase().trim();
+
+    if (!stockBySku.has(sku)) {
+      continue;
+    }
+
     const qty = Number(row.quantity || 0);
     const type = String(row.type || "");
-
-    const current = bySku.get(sku) ?? 0;
+    const current = stockBySku.get(sku) ?? 0;
 
     if (type === "INVENTORY") {
-      bySku.set(sku, qty);
+      stockBySku.set(sku, qty);
       continue;
     }
 
     if (type === "IN") {
-      bySku.set(sku, current + qty);
+      stockBySku.set(sku, current + qty);
       continue;
     }
 
     if (type === "OUT") {
-      bySku.set(sku, current - qty);
+      stockBySku.set(sku, current - qty);
       continue;
     }
 
     if (type === "ADJUST") {
-      bySku.set(sku, current + qty);
+      stockBySku.set(sku, current + qty);
       continue;
     }
   }
 
-  return Array.from(bySku.entries())
+  return Array.from(stockBySku.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([sku, theoretical_qty_bt]) => ({
       sku,
       theoretical_qty_bt,
-      cost_snapshot: costBySku.get(String(sku).toUpperCase().trim()) ?? null,
+      cost_snapshot: costBySku.get(sku) ?? null,
     }));
 }
+
 
 // LISTA SESSIONI
 router.get("/sessions", async (_req, res) => {
