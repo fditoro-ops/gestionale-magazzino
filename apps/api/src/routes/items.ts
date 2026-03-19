@@ -48,9 +48,10 @@ function mapRowToItem(row: any) {
     sku: row.sku,
     name: row.name ?? "",
 
-    categoryId: row.categoryId ?? row.category ?? "bevande",
-    category: row.category ?? row.categoryId ?? "bevande",
-    supplier: row.supplier ?? "VARI",
+categoryId: row.categoryId ?? row.category ?? "bevande",
+category: row.category ?? row.categoryId ?? "bevande",
+supplier: row.supplier ?? "VARI",
+supplierId: row.supplierId ?? null,
 
     active: typeof row.active === "boolean" ? row.active : true,
 
@@ -78,6 +79,43 @@ function mapRowToItem(row: any) {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+async function resolveSupplier(input: {
+  supplierId?: string | null;
+  supplier?: string | null;
+}) {
+  if (input.supplierId) {
+    const byId = await pool.query(
+      `
+      SELECT id, code, name
+      FROM suppliers
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [input.supplierId]
+    );
+
+    if (byId.rowCount) return byId.rows[0];
+  }
+
+  if (input.supplier) {
+    const code = input.supplier.toUpperCase().trim();
+
+    const byCode = await pool.query(
+      `
+      SELECT id, code, name
+      FROM suppliers
+      WHERE UPPER(TRIM(code)) = $1
+      LIMIT 1
+      `,
+      [code]
+    );
+
+    if (byCode.rowCount) return byCode.rows[0];
+  }
+
+  return null;
 }
 
 async function getItemBySkuOrThrow(sku: string) {
@@ -108,6 +146,7 @@ router.get("/", async (_req, res) => {
         sku,
         name,
         supplier,
+        "supplierId",
         active,
         "categoryId",
         category,
@@ -542,6 +581,7 @@ router.get("/:itemId", async (req, res) => {
         sku,
         name,
         supplier,
+        "supplierId",
         active,
         "categoryId",
         category,
