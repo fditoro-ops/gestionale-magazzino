@@ -239,15 +239,26 @@ router.put("/:itemId", async (req, res) => {
 // GET SINGLE
 //
 router.get("/:itemId", async (req, res) => {
-  const r = await pool.query(
-    `SELECT * FROM "Item" WHERE id=$1`,
-    [req.params.itemId]
-  );
+  try {
+    const r = await pool.query(
+      `SELECT * FROM "Item" WHERE id=$1`,
+      [req.params.itemId]
+    );
 
-  const item = r.rows[0];
-  const stockBt = await getStockBtForSku(item.sku);
+    if (!r.rowCount) {
+      return res.status(404).json({ error: "Item non trovato" });
+    }
 
-  res.json({ ...mapRowToItem(item), stockBt });
+    const item = r.rows[0];
+
+    const stockBt = await getStockBtForSku(item.sku);
+
+    return res.json({
+      ...mapRowToItem(item),
+      stockBt,
+    });
+  } catch (err) {
+    console.error("GET item error", err);
+    return res.status(500).json({ error: "Errore server" });
+  }
 });
-
-export default router;
