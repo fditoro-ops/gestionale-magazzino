@@ -250,7 +250,6 @@ router.get("/:itemId", async (req, res) => {
     }
 
     const item = r.rows[0];
-
     const stockBt = await getStockBtForSku(item.sku);
 
     return res.json({
@@ -262,3 +261,5 @@ router.get("/:itemId", async (req, res) => {
     return res.status(500).json({ error: "Errore server" });
   }
 });
+
+export default router;
