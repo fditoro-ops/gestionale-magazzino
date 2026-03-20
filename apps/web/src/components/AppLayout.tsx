@@ -7,6 +7,7 @@ export type TabKey =
   | "warehouse"
   | "items"
   | "inventory"
+  | "cashClosure"
   | "orders"
   | "suppliers"
   | "users";
@@ -68,6 +69,14 @@ export default function AppLayout({
   onClick={() => onTabChange("inventory")}
 >
   Inventario
+          
+  <SideItem
+            active={tab === "cashClosure"}
+            onClick={() => onTabChange("cashClosure")}
+          >
+            Chiusura Cassa
+          </SideItem>
+
 </SideItem>
           
           <SideItem
