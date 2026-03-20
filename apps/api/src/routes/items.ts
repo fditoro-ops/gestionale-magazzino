@@ -14,6 +14,12 @@ function assertValidUm(um: unknown): um is ItemUm {
   return um === "CL" || um === "PZ";
 }
 
+function toNumberOrNull(v: any): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function mapRowToItem(row: any) {
   return {
     itemId: row.id,
@@ -24,14 +30,20 @@ function mapRowToItem(row: any) {
     supplier: row.supplier ?? "VARI",
     supplierId: row.supplierId ?? null,
     active: row.active ?? true,
+
     um: row.um,
-    baseQty: Number(row.baseQty),
+
+    baseQty: toNumberOrNull(row.baseQty),
+    packSize: toNumberOrNull(row.packSize),
+
     brand: row.brand ?? null,
-    packSize: row.packSize ?? null,
-    costEur: row.costEur ?? null,
-    lastCostCents: row.lastCostCents ?? null,
+
+    costEur: toNumberOrNull(row.costEur),
+    lastCostCents: toNumberOrNull(row.lastCostCents),
+
     costCurrency: row.costCurrency ?? "EUR",
     imageUrl: row.imageUrl ?? null,
+
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
