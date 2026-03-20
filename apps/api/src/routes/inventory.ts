@@ -31,10 +31,27 @@ function toNum(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function normalizePackSize(v: unknown): number {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return 1;
+  return n;
+}
+
+function toBtFromCountedInput(
+  countedInput: number,
+  packSize: number | null | undefined
+): number {
+  const ps = normalizePackSize(packSize);
+  return countedInput * ps;
+}
+
 /**
- * TODO:
- * sostituire questa funzione con la vera buildGiacenzeBT({ asOf })
- * o con una query coerente con la tua logica Movimentazione = source of truth
+ * Build giacenze as-of coerente con:
+ * - Movements come source of truth
+ * - INVENTORY = reset per SKU
+ * - IN = carico
+ * - OUT = scarico
+ * - ADJUST = delta
  */
 async function buildGiacenzeAsOf(effectiveAt: string) {
   const movementsQ = await pool.query(
@@ -43,7 +60,8 @@ async function buildGiacenzeAsOf(effectiveAt: string) {
       sku,
       quantity,
       type,
-      date
+      date,
+      id
     FROM movements
     WHERE tenant_id = $1
       AND date <= $2
@@ -59,6 +77,7 @@ async function buildGiacenzeAsOf(effectiveAt: string) {
     SELECT
       sku,
       "lastCostCents",
+      "packSize",
       active
     FROM "Item"
     WHERE active = true
@@ -68,7 +87,11 @@ async function buildGiacenzeAsOf(effectiveAt: string) {
     `
   );
 
-  const costBySku = new Map<string, number | null>();
+  const metaBySku = new Map<
+    string,
+    { lastCostCents: number | null; packSize: number }
+  >();
+
   const stockBySku = new Map<string, number>();
 
   for (const row of itemsQ.rows) {
@@ -78,16 +101,26 @@ async function buildGiacenzeAsOf(effectiveAt: string) {
         ? Number(row.lastCostCents)
         : null;
 
-    costBySku.set(sku, lastCost);
+    const packSizeRaw =
+      row.packSize !== null && row.packSize !== undefined
+        ? Number(row.packSize)
+        : 1;
+
+    const packSize =
+      Number.isFinite(packSizeRaw) && packSizeRaw > 0 ? packSizeRaw : 1;
+
+    metaBySku.set(sku, {
+      lastCostCents: lastCost,
+      packSize,
+    });
+
     stockBySku.set(sku, 0);
   }
 
   for (const row of movementsQ.rows) {
     const sku = String(row.sku ?? "").toUpperCase().trim();
 
-    if (!stockBySku.has(sku)) {
-      continue;
-    }
+    if (!stockBySku.has(sku)) continue;
 
     const qty = Number(row.quantity || 0);
     const type = String(row.type || "");
@@ -104,7 +137,7 @@ async function buildGiacenzeAsOf(effectiveAt: string) {
     }
 
     if (type === "OUT") {
-      stockBySku.set(sku, current - qty);
+      stockBySku.set(sku, current - Math.abs(qty));
       continue;
     }
 
@@ -119,10 +152,10 @@ async function buildGiacenzeAsOf(effectiveAt: string) {
     .map(([sku, theoretical_qty_bt]) => ({
       sku,
       theoretical_qty_bt,
-      cost_snapshot: costBySku.get(sku) ?? null,
+      cost_snapshot: metaBySku.get(sku)?.lastCostCents ?? null,
+      pack_size: metaBySku.get(sku)?.packSize ?? 1,
     }));
 }
-
 
 // LISTA SESSIONI
 router.get("/sessions", async (_req, res) => {
@@ -138,7 +171,8 @@ router.get("/sessions", async (_req, res) => {
         effective_at,
         created_at,
         created_by,
-        notes
+        notes,
+        applied_at
       FROM inventory_sessions
       WHERE tenant_id = $1
       ORDER BY effective_at DESC, created_at DESC
@@ -283,6 +317,7 @@ router.get("/dashboard", async (_req, res) => {
       SELECT
         l.sku,
         l.theoretical_qty_bt,
+        l.counted_qty,
         l.counted_qty_bt,
         l.difference_qty_bt,
         l.difference_value
@@ -375,7 +410,16 @@ router.post("/sessions", async (req, res) => {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       RETURNING *
       `,
-      [id, TENANT_ID, code, name ?? null, status, effective_at, created_by ?? null, notes ?? null]
+      [
+        id,
+        TENANT_ID,
+        code,
+        name ?? null,
+        status,
+        effective_at,
+        created_by ?? null,
+        notes ?? null,
+      ]
     );
 
     res.json({ ok: true, session: rows[0] });
@@ -428,6 +472,7 @@ router.get("/sessions/:id", async (req, res) => {
 // GENERA RIGHE
 router.post("/sessions/:id/generate-lines", async (req, res) => {
   const client = await pool.connect();
+
   try {
     const { id } = req.params;
 
@@ -480,15 +525,17 @@ router.post("/sessions/:id/generate-lines", async (req, res) => {
           session_id,
           sku,
           theoretical_qty_bt,
+          counted_qty,
           counted_qty_bt,
           difference_qty_bt,
           cost_snapshot,
           difference_value,
           note,
           counted_by,
-          counted_at
+          counted_at,
+          pack_size
         )
-        VALUES ($1,$2,$3,$4,NULL,NULL,$5,NULL,NULL,NULL,NULL)
+        VALUES ($1,$2,$3,$4,NULL,NULL,NULL,$5,NULL,NULL,NULL,NULL,$6)
         `,
         [
           makeId(),
@@ -496,6 +543,7 @@ router.post("/sessions/:id/generate-lines", async (req, res) => {
           row.sku,
           row.theoretical_qty_bt ?? 0,
           row.cost_snapshot,
+          row.pack_size ?? 1,
         ]
       );
     }
@@ -529,13 +577,13 @@ router.post("/sessions/:id/generate-lines", async (req, res) => {
 router.patch("/lines/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { counted_qty_bt, note, counted_by } = req.body ?? {};
+    const { counted_qty, note, counted_by } = req.body ?? {};
 
-    const counted = toNum(counted_qty_bt);
-    if (counted === null) {
+    const countedInput = toNum(counted_qty);
+    if (countedInput === null) {
       return res.status(400).json({
         ok: false,
-        error: "counted_qty_bt deve essere numerico",
+        error: "counted_qty deve essere numerico",
       });
     }
 
@@ -566,8 +614,12 @@ router.patch("/lines/:id", async (req, res) => {
     }
 
     const theoretical = Number(row.theoretical_qty_bt || 0);
-    const costSnapshot = row.cost_snapshot !== null ? Number(row.cost_snapshot) : null;
-    const difference = counted - theoretical;
+    const costSnapshot =
+      row.cost_snapshot !== null ? Number(row.cost_snapshot) : null;
+
+    const packSize = normalizePackSize(row.pack_size);
+    const countedBt = toBtFromCountedInput(countedInput, packSize);
+    const difference = countedBt - theoretical;
     const differenceValue =
       costSnapshot !== null ? difference * costSnapshot : null;
 
@@ -575,18 +627,20 @@ router.patch("/lines/:id", async (req, res) => {
       `
       UPDATE inventory_lines
       SET
-        counted_qty_bt = $2,
-        difference_qty_bt = $3,
-        difference_value = $4,
-        note = $5,
-        counted_by = $6,
+        counted_qty = $2,
+        counted_qty_bt = $3,
+        difference_qty_bt = $4,
+        difference_value = $5,
+        note = $6,
+        counted_by = $7,
         counted_at = NOW()
       WHERE id = $1
       RETURNING *
       `,
       [
         id,
-        counted,
+        countedInput,
+        countedBt,
         difference,
         differenceValue,
         note ?? null,
@@ -628,20 +682,20 @@ router.post("/sessions/:id/close", async (req, res) => {
       });
     }
 
-    const missing = await pool.query(
+    const counted = await pool.query(
       `
       SELECT COUNT(*)::int AS c
       FROM inventory_lines
       WHERE session_id = $1
-        AND counted_qty_bt IS NULL
+        AND counted_qty_bt IS NOT NULL
       `,
       [id]
     );
 
-    if (missing.rows[0]?.c > 0) {
+    if (Number(counted.rows[0]?.c || 0) === 0) {
       return res.status(400).json({
         ok: false,
-        error: `Ci sono ancora ${missing.rows[0].c} righe non contate`,
+        error: "Devi contare almeno una riga prima di chiudere la sessione",
       });
     }
 
@@ -708,13 +762,11 @@ router.post("/sessions/:id/reopen", async (req, res) => {
       ok: true,
       session: rows[0],
     });
-
-  } catch (err:any) {
+  } catch (err: any) {
     console.error("POST /inventory/sessions/:id/reopen error", err);
-    res.status(500).json({ ok:false, error: err.message });
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
-
 
 // APPLICA INVENTARIO
 router.post("/sessions/:id/apply", async (req, res) => {
@@ -774,18 +826,18 @@ router.post("/sessions/:id/apply", async (req, res) => {
       });
     }
 
-    const missing = lines.filter(
-  (x) => x.counted_qty_bt === null || x.counted_qty_bt === undefined
-);
-    if (missing.length > 0) {
+    const countedLines = lines.filter(
+      (x) => x.counted_qty_bt !== null && x.counted_qty_bt !== undefined
+    );
+
+    if (!countedLines.length) {
       await client.query("ROLLBACK");
       return res.status(400).json({
         ok: false,
-        error: `Ci sono ancora ${missing.length} righe non contate`,
+        error: "Nessuna riga contata da applicare",
       });
     }
 
-    // warning informativo: esistono movimenti successivi a effective_at
     const futureMovements = await client.query(
       `
       SELECT COUNT(*)::int AS c
@@ -797,27 +849,27 @@ router.post("/sessions/:id/apply", async (req, res) => {
     );
 
     const existingMovements = await client.query(
-  `
-  SELECT COUNT(*)::int AS c
-  FROM movements
-  WHERE tenant_id = $1
-    AND documento = $2
-    AND type = 'INVENTORY'
-  `,
-  [TENANT_ID, session.code]
-);
+      `
+      SELECT COUNT(*)::int AS c
+      FROM movements
+      WHERE tenant_id = $1
+        AND documento = $2
+        AND type = 'INVENTORY'
+      `,
+      [TENANT_ID, session.code]
+    );
 
-if (Number(existingMovements.rows[0]?.c || 0) > 0) {
-  await client.query("ROLLBACK");
-  return res.status(400).json({
-    ok: false,
-    error: "Movimenti INVENTORY già presenti per questa sessione",
-  });
-}
-    
+    if (Number(existingMovements.rows[0]?.c || 0) > 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        ok: false,
+        error: "Movimenti INVENTORY già presenti per questa sessione",
+      });
+    }
+
     const futureCount = Number(futureMovements.rows[0]?.c || 0);
 
-    for (const line of lines) {
+    for (const line of countedLines) {
       await client.query(
         `
         INSERT INTO movements (
@@ -848,26 +900,27 @@ if (Number(existingMovements.rows[0]?.c || 0) > 0) {
     }
 
     const updated = await client.query(
-  `
-  UPDATE inventory_sessions
-  SET
-    status = 'APPLIED',
-    applied_at = NOW()
-  WHERE id = $1
-  RETURNING *
-  `,
-  [id]
-);
+      `
+      UPDATE inventory_sessions
+      SET
+        status = 'APPLIED',
+        applied_at = NOW()
+      WHERE id = $1
+      RETURNING *
+      `,
+      [id]
+    );
 
     await client.query("COMMIT");
 
     return res.json({
       ok: true,
       session: updated.rows[0],
-      applied_lines: lines.length,
-      warning: futureCount > 0
-        ? `Esistono ${futureCount} movimenti successivi a effective_at. Inventario applicato retrodatando i reset.`
-        : null,
+      applied_lines: countedLines.length,
+      warning:
+        futureCount > 0
+          ? `Esistono ${futureCount} movimenti successivi a effective_at. Inventario applicato retrodatando i reset.`
+          : null,
     });
   } catch (err: any) {
     await client.query("ROLLBACK");
@@ -881,7 +934,7 @@ if (Number(existingMovements.rows[0]?.c || 0) > 0) {
   }
 });
 
-// ANNULLA SESSIONE
+// ANNULLA SESSIONE NON APPLICATA
 router.post("/sessions/:id/cancel", async (req, res) => {
   try {
     const { id } = req.params;
@@ -909,16 +962,18 @@ router.post("/sessions/:id/cancel", async (req, res) => {
     if (session.status === "APPLIED") {
       return res.status(400).json({
         ok: false,
-        error: "Una sessione APPLIED non può essere annullata",
+        error:
+          "Una sessione APPLIED non può essere annullata con cancel. Usa DELETE /sessions/:id",
       });
     }
-if (session.status === "CANCELLED") {
-  return res.status(400).json({
-    ok: false,
-    error: "La sessione è già CANCELLED",
-  });
-}
-    
+
+    if (session.status === "CANCELLED") {
+      return res.status(400).json({
+        ok: false,
+        error: "La sessione è già CANCELLED",
+      });
+    }
+
     const { rows } = await pool.query(
       `
       UPDATE inventory_sessions
@@ -933,10 +988,79 @@ if (session.status === "CANCELLED") {
       ok: true,
       session: rows[0],
     });
-
-  } catch (err:any) {
+  } catch (err: any) {
     console.error("POST /inventory/sessions/:id/cancel error", err);
-    res.status(500).json({ ok:false, error: err.message });
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ELIMINA SESSIONE INVENTARIO ANCHE SE APPLIED
+router.delete("/sessions/:id", async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { id } = req.params;
+
+    await client.query("BEGIN");
+
+    const s = await client.query(
+      `
+      SELECT *
+      FROM inventory_sessions
+      WHERE id = $1
+        AND tenant_id = $2
+      LIMIT 1
+      `,
+      [id, TENANT_ID]
+    );
+
+    const session = s.rows[0];
+
+    if (!session) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        ok: false,
+        error: "Sessione non trovata",
+      });
+    }
+
+    await client.query(
+      `
+      DELETE FROM movements
+      WHERE tenant_id = $1
+        AND documento = $2
+        AND type = 'INVENTORY'
+      `,
+      [TENANT_ID, session.code]
+    );
+
+    await client.query(
+      `
+      UPDATE inventory_sessions
+      SET
+        status = 'CANCELLED',
+        applied_at = NULL
+      WHERE id = $1
+      `,
+      [id]
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      deleted_session_id: id,
+      deleted_inventory_code: session.code,
+    });
+  } catch (err: any) {
+    await client.query("ROLLBACK");
+    console.error("DELETE /inventory/sessions/:id error", err);
+    return res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
+  } finally {
+    client.release();
   }
 });
 
@@ -995,4 +1119,5 @@ router.get("/sessions/:id/summary", async (req, res) => {
     });
   }
 });
+
 export default router;
