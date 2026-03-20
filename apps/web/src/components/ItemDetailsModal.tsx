@@ -15,6 +15,7 @@ export type Item = {
   baseQty?: number | null;
 
   packSize?: number | null;
+  inventoryMultiplier?: number | null;
 
   lastCostCents?: number | null;
   costEur?: number | null;
@@ -80,11 +81,12 @@ export default function ItemDetailsModal({
   const [categoryId, setCategoryId] = useState("");
 
   const [packSize, setPackSize] = useState<string>("");
+  const [inventoryMultiplier, setInventoryMultiplier] = useState<string>("");
+
   const [um, setUm] = useState<ItemUm>("PZ");
   const [baseQty, setBaseQty] = useState<string>("1");
 
   const [lastCostEuro, setLastCostEuro] = useState<string>("");
-
   const [imageUrl, setImageUrl] = useState<string>("");
   const [active, setActive] = useState<boolean>(true);
 
@@ -109,6 +111,13 @@ export default function ItemDetailsModal({
     setPackSize(
       Number.isFinite(parsedPackSize) && parsedPackSize > 0
         ? String(parsedPackSize)
+        : ""
+    );
+
+    const parsedInventoryMultiplier = Number(item.inventoryMultiplier);
+    setInventoryMultiplier(
+      Number.isFinite(parsedInventoryMultiplier) && parsedInventoryMultiplier > 0
+        ? String(parsedInventoryMultiplier)
         : ""
     );
 
@@ -167,6 +176,7 @@ export default function ItemDetailsModal({
     }
 
     const parsedPackSize = parsePositiveNumber(packSize);
+    const parsedInventoryMultiplier = parsePositiveNumber(inventoryMultiplier);
     const parsedBaseQty = parsePositiveNumber(baseQty);
 
     if (um !== "CL" && um !== "PZ") {
@@ -191,6 +201,7 @@ export default function ItemDetailsModal({
       categoryId: categoryId.trim() || null,
       category: categoryId.trim() || null,
       packSize: parsedPackSize,
+      inventoryMultiplier: parsedInventoryMultiplier,
       um,
       baseQty: parsedBaseQty,
       costEur: lastCostEuro.trim()
@@ -295,12 +306,14 @@ export default function ItemDetailsModal({
                     onChange={(e) => setSupplier(e.target.value)}
                   >
                     <option value="VARI">VARI</option>
-                    {suppliers.map((s) => (
-                      <option key={s.id} value={s.code}>
-                        {s.code}
-                        {s.name ? ` · ${s.name}` : ""}
-                      </option>
-                    ))}
+                    {suppliers
+                      .filter((s) => s.code !== "VARI")
+                      .map((s) => (
+                        <option key={s.id} value={s.code}>
+                          {s.code}
+                          {s.name ? ` · ${s.name}` : ""}
+                        </option>
+                      ))}
                   </select>
 
                   <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
@@ -329,6 +342,22 @@ export default function ItemDetailsModal({
                   value={packSize}
                   onChange={(e) => setPackSize(e.target.value)}
                 />
+              </div>
+
+              <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
+                <label className={labelCls}>Moltiplicatore inventario (BT)</label>
+                <input
+                  className={inputCls}
+                  type="number"
+                  min={1}
+                  step="any"
+                  value={inventoryMultiplier}
+                  onChange={(e) => setInventoryMultiplier(e.target.value)}
+                  placeholder="Es. 75 / 70 / 3000 / 1"
+                />
+                <div className={helpCls}>
+                  Valore in BT di una unità contata in inventario.
+                </div>
               </div>
 
               <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
