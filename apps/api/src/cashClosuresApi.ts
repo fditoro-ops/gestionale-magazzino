@@ -1,4 +1,4 @@
-import { authFetch } from "./authFetch";
+import { authFetch } from "./authFetch.js";
 
 export type CashClosureStatus =
   | "DRAFT"
