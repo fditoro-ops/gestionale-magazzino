@@ -27,6 +27,7 @@ type InventoryLine = {
   session_id: string;
   sku: string;
   theoretical_qty_bt: string | number;
+  counted_qty?: string | number | null;
   counted_qty_bt: string | number | null;
   difference_qty_bt: string | number | null;
   cost_snapshot: string | number | null;
@@ -34,6 +35,7 @@ type InventoryLine = {
   note?: string | null;
   counted_by?: string | null;
   counted_at?: string | null;
+  pack_size?: string | number | null;
 };
 
 type InventorySummary = {
@@ -73,7 +75,6 @@ export default function InventoryPage() {
 
   const [draftQtyByLineId, setDraftQtyByLineId] = useState<Record<string, string>>({});
   const [draftNoteByLineId, setDraftNoteByLineId] = useState<Record<string, string>>({});
-  const [savingLineId, setSavingLineId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
   const [newSessionName, setNewSessionName] = useState("Inventario manuale");
@@ -88,6 +89,33 @@ export default function InventoryPage() {
     }
     return map;
   }, [items]);
+
+  const editableSession =
+    selectedSession?.status === "COUNTING" || selectedSession?.status === "CLOSED";
+
+  const dirtyLineIds = useMemo(() => {
+    return lines
+      .filter((line) => {
+        const currentQty =
+          draftQtyByLineId[line.id] ??
+          (line.counted_qty === null || line.counted_qty === undefined
+            ? ""
+            : String(line.counted_qty));
+
+        const currentNote =
+          draftNoteByLineId[line.id] ?? (line.note ?? "");
+
+        const originalQty =
+          line.counted_qty === null || line.counted_qty === undefined
+            ? ""
+            : String(line.counted_qty);
+
+        const originalNote = line.note ?? "";
+
+        return currentQty !== originalQty || currentNote !== originalNote;
+      })
+      .map((line) => line.id);
+  }, [lines, draftQtyByLineId, draftNoteByLineId]);
 
   async function loadSessions() {
     try {
@@ -153,9 +181,9 @@ export default function InventoryPage() {
 
       for (const line of nextLines) {
         qtyDrafts[line.id] =
-          line.counted_qty_bt === null || line.counted_qty_bt === undefined
+          line.counted_qty === null || line.counted_qty === undefined
             ? ""
-            : String(line.counted_qty_bt);
+            : String(line.counted_qty);
 
         noteDrafts[line.id] = line.note ?? "";
       }
@@ -293,6 +321,10 @@ export default function InventoryPage() {
         throw new Error(data?.error || "Errore applicazione inventario");
       }
 
+      if (data?.warning) {
+        alert(data.warning);
+      }
+
       await loadSessions();
       await loadSessionDetail(sessionId);
     } catch (err: any) {
@@ -328,50 +360,96 @@ export default function InventoryPage() {
     }
   }
 
-  async function saveLine(line: InventoryLine) {
+  async function deleteSession(session: InventorySession) {
+    const ok = window.confirm(
+      `Vuoi eliminare l'inventario ${session.code}? Verranno rimossi anche gli eventuali movimenti INVENTORY collegati.`
+    );
+    if (!ok) return;
+
     try {
-      const qtyRaw = draftQtyByLineId[line.id] ?? "";
-      const noteRaw = draftNoteByLineId[line.id] ?? "";
+      setBusyAction(`delete:${session.id}`);
 
-      if (qtyRaw.trim() === "") {
-        alert("Inserisci una quantità contata");
-        return;
-      }
-
-      const countedQty = Number(qtyRaw.replace(",", "."));
-
-      if (!Number.isFinite(countedQty)) {
-        alert("La quantità contata deve essere numerica");
-        return;
-      }
-
-      setSavingLineId(line.id);
-
-      const res = await authFetch(`/inventory/lines/${line.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          counted_qty_bt: countedQty,
-          note: noteRaw || null,
-          counted_by: "core-ui",
-        }),
+      const res = await authFetch(`/inventory/sessions/${session.id}`, {
+        method: "DELETE",
       });
 
       const data = await res.json();
 
       if (!res.ok || !data?.ok) {
-        throw new Error(data?.error || "Errore salvataggio riga");
+        throw new Error(data?.error || "Errore eliminazione inventario");
       }
 
-      if (!selectedSessionId) return;
+      await loadSessions();
+
+      if (selectedSessionId === session.id) {
+        setSelectedSessionId(null);
+        setSelectedSession(null);
+        setSummary(null);
+        setLines([]);
+        setDraftQtyByLineId({});
+        setDraftNoteByLineId({});
+      }
+
+      alert("Inventario eliminato correttamente");
+    } catch (err: any) {
+      alert(err.message || "Errore eliminazione inventario");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function saveAllLines() {
+    if (!selectedSessionId || !selectedSession) return;
+
+    const changedLines = lines.filter((line) => dirtyLineIds.includes(line.id));
+
+    if (!changedLines.length) {
+      alert("Non ci sono modifiche da salvare");
+      return;
+    }
+
+    try {
+      setBusyAction(`saveall:${selectedSessionId}`);
+
+      for (const line of changedLines) {
+        const qtyRaw = (draftQtyByLineId[line.id] ?? "").trim();
+        const noteRaw = (draftNoteByLineId[line.id] ?? "").trim();
+
+        if (qtyRaw === "") {
+          continue;
+        }
+
+        const countedQty = Number(qtyRaw.replace(",", "."));
+
+        if (!Number.isFinite(countedQty)) {
+          throw new Error(`La quantità della SKU ${line.sku} non è numerica`);
+        }
+
+        const res = await authFetch(`/inventory/lines/${line.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            counted_qty: countedQty,
+            note: noteRaw || null,
+            counted_by: "core-ui",
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data?.ok) {
+          throw new Error(data?.error || `Errore salvataggio riga ${line.sku}`);
+        }
+      }
 
       await loadSessionDetail(selectedSessionId);
+      alert("Inventario salvato");
     } catch (err: any) {
-      alert(err.message || "Errore salvataggio riga");
+      alert(err.message || "Errore salvataggio inventario");
     } finally {
-      setSavingLineId(null);
+      setBusyAction(null);
     }
   }
 
@@ -392,7 +470,7 @@ export default function InventoryPage() {
 
         <div style={styles.headerActions}>
           <input
-            style={styles.topInput}
+            style={styles.topInputWide}
             value={newSessionName}
             onChange={(e) => setNewSessionName(e.target.value)}
             placeholder="Nome inventario"
@@ -518,6 +596,16 @@ export default function InventoryPage() {
                                 Annulla
                               </button>
                             )}
+
+                            {s.status !== "CANCELLED" && (
+                              <button
+                                style={styles.dangerBtn}
+                                onClick={() => deleteSession(s)}
+                                disabled={busyAction === `delete:${s.id}`}
+                              >
+                                Elimina
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -554,6 +642,35 @@ export default function InventoryPage() {
                   <div style={styles.detailMeta}>
                     Creato da: {selectedSession.created_by || "-"}
                   </div>
+                  {selectedSession.applied_at && (
+                    <div style={styles.detailMeta}>
+                      Applicato il: {formatDateTime(selectedSession.applied_at)}
+                    </div>
+                  )}
+                </div>
+
+                <div style={styles.detailHeaderActions}>
+                  {editableSession && (
+                    <button
+                      style={styles.primaryBtn}
+                      onClick={saveAllLines}
+                      disabled={busyAction === `saveall:${selectedSession.id}`}
+                    >
+                      {busyAction === `saveall:${selectedSession.id}`
+                        ? "Salvataggio..."
+                        : `Salva tutto${dirtyLineIds.length ? ` (${dirtyLineIds.length})` : ""}`}
+                    </button>
+                  )}
+
+                  {selectedSession.status !== "CANCELLED" && (
+                    <button
+                      style={styles.dangerBtn}
+                      onClick={() => deleteSession(selectedSession)}
+                      disabled={busyAction === `delete:${selectedSession.id}`}
+                    >
+                      Elimina inventario
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -566,6 +683,14 @@ export default function InventoryPage() {
                 </div>
               )}
 
+              {selectedSession.status === "COUNTING" && (
+                <div style={styles.infoBanner}>
+                  Inventario parziale attivo: puoi contare solo le SKU che vuoi,
+                  salvare tutto con un click e chiudere la sessione anche senza compilare
+                  tutte le righe.
+                </div>
+              )}
+
               {loadingDetail ? (
                 <div style={styles.info}>Caricamento dettaglio inventario...</div>
               ) : (
@@ -574,13 +699,13 @@ export default function InventoryPage() {
                     <thead>
                       <tr>
                         <th style={styles.th}>SKU</th>
-                        <th style={styles.th}>Articolo</th>
-                        <th style={styles.th}>Teorico</th>
+                        <th style={{ ...styles.th, minWidth: 320 }}>Articolo</th>
+                        <th style={styles.th}>Teorico BT</th>
                         <th style={styles.th}>Contato</th>
-                        <th style={styles.th}>Differenza</th>
+                        <th style={styles.th}>BT contati</th>
+                        <th style={styles.th}>Differenza BT</th>
                         <th style={styles.th}>Valore €</th>
-                        <th style={styles.th}>Note</th>
-                        <th style={styles.th}>Salva</th>
+                        <th style={{ ...styles.th, minWidth: 240 }}>Note</th>
                       </tr>
                     </thead>
 
@@ -593,34 +718,42 @@ export default function InventoryPage() {
                         </tr>
                       ) : (
                         lines.map((line) => {
-                          const theoretical = toNumber(line.theoretical_qty_bt);
-                          const counted =
-                            draftQtyByLineId[line.id] === ""
+                          const theoreticalBt = toNumber(line.theoretical_qty_bt);
+
+                          const draftQtyRaw = draftQtyByLineId[line.id] ?? "";
+                          const countedHuman =
+                            draftQtyRaw.trim() === ""
                               ? null
-                              : toNumber(draftQtyByLineId[line.id]);
-                          const diff =
-                            counted === null ? null : counted - theoretical;
+                              : toLocaleNumber(draftQtyRaw);
+
+                          const packSize = safePackSize(line.pack_size);
+                          const countedBt =
+                            countedHuman === null ? null : countedHuman * packSize;
+
+                          const diffBt =
+                            countedBt === null ? null : countedBt - theoreticalBt;
 
                           const currentValueCents =
-                            diff !== null && line.cost_snapshot !== null
-                              ? diff * toNumber(line.cost_snapshot)
+                            diffBt !== null && line.cost_snapshot !== null
+                              ? diffBt * toNumber(line.cost_snapshot)
                               : null;
 
-                          const isEditable =
-                            selectedSession.status === "COUNTING" ||
-                            selectedSession.status === "CLOSED";
+                          const isEditable = editableSession;
+                          const isDirty = dirtyLineIds.includes(line.id);
 
                           return (
-                            <tr key={line.id}>
+                            <tr key={line.id} style={isDirty ? styles.dirtyRow : undefined}>
                               <td style={styles.td}>{line.sku}</td>
+
                               <td style={styles.td}>
                                 {itemNameBySku.get(String(line.sku).toUpperCase()) || "-"}
                               </td>
-                              <td style={styles.td}>{formatQty(line.theoretical_qty_bt)}</td>
+
+                              <td style={styles.td}>{formatQty(theoreticalBt)}</td>
 
                               <td style={styles.td}>
                                 <input
-                                  style={styles.input}
+                                  style={styles.qtyInput}
                                   value={draftQtyByLineId[line.id] ?? ""}
                                   disabled={!isEditable}
                                   onChange={(e) =>
@@ -629,12 +762,16 @@ export default function InventoryPage() {
                                       [line.id]: e.target.value,
                                     }))
                                   }
-                                  placeholder="0"
+                                  placeholder="Es. 3,5"
                                 />
                               </td>
 
                               <td style={styles.td}>
-                                {diff === null ? "-" : formatNumber(diff)}
+                                {countedBt === null ? "-" : formatQty(countedBt)}
+                              </td>
+
+                              <td style={styles.td}>
+                                {diffBt === null ? "-" : formatNumber(diffBt)}
                               </td>
 
                               <td style={styles.td}>
@@ -645,7 +782,7 @@ export default function InventoryPage() {
 
                               <td style={styles.td}>
                                 <input
-                                  style={styles.input}
+                                  style={styles.noteInput}
                                   value={draftNoteByLineId[line.id] ?? ""}
                                   disabled={!isEditable}
                                   onChange={(e) =>
@@ -656,16 +793,6 @@ export default function InventoryPage() {
                                   }
                                   placeholder="Note"
                                 />
-                              </td>
-
-                              <td style={styles.td}>
-                                <button
-                                  style={styles.actionBtn}
-                                  disabled={!isEditable || savingLineId === line.id}
-                                  onClick={() => saveLine(line)}
-                                >
-                                  {savingLineId === line.id ? "Salvataggio..." : "Salva"}
-                                </button>
                               </td>
                             </tr>
                           );
@@ -702,6 +829,16 @@ function formatDateTime(value?: string | null) {
 function toNumber(v: string | number | null | undefined) {
   const n = Number(v ?? 0);
   return Number.isFinite(n) ? n : 0;
+}
+
+function toLocaleNumber(v: string) {
+  const n = Number(v.replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function safePackSize(v: string | number | null | undefined) {
+  const n = Number(v ?? 1);
+  return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
 function formatQty(v: string | number | null | undefined) {
@@ -789,9 +926,19 @@ const styles: Record<string, CSSProperties> = {
     background: "#fff",
   },
 
+  topInputWide: {
+    minWidth: 260,
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid #d9e2ec",
+    fontSize: 14,
+    outline: "none",
+    background: "#fff",
+  },
+
   layout: {
     display: "grid",
-    gridTemplateColumns: "1.05fr 1.35fr",
+    gridTemplateColumns: "1.05fr 1.45fr",
     gap: 16,
     alignItems: "start",
   },
@@ -866,6 +1013,15 @@ const styles: Record<string, CSSProperties> = {
     background: "#f7f7f7",
   },
 
+  infoBanner: {
+    padding: 12,
+    borderRadius: 10,
+    background: "#eef8ff",
+    border: "1px solid #cfe8f6",
+    color: "#1f3c4d",
+    fontSize: 13,
+  },
+
   error: {
     padding: 12,
     borderRadius: 10,
@@ -921,6 +1077,10 @@ const styles: Record<string, CSSProperties> = {
     background: "#f8fcff",
   },
 
+  dirtyRow: {
+    background: "#fffdf5",
+  },
+
   placeholder: {
     padding: 20,
     borderRadius: 14,
@@ -944,6 +1104,14 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 12,
+    flexWrap: "wrap",
+  },
+
+  detailHeaderActions: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
   },
 
   detailTitle: {
@@ -982,10 +1150,21 @@ const styles: Record<string, CSSProperties> = {
     color: "#243B53",
   },
 
-  input: {
+  qtyInput: {
     width: "100%",
-    minWidth: 90,
-    padding: "8px 10px",
+    minWidth: 130,
+    padding: "10px 12px",
+    borderRadius: 8,
+    border: "1px solid #d9e2ec",
+    fontSize: 15,
+    outline: "none",
+    boxSizing: "border-box",
+  },
+
+  noteInput: {
+    width: "100%",
+    minWidth: 220,
+    padding: "10px 12px",
     borderRadius: 8,
     border: "1px solid #d9e2ec",
     fontSize: 14,
