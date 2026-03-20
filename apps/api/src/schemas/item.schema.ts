@@ -13,7 +13,7 @@ export const CategoryId = z.enum([
   "tequila",
 ]);
 
-const Supplier = z.enum(["DORECA", "ALPORI", "VARI"]);
+const Supplier = z.string().trim().min(1);
 const ItemUm = z.enum(["CL", "PZ"]);
 
 const nullableTrimmedString = z
