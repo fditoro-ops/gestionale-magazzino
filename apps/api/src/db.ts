@@ -302,6 +302,93 @@ await pool.query(`
   console.log("✅ Tabella cic_pending_rows pronta");
 
   /* =========================
+     CASH CLOSURES
+  ========================= */
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cash_closures (
+      id TEXT PRIMARY KEY,
+
+      tenant_id TEXT NOT NULL,
+
+      business_date DATE NOT NULL,
+      operator_id TEXT,
+      operator_name TEXT,
+
+      theoretical_base NUMERIC NOT NULL DEFAULT 0,
+
+      cash_declared NUMERIC NOT NULL DEFAULT 0,
+      card_declared NUMERIC NOT NULL DEFAULT 0,
+      satispay_declared NUMERIC NOT NULL DEFAULT 0,
+      other_declared NUMERIC NOT NULL DEFAULT 0,
+
+      declared_total NUMERIC NOT NULL DEFAULT 0,
+      delta NUMERIC NOT NULL DEFAULT 0,
+
+      receipt_image_url TEXT,
+      receipt_image_name TEXT,
+
+      notes TEXT,
+
+      status TEXT NOT NULL DEFAULT 'DRAFT',
+      alert_flags JSONB NOT NULL DEFAULT '[]'::jsonb,
+
+      email_sent BOOLEAN NOT NULL DEFAULT false,
+      email_sent_at TIMESTAMPTZ,
+      email_error TEXT,
+
+      closed_at TIMESTAMPTZ,
+      verified_at TIMESTAMPTZ,
+      verified_by TEXT,
+
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+      CONSTRAINT chk_cash_closures_status
+        CHECK (status IN ('DRAFT', 'CLOSED', 'VERIFIED', 'CANCELLED')),
+
+      CONSTRAINT chk_cash_closures_theoretical_base
+        CHECK (theoretical_base >= 0),
+
+      CONSTRAINT chk_cash_closures_cash_declared
+        CHECK (cash_declared >= 0),
+
+      CONSTRAINT chk_cash_closures_card_declared
+        CHECK (card_declared >= 0),
+
+      CONSTRAINT chk_cash_closures_satispay_declared
+        CHECK (satispay_declared >= 0),
+
+      CONSTRAINT chk_cash_closures_other_declared
+        CHECK (other_declared >= 0)
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_cash_closures_tenant_date
+    ON cash_closures (tenant_id, business_date DESC)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_cash_closures_status
+    ON cash_closures (tenant_id, status)
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_cash_closures_operator
+    ON cash_closures (tenant_id, operator_id)
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_cash_closures_draft_open
+    ON cash_closures (tenant_id, business_date, operator_id, status)
+    WHERE status = 'DRAFT'
+  `);
+
+  console.log("✅ Tabella cash_closures pronta");
+
+  
+  /* =========================
      CIC UNRESOLVED
   ========================= */
 
