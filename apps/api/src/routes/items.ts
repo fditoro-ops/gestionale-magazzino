@@ -171,6 +171,24 @@ router.patch("/:sku", async (req, res) => {
 
   const current = await getItemBySkuOrThrow(sku);
 
+  const nextUm = patch.um ?? current.um;
+  if (!assertValidUm(nextUm)) {
+    return res.status(400).json({ error: "UM non valida" });
+  }
+
+  const nextBaseQty =
+    patch.baseQty !== undefined && patch.baseQty !== null
+      ? Number(patch.baseQty)
+      : Number(current.baseQty);
+
+  if (!Number.isFinite(nextBaseQty) || nextBaseQty <= 0) {
+    return res.status(400).json({ error: "baseQty non valida" });
+  }
+
+  if (nextUm === "PZ" && nextBaseQty !== 1) {
+    return res.status(400).json({ error: "PZ deve essere 1" });
+  }
+
   const supplierRow = await resolveSupplier({
     supplierId: (patch as any).supplierId ?? current.supplierId,
     supplier: patch.supplier ?? current.supplier,
@@ -183,13 +201,31 @@ router.patch("/:sku", async (req, res) => {
     `
     UPDATE "Item"
     SET
-      name=$1,
-      supplier=$2,
-      "supplierId"=$3
-    WHERE sku=$4
+      name = $1,
+      supplier = $2,
+      "supplierId" = $3,
+      um = $4,
+      "baseQty" = $5,
+      brand = $6,
+      "packSize" = $7,
+      active = $8,
+      "lastCostCents" = $9,
+      "updatedAt" = NOW()
+    WHERE sku = $10
     RETURNING *
     `,
-    [patch.name ?? current.name, supplierCode, supplierId, sku]
+    [
+      patch.name ?? current.name,
+      supplierCode,
+      supplierId,
+      nextUm,
+      nextBaseQty,
+      patch.brand ?? current.brand,
+      patch.packSize ?? current.packSize,
+      patch.active ?? current.active,
+      patch.lastCostCents ?? current.lastCostCents,
+      sku,
+    ]
   );
 
   res.json(mapRowToItem(r.rows[0]));
@@ -211,6 +247,28 @@ router.put("/:itemId", async (req, res) => {
 
   const current = currentRes.rows[0];
 
+  if (!current) {
+    return res.status(404).json({ error: "Item non trovato" });
+  }
+
+  const nextUm = patch.um ?? current.um;
+  if (!assertValidUm(nextUm)) {
+    return res.status(400).json({ error: "UM non valida" });
+  }
+
+  const nextBaseQty =
+    patch.baseQty !== undefined && patch.baseQty !== null
+      ? Number(patch.baseQty)
+      : Number(current.baseQty);
+
+  if (!Number.isFinite(nextBaseQty) || nextBaseQty <= 0) {
+    return res.status(400).json({ error: "baseQty non valida" });
+  }
+
+  if (nextUm === "PZ" && nextBaseQty !== 1) {
+    return res.status(400).json({ error: "PZ deve essere 1" });
+  }
+
   const supplierRow = await resolveSupplier({
     supplierId: (patch as any).supplierId ?? current.supplierId,
     supplier: patch.supplier ?? current.supplier,
@@ -223,13 +281,31 @@ router.put("/:itemId", async (req, res) => {
     `
     UPDATE "Item"
     SET
-      name=$1,
-      supplier=$2,
-      "supplierId"=$3
-    WHERE id=$4
+      name = $1,
+      supplier = $2,
+      "supplierId" = $3,
+      um = $4,
+      "baseQty" = $5,
+      brand = $6,
+      "packSize" = $7,
+      active = $8,
+      "lastCostCents" = $9,
+      "updatedAt" = NOW()
+    WHERE id = $10
     RETURNING *
     `,
-    [patch.name ?? current.name, supplierCode, supplierId, req.params.itemId]
+    [
+      patch.name ?? current.name,
+      supplierCode,
+      supplierId,
+      nextUm,
+      nextBaseQty,
+      patch.brand ?? current.brand,
+      patch.packSize ?? current.packSize,
+      patch.active ?? current.active,
+      patch.lastCostCents ?? current.lastCostCents,
+      req.params.itemId,
+    ]
   );
 
   res.json(mapRowToItem(r.rows[0]));
