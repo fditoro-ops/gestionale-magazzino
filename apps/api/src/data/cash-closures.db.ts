@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { pool } from "../db.js";
 import type { CashClosure } from "../types/cash-closure.js";
 
@@ -88,10 +89,10 @@ export async function listCashClosuresDb(filters: ListFilters): Promise<CashClos
   }
 
   const sql = `
-    select *
-    from cash_closures
-    where ${where.join(" and ")}
-    order by business_date desc, created_at desc
+    SELECT *
+    FROM cash_closures
+    WHERE ${where.join(" AND ")}
+    ORDER BY business_date DESC, created_at DESC
   `;
 
   const { rows } = await pool.query(sql, values);
@@ -104,11 +105,11 @@ export async function getCashClosureByIdDb(
 ): Promise<CashClosure | null> {
   const { rows } = await pool.query(
     `
-    select *
-    from cash_closures
-    where tenant_id = $1
-      and id = $2
-    limit 1
+    SELECT *
+    FROM cash_closures
+    WHERE tenant_id = $1
+      AND id = $2
+    LIMIT 1
     `,
     [tenant_id, id]
   );
@@ -120,9 +121,12 @@ export async function getCashClosureByIdDb(
 export async function createCashClosureDb(
   input: InsertCashClosureInput
 ): Promise<CashClosure> {
+  const id = randomUUID();
+
   const { rows } = await pool.query(
     `
-    insert into cash_closures (
+    INSERT INTO cash_closures (
+      id,
       tenant_id,
       business_date,
       operator_id,
@@ -137,12 +141,13 @@ export async function createCashClosureDb(
       notes,
       alert_flags
     )
-    values (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb
+    VALUES (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb
     )
-    returning *
+    RETURNING *
     `,
     [
+      id,
       input.tenant_id,
       input.business_date,
       input.operator_id ?? null,
@@ -167,7 +172,8 @@ export async function updateCashClosureDb(
   id: string,
   patch: UpdateCashClosureInput
 ): Promise<CashClosure | null> {
-  const entries = Object.entries(patch).filter(([, v]) => v !== undefined);
+  const entries = Object.entries(patch).filter(([, value]) => value !== undefined);
+
   if (!entries.length) {
     return getCashClosureByIdDb(tenant_id, id);
   }
@@ -176,11 +182,10 @@ export async function updateCashClosureDb(
   const sets: string[] = [];
 
   for (const [key, value] of entries) {
-    values.push(
-      key === "alert_flags" ? JSON.stringify(value ?? []) : value
-    );
+    values.push(key === "alert_flags" ? JSON.stringify(value ?? []) : value);
 
     const param = `$${values.length}`;
+
     if (key === "alert_flags") {
       sets.push(`${key} = ${param}::jsonb`);
     } else {
@@ -188,15 +193,19 @@ export async function updateCashClosureDb(
     }
   }
 
+  values.push(new Date().toISOString());
+  sets.push(`updated_at = $${values.length}`);
+
   const sql = `
-    update cash_closures
-    set ${sets.join(", ")}
-    where tenant_id = $1
-      and id = $2
-    returning *
+    UPDATE cash_closures
+    SET ${sets.join(", ")}
+    WHERE tenant_id = $1
+      AND id = $2
+    RETURNING *
   `;
 
   const { rows } = await pool.query(sql, values);
   if (!rows[0]) return null;
+
   return mapRow(rows[0]);
 }
