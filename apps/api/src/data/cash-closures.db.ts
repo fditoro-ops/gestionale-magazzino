@@ -1,4 +1,4 @@
-import { pool } from "../db/index.js";
+import { pool } from "../db.js";
 import type { CashClosure } from "../types/cash-closure.js";
 
 type ListFilters = {
