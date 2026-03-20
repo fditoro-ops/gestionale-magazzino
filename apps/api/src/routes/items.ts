@@ -35,6 +35,7 @@ function mapRowToItem(row: any) {
 
     baseQty: toNumberOrNull(row.baseQty),
     packSize: toNumberOrNull(row.packSize),
+    inventoryMultiplier: toNumberOrNull(row.inventoryMultiplier),
 
     brand: row.brand ?? null,
 
@@ -116,9 +117,6 @@ function validateMeasure(um: ItemUm, baseQty: number) {
   }
 }
 
-//
-// GET ALL
-//
 router.get("/", async (_req, res) => {
   try {
     const r = await pool.query(`SELECT * FROM "Item" ORDER BY sku`);
@@ -129,9 +127,6 @@ router.get("/", async (_req, res) => {
   }
 });
 
-//
-// POST
-//
 router.post("/", async (req, res) => {
   try {
     const parsed = CreateItemSchema.safeParse(req.body);
@@ -178,6 +173,7 @@ router.post("/", async (req, res) => {
         "baseQty",
         brand,
         "packSize",
+        "inventoryMultiplier",
         "lastCostCents",
         "costCurrency",
         "imageUrl",
@@ -185,7 +181,7 @@ router.post("/", async (req, res) => {
         "updatedAt"
       )
       VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW()
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW(),NOW()
       )
       RETURNING *
       `,
@@ -202,6 +198,7 @@ router.post("/", async (req, res) => {
         baseQty,
         data.brand ?? null,
         data.packSize ?? null,
+        data.inventoryMultiplier ?? null,
         data.lastCostCents ?? null,
         data.costCurrency ?? "EUR",
         data.imageUrl ?? null,
@@ -215,9 +212,6 @@ router.post("/", async (req, res) => {
   }
 });
 
-//
-// PATCH by SKU
-//
 router.patch("/:sku", async (req, res) => {
   try {
     const parsed = UpdateItemSchema.safeParse(req.body);
@@ -256,11 +250,12 @@ router.patch("/:sku", async (req, res) => {
         "baseQty" = $8,
         brand = $9,
         "packSize" = $10,
-        "lastCostCents" = $11,
-        "costCurrency" = $12,
-        "imageUrl" = $13,
+        "inventoryMultiplier" = $11,
+        "lastCostCents" = $12,
+        "costCurrency" = $13,
+        "imageUrl" = $14,
         "updatedAt" = NOW()
-      WHERE sku = $14
+      WHERE sku = $15
       RETURNING *
       `,
       [
@@ -274,6 +269,7 @@ router.patch("/:sku", async (req, res) => {
         nextBaseQty,
         patch.brand ?? current.brand,
         patch.packSize ?? current.packSize,
+        patch.inventoryMultiplier ?? current.inventoryMultiplier,
         patch.lastCostCents ?? current.lastCostCents,
         patch.costCurrency ?? current.costCurrency ?? "EUR",
         patch.imageUrl ?? current.imageUrl,
@@ -286,15 +282,12 @@ router.patch("/:sku", async (req, res) => {
     if (err?.message === "ITEM_NOT_FOUND") {
       return res.status(404).json({ error: "Item non trovato" });
     }
-
     if (err?.message === "UM_INVALID") {
       return res.status(400).json({ error: "UM non valida" });
     }
-
     if (err?.message === "BASEQTY_INVALID") {
       return res.status(400).json({ error: "baseQty non valida" });
     }
-
     if (err?.message === "PZ_BASEQTY_INVALID") {
       return res.status(400).json({ error: "PZ deve essere 1" });
     }
@@ -304,9 +297,6 @@ router.patch("/:sku", async (req, res) => {
   }
 });
 
-//
-// PUT by itemId
-//
 router.put("/:itemId", async (req, res) => {
   try {
     const parsed = UpdateItemSchema.safeParse(req.body);
@@ -353,11 +343,12 @@ router.put("/:itemId", async (req, res) => {
         "baseQty" = $8,
         brand = $9,
         "packSize" = $10,
-        "lastCostCents" = $11,
-        "costCurrency" = $12,
-        "imageUrl" = $13,
+        "inventoryMultiplier" = $11,
+        "lastCostCents" = $12,
+        "costCurrency" = $13,
+        "imageUrl" = $14,
         "updatedAt" = NOW()
-      WHERE id = $14
+      WHERE id = $15
       RETURNING *
       `,
       [
@@ -371,6 +362,7 @@ router.put("/:itemId", async (req, res) => {
         nextBaseQty,
         patch.brand ?? current.brand,
         patch.packSize ?? current.packSize,
+        patch.inventoryMultiplier ?? current.inventoryMultiplier,
         patch.lastCostCents ?? current.lastCostCents,
         patch.costCurrency ?? current.costCurrency ?? "EUR",
         patch.imageUrl ?? current.imageUrl,
@@ -383,11 +375,9 @@ router.put("/:itemId", async (req, res) => {
     if (err?.message === "UM_INVALID") {
       return res.status(400).json({ error: "UM non valida" });
     }
-
     if (err?.message === "BASEQTY_INVALID") {
       return res.status(400).json({ error: "baseQty non valida" });
     }
-
     if (err?.message === "PZ_BASEQTY_INVALID") {
       return res.status(400).json({ error: "PZ deve essere 1" });
     }
@@ -397,9 +387,6 @@ router.put("/:itemId", async (req, res) => {
   }
 });
 
-//
-// GET SINGLE
-//
 router.get("/:itemId", async (req, res) => {
   try {
     const r = await pool.query(
