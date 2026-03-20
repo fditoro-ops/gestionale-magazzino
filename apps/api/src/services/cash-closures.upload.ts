@@ -1,10 +1,7 @@
 export async function uploadCashClosureReceipt(params: {
-  file: Express.Multer.File;
+  file: any;
 }) {
   const { file } = params;
-
-  // TODO: sostituisci con upload reale
-  // ad esempio S3 / Cloudinary
 
   return {
     receipt_image_url: `/uploads/${file.filename}`,
