@@ -64,21 +64,20 @@ export default function AppLayout({
             Articoli
           </SideItem>
 
-<SideItem
-  active={tab === "inventory"}
-  onClick={() => onTabChange("inventory")}
->
-  Inventario
-          
-  <SideItem
+          <SideItem
+            active={tab === "inventory"}
+            onClick={() => onTabChange("inventory")}
+          >
+            Inventario
+          </SideItem>
+
+          <SideItem
             active={tab === "cashClosure"}
             onClick={() => onTabChange("cashClosure")}
           >
             Chiusura Cassa
           </SideItem>
 
-</SideItem>
-          
           <SideItem
             active={tab === "orders"}
             onClick={() => onTabChange("orders")}
