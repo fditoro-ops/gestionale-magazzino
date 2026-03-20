@@ -4,7 +4,12 @@ import { RefreshCw, Plus, Pencil, X } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
-type Supplier = "DORECA" | "ALPORI" | "VARI";
+type SupplierOption = {
+  id: string;
+  code: string;
+  name?: string | null;
+};
+
 type ItemUm = "CL" | "PZ";
 
 const CATEGORIES = [
@@ -28,12 +33,6 @@ function normalizeCategoryId(raw: unknown): (typeof CATEGORIES)[number]["id"] {
     ? (s as (typeof CATEGORIES)[number]["id"])
     : "bevande";
 }
-
-const SUPPLIERS = [
-  { id: "DORECA", label: "Doreca" },
-  { id: "ALPORI", label: "Alpori" },
-  { id: "VARI", label: "Vari" },
-] as const;
 
 function euroToCents(s: string): number | null {
   if (!s.trim()) return null;
@@ -71,6 +70,8 @@ function formatItemMeasure(item: any) {
 
 export default function ItemsAdmin() {
   const [items, setItems] = useState<Item[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -85,7 +86,7 @@ export default function ItemsAdmin() {
   const [newCategoryId, setNewCategoryId] = useState<
     (typeof CATEGORIES)[number]["id"]
   >("bevande");
-  const [newSupplier, setNewSupplier] = useState<Supplier>("VARI");
+  const [newSupplier, setNewSupplier] = useState<string>("VARI");
   const [newUm, setNewUm] = useState<ItemUm>("PZ");
   const [newBaseQty, setNewBaseQty] = useState("1");
   const [newLastCostEuro, setNewLastCostEuro] = useState("");
@@ -114,8 +115,26 @@ export default function ItemsAdmin() {
     }
   }
 
+  async function loadSuppliers() {
+    try {
+      const res = await fetch(`${API_BASE}/suppliers`);
+      const data = await res.json();
+
+      const rows = Array.isArray(data?.suppliers)
+        ? data.suppliers
+        : Array.isArray(data)
+        ? data
+        : [];
+
+      setSuppliers(rows);
+    } catch {
+      setSuppliers([]);
+    }
+  }
+
   useEffect(() => {
     reload();
+    loadSuppliers();
   }, []);
 
   const filtered = useMemo(() => {
@@ -145,7 +164,6 @@ export default function ItemsAdmin() {
   function handleUmChange(nextUm: ItemUm) {
     setNewUm(nextUm);
 
-    // UX assistita, non fallback nascosto
     if (nextUm === "PZ" && (!newBaseQty.trim() || newBaseQty === "0")) {
       setNewBaseQty("1");
     }
@@ -360,11 +378,13 @@ export default function ItemsAdmin() {
                 <select
                   className={inputCls}
                   value={newSupplier}
-                  onChange={(e) => setNewSupplier(e.target.value as Supplier)}
+                  onChange={(e) => setNewSupplier(e.target.value)}
                 >
-                  {SUPPLIERS.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
+                  <option value="VARI">Vari</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.code}>
+                      {s.code}
+                      {s.name ? ` · ${s.name}` : ""}
                     </option>
                   ))}
                 </select>
@@ -522,6 +542,7 @@ export default function ItemsAdmin() {
       <ItemDetailsModal
         open={detailsOpen}
         item={selected}
+        suppliers={suppliers}
         onClose={() => setDetailsOpen(false)}
         onSavePatch={savePatch}
         loading={loading}
