@@ -71,7 +71,7 @@ function formatItemMeasure(item: any) {
 export default function ItemsAdmin() {
   const [items, setItems] = useState<Item[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
-
+const [newInventoryMultiplier, setNewInventoryMultiplier] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -159,6 +159,7 @@ export default function ItemsAdmin() {
     setNewBaseQty("1");
     setNewLastCostEuro("");
     setNewImageUrl("");
+    setNewInventoryMultiplier("");
   }
 
   function handleUmChange(nextUm: ItemUm) {
@@ -175,7 +176,8 @@ export default function ItemsAdmin() {
     const sku = normalizeSku(newSku);
     const baseQty = parsePositiveNumber(newBaseQty);
     const packSize = parsePositiveNumber(newPackSize);
-
+const inventoryMultiplier = parsePositiveNumber(newInventoryMultiplier);
+    
     if (!sku || !newName.trim()) {
       setErr("SKU e Nome articolo sono obbligatori.");
       return;
@@ -212,6 +214,7 @@ export default function ItemsAdmin() {
       packSize,
       um: newUm,
       baseQty,
+      inventoryMultiplier,
       costEur: newLastCostEuro.trim()
         ? Number(newLastCostEuro.replace(",", "."))
         : null,
@@ -358,6 +361,22 @@ export default function ItemsAdmin() {
                 />
               </div>
 
+<div className="col-span-12 md:col-span-3 grid gap-1">
+  <label className={labelCls}>Moltiplicatore inventario (BT)</label>
+  <input
+    className={inputCls}
+    type="number"
+    min={1}
+    step="any"
+    value={newInventoryMultiplier}
+    onChange={(e) => setNewInventoryMultiplier(e.target.value)}
+    placeholder="Es. 75 / 70 / 3000 / 1"
+  />
+  <div className={helpCls}>
+    Quanto vale in BT una unità contata in inventario.
+  </div>
+</div>
+              
               <div className="col-span-12 md:col-span-3 grid gap-1">
                 <label className={labelCls}>Categoria</label>
                 <select
