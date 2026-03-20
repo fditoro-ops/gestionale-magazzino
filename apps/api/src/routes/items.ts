@@ -14,37 +14,6 @@ function assertValidUm(um: unknown): um is ItemUm {
   return um === "CL" || um === "PZ";
 }
 
-function normalizeItemMeasure(row: any) {
-  const um = row.um;
-  const baseQty = row.baseQty != null ? Number(row.baseQty) : null;
-
-  if (!assertValidUm(um)) {
-    throw new Error(`Item ${row.sku}: um non valida`);
-  }
-
-  if (baseQty == null || !Number.isFinite(baseQty) || baseQty <= 0) {
-    throw new Error(`Item ${row.sku}: baseQty non valida`);
-  }
-
-  return {
-    um,
-    baseQty,
-  };
-}
-
-function deriveLegacyFieldsFromCore(input: {
-  um: ItemUm;
-  baseQty: number;
-}) {
-  return {
-    stockKind: input.um === "CL" ? "VOLUME_CONTAINER" : "UNIT",
-    unitToCl: null,
-    containerSizeCl: input.um === "CL" ? input.baseQty : null,
-    containerLabel: input.um === "CL" ? `${input.baseQty} CL` : "1 PZ",
-    minStockCl: 0,
-  };
-}
-
 function mapRowToItem(row: any) {
   return {
     itemId: row.id,
@@ -74,7 +43,7 @@ async function resolveSupplier(input: {
 }) {
   if (input.supplierId) {
     const r = await pool.query(
-      `SELECT id, code FROM suppliers WHERE id=$1 LIMIT 1`,
+      `SELECT id, code FROM suppliers WHERE id = $1 LIMIT 1`,
       [input.supplierId]
     );
     if (r.rowCount) return r.rows[0];
@@ -83,7 +52,7 @@ async function resolveSupplier(input: {
   if (input.supplier) {
     const code = input.supplier.toUpperCase().trim();
     const r = await pool.query(
-      `SELECT id, code FROM suppliers WHERE UPPER(code)=$1 LIMIT 1`,
+      `SELECT id, code FROM suppliers WHERE UPPER(code) = $1 LIMIT 1`,
       [code]
     );
     if (r.rowCount) return r.rows[0];
@@ -94,221 +63,326 @@ async function resolveSupplier(input: {
 
 async function getItemBySkuOrThrow(sku: string) {
   const r = await pool.query(
-    `SELECT * FROM "Item" WHERE sku=$1 LIMIT 1`,
+    `SELECT * FROM "Item" WHERE sku = $1 LIMIT 1`,
     [sku]
   );
-  if (!r.rowCount) throw new Error("ITEM_NOT_FOUND");
+
+  if (!r.rowCount) {
+    throw new Error("ITEM_NOT_FOUND");
+  }
+
   return r.rows[0];
+}
+
+function normalizeNextUm(patchUm: unknown, currentUm: unknown): ItemUm {
+  const nextUm = (patchUm ?? currentUm) as ItemUm;
+  if (!assertValidUm(nextUm)) {
+    throw new Error("UM_INVALID");
+  }
+  return nextUm;
+}
+
+function normalizeNextBaseQty(
+  patchBaseQty: unknown,
+  currentBaseQty: unknown
+): number {
+  const nextBaseQty =
+    patchBaseQty !== undefined && patchBaseQty !== null
+      ? Number(patchBaseQty)
+      : Number(currentBaseQty);
+
+  if (!Number.isFinite(nextBaseQty) || nextBaseQty <= 0) {
+    throw new Error("BASEQTY_INVALID");
+  }
+
+  return nextBaseQty;
+}
+
+function validateMeasure(um: ItemUm, baseQty: number) {
+  if (um === "PZ" && baseQty !== 1) {
+    throw new Error("PZ_BASEQTY_INVALID");
+  }
 }
 
 //
 // GET ALL
 //
 router.get("/", async (_req, res) => {
-  const r = await pool.query(`SELECT * FROM "Item" ORDER BY sku`);
-  res.json(r.rows.map(mapRowToItem));
+  try {
+    const r = await pool.query(`SELECT * FROM "Item" ORDER BY sku`);
+    return res.json(r.rows.map(mapRowToItem));
+  } catch (err) {
+    console.error("GET /items error", err);
+    return res.status(500).json({ error: "Errore server" });
+  }
 });
 
 //
 // POST
 //
 router.post("/", async (req, res) => {
-  const parsed = CreateItemSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json(parsed.error);
+  try {
+    const parsed = CreateItemSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(parsed.error);
+    }
 
-  const data = parsed.data;
+    const data = parsed.data;
 
-  if (!assertValidUm(data.um))
-    return res.status(400).json({ error: "UM non valida" });
+    if (!assertValidUm(data.um)) {
+      return res.status(400).json({ error: "UM non valida" });
+    }
 
-  if (data.um === "PZ" && Number(data.baseQty) !== 1)
-    return res.status(400).json({ error: "PZ deve essere 1" });
+    const baseQty = Number(data.baseQty);
 
-  const baseQty = Number(data.baseQty);
-  const legacy = deriveLegacyFieldsFromCore({
-    um: data.um,
-    baseQty,
-  });
+    if (!Number.isFinite(baseQty) || baseQty <= 0) {
+      return res.status(400).json({ error: "baseQty non valida" });
+    }
 
-  const supplierRow = await resolveSupplier({
-    supplierId: (data as any).supplierId ?? null,
-    supplier: data.supplier ?? null,
-  });
+    if (data.um === "PZ" && baseQty !== 1) {
+      return res.status(400).json({ error: "PZ deve essere 1" });
+    }
 
-  const supplierId = supplierRow?.id ?? null;
-  const supplierCode = supplierRow?.code ?? "VARI";
+    const supplierRow = await resolveSupplier({
+      supplierId: (data as any).supplierId ?? null,
+      supplier: data.supplier ?? null,
+    });
 
-  const r = await pool.query(
-    `
-    INSERT INTO "Item"
-    (id, sku, name, supplier, "supplierId", um, "baseQty")
-    VALUES ($1,$2,$3,$4,$5,$6,$7)
-    RETURNING *
-    `,
-    [
-      `itm_${Date.now()}`,
-      data.sku,
-      data.name,
-      supplierCode,
-      supplierId,
-      data.um,
-      baseQty,
-    ]
-  );
+    const supplierId = supplierRow?.id ?? null;
+    const supplierCode = supplierRow?.code ?? "VARI";
 
-  res.json(mapRowToItem(r.rows[0]));
+    const r = await pool.query(
+      `
+      INSERT INTO "Item" (
+        id,
+        sku,
+        name,
+        "categoryId",
+        category,
+        supplier,
+        "supplierId",
+        active,
+        um,
+        "baseQty",
+        brand,
+        "packSize",
+        "lastCostCents",
+        "costCurrency",
+        "imageUrl",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW()
+      )
+      RETURNING *
+      `,
+      [
+        `itm_${Date.now()}`,
+        data.sku,
+        data.name,
+        data.categoryId ?? "bevande",
+        data.category ?? data.categoryId ?? "bevande",
+        supplierCode,
+        supplierId,
+        data.active ?? true,
+        data.um,
+        baseQty,
+        data.brand ?? null,
+        data.packSize ?? null,
+        data.lastCostCents ?? null,
+        data.costCurrency ?? "EUR",
+        data.imageUrl ?? null,
+      ]
+    );
+
+    return res.json(mapRowToItem(r.rows[0]));
+  } catch (err) {
+    console.error("POST /items error", err);
+    return res.status(500).json({ error: "Errore server" });
+  }
 });
 
 //
-// PATCH
+// PATCH by SKU
 //
 router.patch("/:sku", async (req, res) => {
-  const parsed = UpdateItemSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json(parsed.error);
+  try {
+    const parsed = UpdateItemSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(parsed.error);
+    }
 
-  const sku = req.params.sku;
-  const patch = parsed.data;
+    const sku = req.params.sku;
+    const patch = parsed.data;
 
-  const current = await getItemBySkuOrThrow(sku);
+    const current = await getItemBySkuOrThrow(sku);
 
-  const nextUm = patch.um ?? current.um;
-  if (!assertValidUm(nextUm)) {
-    return res.status(400).json({ error: "UM non valida" });
+    const nextUm = normalizeNextUm(patch.um, current.um);
+    const nextBaseQty = normalizeNextBaseQty(patch.baseQty, current.baseQty);
+    validateMeasure(nextUm, nextBaseQty);
+
+    const supplierRow = await resolveSupplier({
+      supplierId: (patch as any).supplierId ?? current.supplierId,
+      supplier: patch.supplier ?? current.supplier,
+    });
+
+    const supplierId = supplierRow?.id ?? current.supplierId;
+    const supplierCode = supplierRow?.code ?? current.supplier ?? "VARI";
+
+    const r = await pool.query(
+      `
+      UPDATE "Item"
+      SET
+        name = $1,
+        "categoryId" = $2,
+        category = $3,
+        supplier = $4,
+        "supplierId" = $5,
+        active = $6,
+        um = $7,
+        "baseQty" = $8,
+        brand = $9,
+        "packSize" = $10,
+        "lastCostCents" = $11,
+        "costCurrency" = $12,
+        "imageUrl" = $13,
+        "updatedAt" = NOW()
+      WHERE sku = $14
+      RETURNING *
+      `,
+      [
+        patch.name ?? current.name,
+        patch.categoryId ?? current.categoryId ?? "bevande",
+        patch.category ?? current.category ?? current.categoryId ?? "bevande",
+        supplierCode,
+        supplierId,
+        patch.active ?? current.active,
+        nextUm,
+        nextBaseQty,
+        patch.brand ?? current.brand,
+        patch.packSize ?? current.packSize,
+        patch.lastCostCents ?? current.lastCostCents,
+        patch.costCurrency ?? current.costCurrency ?? "EUR",
+        patch.imageUrl ?? current.imageUrl,
+        sku,
+      ]
+    );
+
+    return res.json(mapRowToItem(r.rows[0]));
+  } catch (err: any) {
+    if (err?.message === "ITEM_NOT_FOUND") {
+      return res.status(404).json({ error: "Item non trovato" });
+    }
+
+    if (err?.message === "UM_INVALID") {
+      return res.status(400).json({ error: "UM non valida" });
+    }
+
+    if (err?.message === "BASEQTY_INVALID") {
+      return res.status(400).json({ error: "baseQty non valida" });
+    }
+
+    if (err?.message === "PZ_BASEQTY_INVALID") {
+      return res.status(400).json({ error: "PZ deve essere 1" });
+    }
+
+    console.error("PATCH /items/:sku error", err);
+    return res.status(500).json({ error: "Errore server" });
   }
-
-  const nextBaseQty =
-    patch.baseQty !== undefined && patch.baseQty !== null
-      ? Number(patch.baseQty)
-      : Number(current.baseQty);
-
-  if (!Number.isFinite(nextBaseQty) || nextBaseQty <= 0) {
-    return res.status(400).json({ error: "baseQty non valida" });
-  }
-
-  if (nextUm === "PZ" && nextBaseQty !== 1) {
-    return res.status(400).json({ error: "PZ deve essere 1" });
-  }
-
-  const supplierRow = await resolveSupplier({
-    supplierId: (patch as any).supplierId ?? current.supplierId,
-    supplier: patch.supplier ?? current.supplier,
-  });
-
-  const supplierId = supplierRow?.id ?? current.supplierId;
-  const supplierCode = supplierRow?.code ?? current.supplier;
-
-  const r = await pool.query(
-    `
-    UPDATE "Item"
-    SET
-      name = $1,
-      supplier = $2,
-      "supplierId" = $3,
-      um = $4,
-      "baseQty" = $5,
-      brand = $6,
-      "packSize" = $7,
-      active = $8,
-      "lastCostCents" = $9,
-      "updatedAt" = NOW()
-    WHERE sku = $10
-    RETURNING *
-    `,
-    [
-      patch.name ?? current.name,
-      supplierCode,
-      supplierId,
-      nextUm,
-      nextBaseQty,
-      patch.brand ?? current.brand,
-      patch.packSize ?? current.packSize,
-      patch.active ?? current.active,
-      patch.lastCostCents ?? current.lastCostCents,
-      sku,
-    ]
-  );
-
-  res.json(mapRowToItem(r.rows[0]));
 });
 
 //
-// PUT
+// PUT by itemId
 //
 router.put("/:itemId", async (req, res) => {
-  const parsed = UpdateItemSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json(parsed.error);
+  try {
+    const parsed = UpdateItemSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(parsed.error);
+    }
 
-  const patch = parsed.data;
+    const patch = parsed.data;
 
-  const currentRes = await pool.query(
-    `SELECT * FROM "Item" WHERE id=$1`,
-    [req.params.itemId]
-  );
+    const currentRes = await pool.query(
+      `SELECT * FROM "Item" WHERE id = $1 LIMIT 1`,
+      [req.params.itemId]
+    );
 
-  const current = currentRes.rows[0];
+    const current = currentRes.rows[0];
 
-  if (!current) {
-    return res.status(404).json({ error: "Item non trovato" });
+    if (!current) {
+      return res.status(404).json({ error: "Item non trovato" });
+    }
+
+    const nextUm = normalizeNextUm(patch.um, current.um);
+    const nextBaseQty = normalizeNextBaseQty(patch.baseQty, current.baseQty);
+    validateMeasure(nextUm, nextBaseQty);
+
+    const supplierRow = await resolveSupplier({
+      supplierId: (patch as any).supplierId ?? current.supplierId,
+      supplier: patch.supplier ?? current.supplier,
+    });
+
+    const supplierId = supplierRow?.id ?? current.supplierId;
+    const supplierCode = supplierRow?.code ?? current.supplier ?? "VARI";
+
+    const r = await pool.query(
+      `
+      UPDATE "Item"
+      SET
+        name = $1,
+        "categoryId" = $2,
+        category = $3,
+        supplier = $4,
+        "supplierId" = $5,
+        active = $6,
+        um = $7,
+        "baseQty" = $8,
+        brand = $9,
+        "packSize" = $10,
+        "lastCostCents" = $11,
+        "costCurrency" = $12,
+        "imageUrl" = $13,
+        "updatedAt" = NOW()
+      WHERE id = $14
+      RETURNING *
+      `,
+      [
+        patch.name ?? current.name,
+        patch.categoryId ?? current.categoryId ?? "bevande",
+        patch.category ?? current.category ?? current.categoryId ?? "bevande",
+        supplierCode,
+        supplierId,
+        patch.active ?? current.active,
+        nextUm,
+        nextBaseQty,
+        patch.brand ?? current.brand,
+        patch.packSize ?? current.packSize,
+        patch.lastCostCents ?? current.lastCostCents,
+        patch.costCurrency ?? current.costCurrency ?? "EUR",
+        patch.imageUrl ?? current.imageUrl,
+        req.params.itemId,
+      ]
+    );
+
+    return res.json(mapRowToItem(r.rows[0]));
+  } catch (err: any) {
+    if (err?.message === "UM_INVALID") {
+      return res.status(400).json({ error: "UM non valida" });
+    }
+
+    if (err?.message === "BASEQTY_INVALID") {
+      return res.status(400).json({ error: "baseQty non valida" });
+    }
+
+    if (err?.message === "PZ_BASEQTY_INVALID") {
+      return res.status(400).json({ error: "PZ deve essere 1" });
+    }
+
+    console.error("PUT /items/:itemId error", err);
+    return res.status(500).json({ error: "Errore server" });
   }
-
-  const nextUm = patch.um ?? current.um;
-  if (!assertValidUm(nextUm)) {
-    return res.status(400).json({ error: "UM non valida" });
-  }
-
-  const nextBaseQty =
-    patch.baseQty !== undefined && patch.baseQty !== null
-      ? Number(patch.baseQty)
-      : Number(current.baseQty);
-
-  if (!Number.isFinite(nextBaseQty) || nextBaseQty <= 0) {
-    return res.status(400).json({ error: "baseQty non valida" });
-  }
-
-  if (nextUm === "PZ" && nextBaseQty !== 1) {
-    return res.status(400).json({ error: "PZ deve essere 1" });
-  }
-
-  const supplierRow = await resolveSupplier({
-    supplierId: (patch as any).supplierId ?? current.supplierId,
-    supplier: patch.supplier ?? current.supplier,
-  });
-
-  const supplierId = supplierRow?.id ?? current.supplierId;
-  const supplierCode = supplierRow?.code ?? current.supplier;
-
-  const r = await pool.query(
-    `
-    UPDATE "Item"
-    SET
-      name = $1,
-      supplier = $2,
-      "supplierId" = $3,
-      um = $4,
-      "baseQty" = $5,
-      brand = $6,
-      "packSize" = $7,
-      active = $8,
-      "lastCostCents" = $9,
-      "updatedAt" = NOW()
-    WHERE id = $10
-    RETURNING *
-    `,
-    [
-      patch.name ?? current.name,
-      supplierCode,
-      supplierId,
-      nextUm,
-      nextBaseQty,
-      patch.brand ?? current.brand,
-      patch.packSize ?? current.packSize,
-      patch.active ?? current.active,
-      patch.lastCostCents ?? current.lastCostCents,
-      req.params.itemId,
-    ]
-  );
-
-  res.json(mapRowToItem(r.rows[0]));
 });
 
 //
@@ -317,7 +391,7 @@ router.put("/:itemId", async (req, res) => {
 router.get("/:itemId", async (req, res) => {
   try {
     const r = await pool.query(
-      `SELECT * FROM "Item" WHERE id=$1`,
+      `SELECT * FROM "Item" WHERE id = $1`,
       [req.params.itemId]
     );
 
@@ -333,7 +407,7 @@ router.get("/:itemId", async (req, res) => {
       stockBt,
     });
   } catch (err) {
-    console.error("GET item error", err);
+    console.error("GET /items/:itemId error", err);
     return res.status(500).json({ error: "Errore server" });
   }
 });
