@@ -15,7 +15,6 @@ export type Item = {
   baseQty?: number | null;
 
   packSize?: number | null;
-  inventoryMultiplier?: number | null;
 
   lastCostCents?: number | null;
   costEur?: number | null;
@@ -81,8 +80,7 @@ export default function ItemDetailsModal({
   const [categoryId, setCategoryId] = useState("");
 
   const [packSize, setPackSize] = useState<string>("");
-  const [inventoryMultiplier, setInventoryMultiplier] = useState<string>("");
-
+ 
   const [um, setUm] = useState<ItemUm>("PZ");
   const [baseQty, setBaseQty] = useState<string>("1");
 
@@ -114,12 +112,6 @@ export default function ItemDetailsModal({
         : ""
     );
 
-    const parsedInventoryMultiplier = Number(item.inventoryMultiplier);
-    setInventoryMultiplier(
-      Number.isFinite(parsedInventoryMultiplier) && parsedInventoryMultiplier > 0
-        ? String(parsedInventoryMultiplier)
-        : ""
-    );
 
     const nextUm: ItemUm = item.um === "CL" ? "CL" : "PZ";
     setUm(nextUm);
@@ -176,7 +168,6 @@ export default function ItemDetailsModal({
     }
 
     const parsedPackSize = parsePositiveNumber(packSize);
-    const parsedInventoryMultiplier = parsePositiveNumber(inventoryMultiplier);
     const parsedBaseQty = parsePositiveNumber(baseQty);
 
     if (um !== "CL" && um !== "PZ") {
@@ -201,7 +192,6 @@ export default function ItemDetailsModal({
       categoryId: categoryId.trim() || null,
       category: categoryId.trim() || null,
       packSize: parsedPackSize,
-      inventoryMultiplier: parsedInventoryMultiplier,
       um,
       baseQty: parsedBaseQty,
       costEur: lastCostEuro.trim()
@@ -342,22 +332,6 @@ export default function ItemDetailsModal({
                   value={packSize}
                   onChange={(e) => setPackSize(e.target.value)}
                 />
-              </div>
-
-              <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
-                <label className={labelCls}>Moltiplicatore inventario (BT)</label>
-                <input
-                  className={inputCls}
-                  type="number"
-                  min={1}
-                  step="any"
-                  value={inventoryMultiplier}
-                  onChange={(e) => setInventoryMultiplier(e.target.value)}
-                  placeholder="Es. 75 / 70 / 3000 / 1"
-                />
-                <div className={helpCls}>
-                  Valore in BT di una unità contata in inventario.
-                </div>
               </div>
 
               <div className="col-span-12 md:col-span-4 min-w-0 grid gap-1">
