@@ -39,6 +39,7 @@ export const CreateItemSchema = z
 
     brand: nullableTrimmedString,
     packSize: z.coerce.number().positive().nullable().optional(),
+    inventoryMultiplier: z.coerce.number().positive().nullable().optional(),
 
     imageUrl: z.string().url().nullable().optional(),
 
@@ -79,6 +80,7 @@ export const UpdateItemSchema = z
 
     brand: nullableTrimmedString,
     packSize: z.coerce.number().positive().nullable().optional(),
+    inventoryMultiplier: z.coerce.number().positive().nullable().optional(),
 
     imageUrl: z.string().url().nullable().optional(),
 
