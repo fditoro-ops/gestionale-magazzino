@@ -35,7 +35,6 @@ function mapRowToItem(row: any) {
 
     baseQty: toNumberOrNull(row.baseQty),
     packSize: toNumberOrNull(row.packSize),
-    inventoryMultiplier: toNumberOrNull(row.inventoryMultiplier),
 
     brand: row.brand ?? null,
 
@@ -158,53 +157,51 @@ router.post("/", async (req, res) => {
     const supplierId = supplierRow?.id ?? null;
     const supplierCode = supplierRow?.code ?? "VARI";
 
-    const r = await pool.query(
-      `
-      INSERT INTO "Item" (
-        id,
-        sku,
-        name,
-        "categoryId",
-        category,
-        supplier,
-        "supplierId",
-        active,
-        um,
-        "baseQty",
-        brand,
-        "packSize",
-        "inventoryMultiplier",
-        "lastCostCents",
-        "costCurrency",
-        "imageUrl",
-        "createdAt",
-        "updatedAt"
-      )
-      VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW(),NOW()
-      )
-      RETURNING *
-      `,
-      [
-        `itm_${Date.now()}`,
-        data.sku,
-        data.name,
-        data.categoryId ?? "bevande",
-        data.category ?? data.categoryId ?? "bevande",
-        supplierCode,
-        supplierId,
-        data.active ?? true,
-        data.um,
-        baseQty,
-        data.brand ?? null,
-        data.packSize ?? null,
-        data.inventoryMultiplier ?? null,
-        data.lastCostCents ?? null,
-        data.costCurrency ?? "EUR",
-        data.imageUrl ?? null,
-      ]
-    );
-
+const r = await pool.query(
+  `
+  INSERT INTO "Item" (
+    id,
+    sku,
+    name,
+    "categoryId",
+    category,
+    supplier,
+    "supplierId",
+    active,
+    um,
+    "baseQty",
+    brand,
+    "packSize",
+    "lastCostCents",
+    "costCurrency",
+    "imageUrl",
+    "createdAt",
+    "updatedAt"
+  )
+  VALUES (
+    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW()
+  )
+  RETURNING *
+  `,
+  [
+    `itm_${Date.now()}`,
+    data.sku,
+    data.name,
+    data.categoryId ?? "bevande",
+    data.category ?? data.categoryId ?? "bevande",
+    supplierCode,
+    supplierId,
+    data.active ?? true,
+    data.um,
+    baseQty,
+    data.brand ?? null,
+    data.packSize ?? null,
+    data.lastCostCents ?? null,
+    data.costCurrency ?? "EUR",
+    data.imageUrl ?? null,
+  ]
+);
+    
     return res.json(mapRowToItem(r.rows[0]));
   } catch (err) {
     console.error("POST /items error", err);
@@ -236,46 +233,44 @@ router.patch("/:sku", async (req, res) => {
     const supplierId = supplierRow?.id ?? current.supplierId;
     const supplierCode = supplierRow?.code ?? current.supplier ?? "VARI";
 
-    const r = await pool.query(
-      `
-      UPDATE "Item"
-      SET
-        name = $1,
-        "categoryId" = $2,
-        category = $3,
-        supplier = $4,
-        "supplierId" = $5,
-        active = $6,
-        um = $7,
-        "baseQty" = $8,
-        brand = $9,
-        "packSize" = $10,
-        "inventoryMultiplier" = $11,
-        "lastCostCents" = $12,
-        "costCurrency" = $13,
-        "imageUrl" = $14,
-        "updatedAt" = NOW()
-      WHERE sku = $15
-      RETURNING *
-      `,
-      [
-        patch.name ?? current.name,
-        patch.categoryId ?? current.categoryId ?? "bevande",
-        patch.category ?? current.category ?? current.categoryId ?? "bevande",
-        supplierCode,
-        supplierId,
-        patch.active ?? current.active,
-        nextUm,
-        nextBaseQty,
-        patch.brand ?? current.brand,
-        patch.packSize ?? current.packSize,
-        patch.inventoryMultiplier ?? current.inventoryMultiplier,
-        patch.lastCostCents ?? current.lastCostCents,
-        patch.costCurrency ?? current.costCurrency ?? "EUR",
-        patch.imageUrl ?? current.imageUrl,
-        sku,
-      ]
-    );
+const r = await pool.query(
+  `
+  UPDATE "Item"
+  SET
+    name = $1,
+    "categoryId" = $2,
+    category = $3,
+    supplier = $4,
+    "supplierId" = $5,
+    active = $6,
+    um = $7,
+    "baseQty" = $8,
+    brand = $9,
+    "packSize" = $10,
+    "lastCostCents" = $11,
+    "costCurrency" = $12,
+    "imageUrl" = $13,
+    "updatedAt" = NOW()
+  WHERE sku = $14
+  RETURNING *
+  `,
+  [
+    patch.name ?? current.name,
+    patch.categoryId ?? current.categoryId ?? "bevande",
+    patch.category ?? current.category ?? current.categoryId ?? "bevande",
+    supplierCode,
+    supplierId,
+    patch.active ?? current.active,
+    nextUm,
+    nextBaseQty,
+    patch.brand ?? current.brand,
+    patch.packSize ?? current.packSize,
+    patch.lastCostCents ?? current.lastCostCents,
+    patch.costCurrency ?? current.costCurrency ?? "EUR",
+    patch.imageUrl ?? current.imageUrl,
+    sku,
+  ]
+);
 
     return res.json(mapRowToItem(r.rows[0]));
   } catch (err: any) {
@@ -329,47 +324,45 @@ router.put("/:itemId", async (req, res) => {
     const supplierId = supplierRow?.id ?? current.supplierId;
     const supplierCode = supplierRow?.code ?? current.supplier ?? "VARI";
 
-    const r = await pool.query(
-      `
-      UPDATE "Item"
-      SET
-        name = $1,
-        "categoryId" = $2,
-        category = $3,
-        supplier = $4,
-        "supplierId" = $5,
-        active = $6,
-        um = $7,
-        "baseQty" = $8,
-        brand = $9,
-        "packSize" = $10,
-        "inventoryMultiplier" = $11,
-        "lastCostCents" = $12,
-        "costCurrency" = $13,
-        "imageUrl" = $14,
-        "updatedAt" = NOW()
-      WHERE id = $15
-      RETURNING *
-      `,
-      [
-        patch.name ?? current.name,
-        patch.categoryId ?? current.categoryId ?? "bevande",
-        patch.category ?? current.category ?? current.categoryId ?? "bevande",
-        supplierCode,
-        supplierId,
-        patch.active ?? current.active,
-        nextUm,
-        nextBaseQty,
-        patch.brand ?? current.brand,
-        patch.packSize ?? current.packSize,
-        patch.inventoryMultiplier ?? current.inventoryMultiplier,
-        patch.lastCostCents ?? current.lastCostCents,
-        patch.costCurrency ?? current.costCurrency ?? "EUR",
-        patch.imageUrl ?? current.imageUrl,
-        req.params.itemId,
-      ]
-    );
-
+const r = await pool.query(
+  `
+  UPDATE "Item"
+  SET
+    name = $1,
+    "categoryId" = $2,
+    category = $3,
+    supplier = $4,
+    "supplierId" = $5,
+    active = $6,
+    um = $7,
+    "baseQty" = $8,
+    brand = $9,
+    "packSize" = $10,
+    "lastCostCents" = $11,
+    "costCurrency" = $12,
+    "imageUrl" = $13,
+    "updatedAt" = NOW()
+  WHERE id = $14
+  RETURNING *
+  `,
+  [
+    patch.name ?? current.name,
+    patch.categoryId ?? current.categoryId ?? "bevande",
+    patch.category ?? current.category ?? current.categoryId ?? "bevande",
+    supplierCode,
+    supplierId,
+    patch.active ?? current.active,
+    nextUm,
+    nextBaseQty,
+    patch.brand ?? current.brand,
+    patch.packSize ?? current.packSize,
+    patch.lastCostCents ?? current.lastCostCents,
+    patch.costCurrency ?? current.costCurrency ?? "EUR",
+    patch.imageUrl ?? current.imageUrl,
+    req.params.itemId,
+  ]
+);
+    
     return res.json(mapRowToItem(r.rows[0]));
   } catch (err: any) {
     if (err?.message === "UM_INVALID") {
