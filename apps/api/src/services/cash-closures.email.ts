@@ -1,48 +1,48 @@
-import type { CashClosure } from "../types/cash-closure.js";
+import nodemailer from "nodemailer";
 
-function euro(n: number) {
-  return new Intl.NumberFormat("it-IT", {
-    style: "currency",
-    currency: "EUR",
-  }).format(n);
-}
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || "smtp.gmail.com",
+  port: Number(process.env.SMTP_PORT) || 587,
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
 
-export async function sendCashClosureEmail(input: {
-  closure: CashClosure;
-}) {
-  const { closure } = input;
+export async function sendCashClosureEmail(closure: any) {
+  const to = process.env.CASH_CLOSURE_EMAIL_TO;
 
-  const subject = `Chiusura cassa ${closure.business_date} - ${closure.operator_name ?? "Operatore"}`;
+  if (!to) {
+    console.log("⚠️ EMAIL NON CONFIGURATA");
+    return { ok: false, error: "EMAIL NOT CONFIGURED" };
+  }
+
+  const subject = `Chiusura Cassa - ${closure.business_date.slice(0, 10)}`;
 
   const body = `
-Chiusura cassa completata.
+Chiusura Cassa
 
 Data: ${closure.business_date}
-Operatore: ${closure.operator_name ?? "-"}
-Teorico base: ${euro(closure.theoretical_base)}
-Contanti: ${euro(closure.cash_declared)}
-Carte: ${euro(closure.card_declared)}
-Satispay: ${euro(closure.satispay_declared)}
-Altri: ${euro(closure.other_declared)}
-Totale dichiarato: ${euro(closure.declared_total)}
-Delta: ${euro(closure.delta)}
+Operatore: ${closure.operator_name || closure.operator_id}
+
+Teorico: € ${closure.theoretical_base}
+Dichiarato: € ${closure.declared_total}
+Delta: € ${closure.delta}
 
 Note:
-${closure.notes ?? "-"}
-  `.trim();
+${closure.notes || "-"}
 
-  console.log("📧 CASH CLOSURE EMAIL");
-  console.log({ subject, body, receipt: closure.receipt_image_url });
+Alert:
+${(closure.alert_flags || []).join(", ") || "Nessuno"}
+`;
 
-  // TODO:
-  // integra qui il tuo servizio reale email
-  // es:
-  // await sendMail({
-  //   to: process.env.CASH_CLOSURE_EMAIL_TO,
-  //   subject,
-  //   text: body,
-  //   attachments: closure.receipt_image_url ? [...] : [],
-  // });
+  await transporter.sendMail({
+    from: `"Core Gestionale" <${process.env.SMTP_USER}>`,
+    to,
+    subject,
+    text: body,
+  });
 
   return { ok: true };
 }
