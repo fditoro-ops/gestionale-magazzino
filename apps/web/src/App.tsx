@@ -20,6 +20,7 @@ import { authFetch } from "./api/authFetch";
 import UsersPage from "./components/UsersPage";
 import InventoryPage from "./components/InventoryPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
+import CashClosurePage from "./pages/CashClosurePage";
 
 type WarehouseRow = {
   itemId: string;
@@ -140,6 +141,8 @@ function CoreApp() {
           )}
 
 {tab === "items" && <ItemsAdmin />}
+
+          {tab === "cashClosure" && <CashClosurePage />}
 
 {tab === "inventory" && <InventoryPage />}
 
