@@ -24,6 +24,12 @@ export type Item = {
   active?: boolean;
 };
 
+type SupplierOption = {
+  id: string;
+  code: string;
+  name?: string | null;
+};
+
 type ItemUm = "CL" | "PZ";
 
 function centsToEuroString(cents: number | null | undefined) {
@@ -54,12 +60,14 @@ function parsePositiveNumber(raw: string): number | null {
 export default function ItemDetailsModal({
   open,
   item,
+  suppliers,
   onClose,
   onSavePatch,
   loading,
 }: {
   open: boolean;
   item: Item | null;
+  suppliers: SupplierOption[];
   onClose: () => void;
   onSavePatch: (sku: string, patch: any) => Promise<void>;
   loading?: boolean;
@@ -116,7 +124,10 @@ export default function ItemDetailsModal({
         : "";
     setBaseQty(nextBaseQty);
 
-    if (typeof item.lastCostCents === "number" && Number.isFinite(item.lastCostCents)) {
+    if (
+      typeof item.lastCostCents === "number" &&
+      Number.isFinite(item.lastCostCents)
+    ) {
       setLastCostEuro(centsToEuroString(item.lastCostCents));
     } else if (typeof item.costEur === "number" && Number.isFinite(item.costEur)) {
       setLastCostEuro(String(item.costEur).replace(".", ","));
@@ -283,9 +294,13 @@ export default function ItemDetailsModal({
                     value={supplier}
                     onChange={(e) => setSupplier(e.target.value)}
                   >
-                    <option value="DORECA">DORECA</option>
-                    <option value="ALPORI">ALPORI</option>
                     <option value="VARI">VARI</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.code}>
+                        {s.code}
+                        {s.name ? ` · ${s.name}` : ""}
+                      </option>
+                    ))}
                   </select>
 
                   <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
