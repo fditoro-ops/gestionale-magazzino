@@ -176,7 +176,8 @@ router.get("/sessions", async (_req, res) => {
         notes,
         applied_at
       FROM inventory_sessions
-      WHERE tenant_id = $1
+     WHERE tenant_id = $1
+  AND status <> 'CANCELLED'
       ORDER BY effective_at DESC, created_at DESC
       `,
       [TENANT_ID]
