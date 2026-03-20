@@ -31,7 +31,7 @@ function toNum(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function normalizePackSize(v: unknown): number {
+function normalizeInventoryMultiplier(v: unknown): number {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return 1;
   return n;
@@ -39,10 +39,10 @@ function normalizePackSize(v: unknown): number {
 
 function toBtFromCountedInput(
   countedInput: number,
-  packSize: number | null | undefined
+  inventoryMultiplier: number | null | undefined
 ): number {
-  const ps = normalizePackSize(packSize);
-  return countedInput * ps;
+  const multiplier = normalizeInventoryMultiplier(inventoryMultiplier);
+  return countedInput * multiplier;
 }
 
 /**
@@ -72,25 +72,25 @@ async function buildGiacenzeAsOf(effectiveAt: string) {
     [TENANT_ID, effectiveAt]
   );
 
-  const itemsQ = await pool.query(
-    `
-    SELECT
-      sku,
-      "lastCostCents",
-      "packSize",
-      active
-    FROM "Item"
-    WHERE active = true
-      AND sku IS NOT NULL
-      AND sku <> ''
-    ORDER BY sku ASC
-    `
-  );
+const itemsQ = await pool.query(
+  `
+  SELECT
+    sku,
+    "lastCostCents",
+    "inventoryMultiplier",
+    active
+  FROM "Item"
+  WHERE active = true
+    AND sku IS NOT NULL
+    AND sku <> ''
+  ORDER BY sku ASC
+  `
+);
 
-  const metaBySku = new Map<
-    string,
-    { lastCostCents: number | null; packSize: number }
-  >();
+const metaBySku = new Map<
+  string,
+  { lastCostCents: number | null; inventoryMultiplier: number }
+>();
 
   const stockBySku = new Map<string, number>();
 
@@ -101,18 +101,20 @@ async function buildGiacenzeAsOf(effectiveAt: string) {
         ? Number(row.lastCostCents)
         : null;
 
-    const packSizeRaw =
-      row.packSize !== null && row.packSize !== undefined
-        ? Number(row.packSize)
-        : 1;
+const inventoryMultiplierRaw =
+  row.inventoryMultiplier !== null && row.inventoryMultiplier !== undefined
+    ? Number(row.inventoryMultiplier)
+    : 1;
 
-    const packSize =
-      Number.isFinite(packSizeRaw) && packSizeRaw > 0 ? packSizeRaw : 1;
+const inventoryMultiplier =
+  Number.isFinite(inventoryMultiplierRaw) && inventoryMultiplierRaw > 0
+    ? inventoryMultiplierRaw
+    : 1;
 
-    metaBySku.set(sku, {
-      lastCostCents: lastCost,
-      packSize,
-    });
+metaBySku.set(sku, {
+  lastCostCents: lastCost,
+  inventoryMultiplier,
+});
 
     stockBySku.set(sku, 0);
   }
@@ -147,14 +149,14 @@ async function buildGiacenzeAsOf(effectiveAt: string) {
     }
   }
 
-  return Array.from(stockBySku.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([sku, theoretical_qty_bt]) => ({
-      sku,
-      theoretical_qty_bt,
-      cost_snapshot: metaBySku.get(sku)?.lastCostCents ?? null,
-      pack_size: metaBySku.get(sku)?.packSize ?? 1,
-    }));
+return Array.from(stockBySku.entries())
+  .sort(([a], [b]) => a.localeCompare(b))
+  .map(([sku, theoretical_qty_bt]) => ({
+    sku,
+    theoretical_qty_bt,
+    cost_snapshot: metaBySku.get(sku)?.lastCostCents ?? null,
+    inventory_multiplier: metaBySku.get(sku)?.inventoryMultiplier ?? 1,
+  }));
 }
 
 // LISTA SESSIONI
@@ -520,31 +522,31 @@ router.post("/sessions/:id/generate-lines", async (req, res) => {
     for (const row of stockRows) {
       await client.query(
         `
-        INSERT INTO inventory_lines (
-          id,
-          session_id,
-          sku,
-          theoretical_qty_bt,
-          counted_qty,
-          counted_qty_bt,
-          difference_qty_bt,
-          cost_snapshot,
-          difference_value,
-          note,
-          counted_by,
-          counted_at,
-          pack_size
-        )
-        VALUES ($1,$2,$3,$4,NULL,NULL,NULL,$5,NULL,NULL,NULL,NULL,$6)
+INSERT INTO inventory_lines (
+  id,
+  session_id,
+  sku,
+  theoretical_qty_bt,
+  counted_qty,
+  counted_qty_bt,
+  difference_qty_bt,
+  cost_snapshot,
+  difference_value,
+  note,
+  counted_by,
+  counted_at,
+  inventory_multiplier
+)
+VALUES ($1,$2,$3,$4,NULL,NULL,NULL,$5,NULL,NULL,NULL,NULL,$6)
         `,
-        [
-          makeId(),
-          id,
-          row.sku,
-          row.theoretical_qty_bt ?? 0,
-          row.cost_snapshot,
-          row.pack_size ?? 1,
-        ]
+[
+  makeId(),
+  id,
+  row.sku,
+  row.theoretical_qty_bt ?? 0,
+  row.cost_snapshot,
+  row.inventory_multiplier ?? 1,
+]
       );
     }
 
@@ -617,8 +619,13 @@ router.patch("/lines/:id", async (req, res) => {
     const costSnapshot =
       row.cost_snapshot !== null ? Number(row.cost_snapshot) : null;
 
-    const packSize = normalizePackSize(row.pack_size);
-    const countedBt = toBtFromCountedInput(countedInput, packSize);
+const inventoryMultiplier = normalizeInventoryMultiplier(
+  row.inventory_multiplier
+);
+const countedBt = toBtFromCountedInput(
+  countedInput,
+  inventoryMultiplier
+);
     const difference = countedBt - theoretical;
     const differenceValue =
       costSnapshot !== null ? difference * costSnapshot : null;
