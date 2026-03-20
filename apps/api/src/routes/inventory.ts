@@ -31,20 +31,6 @@ function toNum(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function normalizeInventoryMultiplier(v: unknown): number {
-  const n = Number(v);
-  if (!Number.isFinite(n) || n <= 0) return 1;
-  return n;
-}
-
-function toBtFromCountedInput(
-  countedInput: number,
-  inventoryMultiplier: number | null | undefined
-): number {
-  const multiplier = normalizeInventoryMultiplier(inventoryMultiplier);
-  return countedInput * multiplier;
-}
-
 /**
  * Build giacenze as-of coerente con:
  * - Movements come source of truth
@@ -52,6 +38,12 @@ function toBtFromCountedInput(
  * - IN = carico
  * - OUT = scarico
  * - ADJUST = delta
+ *
+ * NB:
+ * - L'inventario conta sempre unità fisiche
+ * - La conversione in BT usa solo baseQty
+ * - La colonna legacy inventory_multiplier su inventory_lines
+ *   viene mantenuta temporaneamente, ma contiene baseQty
  */
 async function buildGiacenzeAsOf(effectiveAt: string) {
   const movementsQ = await pool.query(
@@ -72,25 +64,25 @@ async function buildGiacenzeAsOf(effectiveAt: string) {
     [TENANT_ID, effectiveAt]
   );
 
-const itemsQ = await pool.query(
-  `
-  SELECT
-    sku,
-    "lastCostCents",
-    "inventoryMultiplier",
-    active
-  FROM "Item"
-  WHERE active = true
-    AND sku IS NOT NULL
-    AND sku <> ''
-  ORDER BY sku ASC
-  `
-);
+  const itemsQ = await pool.query(
+    `
+    SELECT
+      sku,
+      "lastCostCents",
+      "baseQty",
+      active
+    FROM "Item"
+    WHERE active = true
+      AND sku IS NOT NULL
+      AND sku <> ''
+    ORDER BY sku ASC
+    `
+  );
 
-const metaBySku = new Map<
-  string,
-  { lastCostCents: number | null; inventoryMultiplier: number }
->();
+  const metaBySku = new Map<
+    string,
+    { lastCostCents: number | null; baseQty: number }
+  >();
 
   const stockBySku = new Map<string, number>();
 
@@ -101,20 +93,18 @@ const metaBySku = new Map<
         ? Number(row.lastCostCents)
         : null;
 
-const inventoryMultiplierRaw =
-  row.inventoryMultiplier !== null && row.inventoryMultiplier !== undefined
-    ? Number(row.inventoryMultiplier)
-    : 1;
+    const baseQtyRaw =
+      row.baseQty !== null && row.baseQty !== undefined
+        ? Number(row.baseQty)
+        : 1;
 
-const inventoryMultiplier =
-  Number.isFinite(inventoryMultiplierRaw) && inventoryMultiplierRaw > 0
-    ? inventoryMultiplierRaw
-    : 1;
+    const baseQty =
+      Number.isFinite(baseQtyRaw) && baseQtyRaw > 0 ? baseQtyRaw : 1;
 
-metaBySku.set(sku, {
-  lastCostCents: lastCost,
-  inventoryMultiplier,
-});
+    metaBySku.set(sku, {
+      lastCostCents: lastCost,
+      baseQty,
+    });
 
     stockBySku.set(sku, 0);
   }
@@ -149,14 +139,14 @@ metaBySku.set(sku, {
     }
   }
 
-return Array.from(stockBySku.entries())
-  .sort(([a], [b]) => a.localeCompare(b))
-  .map(([sku, theoretical_qty_bt]) => ({
-    sku,
-    theoretical_qty_bt,
-    cost_snapshot: metaBySku.get(sku)?.lastCostCents ?? null,
-    inventory_multiplier: metaBySku.get(sku)?.inventoryMultiplier ?? 1,
-  }));
+  return Array.from(stockBySku.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([sku, theoretical_qty_bt]) => ({
+      sku,
+      theoretical_qty_bt,
+      cost_snapshot: metaBySku.get(sku)?.lastCostCents ?? null,
+      base_qty: metaBySku.get(sku)?.baseQty ?? 1,
+    }));
 }
 
 // LISTA SESSIONI
@@ -176,8 +166,8 @@ router.get("/sessions", async (_req, res) => {
         notes,
         applied_at
       FROM inventory_sessions
-     WHERE tenant_id = $1
-  AND status <> 'CANCELLED'
+      WHERE tenant_id = $1
+        AND status <> 'CANCELLED'
       ORDER BY effective_at DESC, created_at DESC
       `,
       [TENANT_ID]
@@ -352,8 +342,7 @@ router.get("/dashboard", async (_req, res) => {
       openValueQ.rows[0]?.inventory_loss_value_cents ?? 0
     );
 
-    const openInventoryLossValueEur =
-      openInventoryLossValueCents / 100;
+    const openInventoryLossValueEur = openInventoryLossValueCents / 100;
 
     res.json({
       ok: true,
@@ -523,31 +512,31 @@ router.post("/sessions/:id/generate-lines", async (req, res) => {
     for (const row of stockRows) {
       await client.query(
         `
-INSERT INTO inventory_lines (
-  id,
-  session_id,
-  sku,
-  theoretical_qty_bt,
-  counted_qty,
-  counted_qty_bt,
-  difference_qty_bt,
-  cost_snapshot,
-  difference_value,
-  note,
-  counted_by,
-  counted_at,
-  inventory_multiplier
-)
-VALUES ($1,$2,$3,$4,NULL,NULL,NULL,$5,NULL,NULL,NULL,NULL,$6)
+        INSERT INTO inventory_lines (
+          id,
+          session_id,
+          sku,
+          theoretical_qty_bt,
+          counted_qty,
+          counted_qty_bt,
+          difference_qty_bt,
+          cost_snapshot,
+          difference_value,
+          note,
+          counted_by,
+          counted_at,
+          inventory_multiplier
+        )
+        VALUES ($1,$2,$3,$4,NULL,NULL,NULL,$5,NULL,NULL,NULL,NULL,$6)
         `,
-[
-  makeId(),
-  id,
-  row.sku,
-  row.theoretical_qty_bt ?? 0,
-  row.cost_snapshot,
-  row.inventory_multiplier ?? 1,
-]
+        [
+          makeId(),
+          id,
+          row.sku,
+          row.theoretical_qty_bt ?? 0,
+          row.cost_snapshot,
+          row.base_qty ?? 1,
+        ]
       );
     }
 
@@ -620,13 +609,11 @@ router.patch("/lines/:id", async (req, res) => {
     const costSnapshot =
       row.cost_snapshot !== null ? Number(row.cost_snapshot) : null;
 
-const inventoryMultiplier = normalizeInventoryMultiplier(
-  row.inventory_multiplier
-);
-const countedBt = toBtFromCountedInput(
-  countedInput,
-  inventoryMultiplier
-);
+    const baseQtyRaw = Number(row.inventory_multiplier);
+    const baseQty =
+      Number.isFinite(baseQtyRaw) && baseQtyRaw > 0 ? baseQtyRaw : 1;
+
+    const countedBt = countedInput * baseQty;
     const difference = countedBt - theoretical;
     const differenceValue =
       costSnapshot !== null ? difference * costSnapshot : null;
