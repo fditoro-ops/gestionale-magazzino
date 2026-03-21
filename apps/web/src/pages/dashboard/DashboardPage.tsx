@@ -191,7 +191,7 @@ export default function DashboardPage({ salesDocuments, salesLines }: Props) {
     const last7Keys = buildRollingDayKeys(7);
     const last30Keys = buildRollingDayKeys(30);
 
-    const now = new Date();
+  
     const thisMonthYear = Number(todayKey.slice(0, 4));
     const thisMonthMonth = Number(todayKey.slice(5, 7));
 
