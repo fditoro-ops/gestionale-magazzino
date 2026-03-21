@@ -101,13 +101,6 @@ function getDocumentBusinessDayKey(doc: SalesDocument) {
   return getBusinessDayKeyFromDate(d);
 }
 
-function getLineBusinessDayKey(
-  line: SalesLine,
-  docBusinessDateById: Map<string, string>
-) {
-  if (line.businessDate) return line.businessDate;
-  return docBusinessDateById.get(line.documentId) || "";
-}
 
 function buildDaysMapFromKeys(dayKeys: string[]) {
   const map = new Map<string, DailyRow>();
