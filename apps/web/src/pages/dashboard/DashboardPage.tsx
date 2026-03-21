@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 type SalesDocumentStatus = "VALID" | "VOID" | "REFUND";
 
 type SalesDocument = {
   documentId: string;
   date: string;
+  businessDate?: string;
   totalAmount: number;
   status: SalesDocumentStatus;
   source?: string;
@@ -13,6 +14,7 @@ type SalesDocument = {
 type SalesLine = {
   id: string;
   documentId: string;
+  businessDate?: string;
   sku: string;
   description: string;
   qty: number;
@@ -40,6 +42,14 @@ type TopItemRow = {
   hasRecipe: boolean;
 };
 
+type FilterKey =
+  | "TODAY"
+  | "YESTERDAY"
+  | "LAST_7_DAYS"
+  | "LAST_30_DAYS"
+  | "THIS_MONTH"
+  | "ALL";
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("it-IT", {
     style: "currency",
@@ -57,13 +67,6 @@ function startOfDay(date: Date) {
   return d;
 }
 
-function endOfDay(date: Date) {
-  const d = new Date(date);
-  d.setHours(23, 59, 59, 999);
-  return d;
-}
-
-
 function addDays(date: Date, days: number) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
@@ -75,13 +78,41 @@ function safeDate(value?: string) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function buildLastDaysMap(days: number) {
-  const today = startOfDay(new Date());
+function getBusinessDayKeyFromDate(date: Date) {
+  const d = new Date(date);
+
+  if (d.getHours() < 6) {
+    d.setDate(d.getDate() - 1);
+  }
+
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getDocumentBusinessDayKey(doc: SalesDocument) {
+  if (doc.businessDate) return doc.businessDate;
+
+  const d = safeDate(doc.date);
+  if (!d) return "";
+
+  return getBusinessDayKeyFromDate(d);
+}
+
+function getLineBusinessDayKey(
+  line: SalesLine,
+  docBusinessDateById: Map<string, string>
+) {
+  if (line.businessDate) return line.businessDate;
+  return docBusinessDateById.get(line.documentId) || "";
+}
+
+function buildDaysMapFromKeys(dayKeys: string[]) {
   const map = new Map<string, DailyRow>();
 
-  for (let i = days - 1; i >= 0; i--) {
-    const day = addDays(today, -i);
-    const key = day.toISOString().slice(0, 10);
+  for (const key of dayKeys) {
     map.set(key, {
       day: key,
       total: 0,
@@ -90,6 +121,19 @@ function buildLastDaysMap(days: number) {
   }
 
   return map;
+}
+
+function buildRollingDayKeys(days: number, endDate = new Date()) {
+  const keys: string[] = [];
+  const base = startOfDay(endDate);
+
+  for (let i = days - 1; i >= 0; i--) {
+    const d = addDays(base, -i);
+    const key = getBusinessDayKeyFromDate(d);
+    if (!keys.includes(key)) keys.push(key);
+  }
+
+  return keys;
 }
 
 function MiniBarChart({ data }: { data: DailyRow[] }) {
@@ -139,44 +183,65 @@ function KpiCard({
 }
 
 export default function DashboardPage({ salesDocuments, salesLines }: Props) {
+  const [filter, setFilter] = useState<FilterKey>("LAST_7_DAYS");
+
   const data = useMemo(() => {
     const validDocs = salesDocuments.filter((doc) => doc.status === "VALID");
 
-    const validDocIds = new Set(validDocs.map((doc) => doc.documentId));
+    const docBusinessDateById = new Map<string, string>(
+      validDocs.map((doc) => [doc.documentId, getDocumentBusinessDayKey(doc)])
+    );
 
-    const validLines = salesLines.filter((line) => validDocIds.has(line.documentId));
+    const todayKey = getBusinessDayKeyFromDate(new Date());
+    const yesterdayKey = getBusinessDayKeyFromDate(addDays(new Date(), -1));
 
-    const totalSales = validDocs.reduce((sum, doc) => sum + (Number(doc.totalAmount) || 0), 0);
-    const totalReceipts = validDocs.length;
-    const totalPieces = validLines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0);
-    const avgTicket = totalReceipts > 0 ? totalSales / totalReceipts : 0;
+    const last7Keys = buildRollingDayKeys(7);
+    const last30Keys = buildRollingDayKeys(30);
 
     const now = new Date();
-    const todayStart = startOfDay(now);
-    const todayEnd = endOfDay(now);
-    const last7Start = startOfDay(addDays(now, -6));
+    const thisMonthYear = Number(todayKey.slice(0, 4));
+    const thisMonthMonth = Number(todayKey.slice(5, 7));
 
-    let todaySales = 0;
-    let todayReceipts = 0;
-    let last7Sales = 0;
+    const filteredDocs = validDocs.filter((doc) => {
+      const businessDay = docBusinessDateById.get(doc.documentId) || "";
+      if (!businessDay) return false;
+
+      if (filter === "TODAY") return businessDay === todayKey;
+      if (filter === "YESTERDAY") return businessDay === yesterdayKey;
+      if (filter === "LAST_7_DAYS") return last7Keys.includes(businessDay);
+      if (filter === "LAST_30_DAYS") return last30Keys.includes(businessDay);
+
+      if (filter === "THIS_MONTH") {
+        const y = Number(businessDay.slice(0, 4));
+        const m = Number(businessDay.slice(5, 7));
+        return y === thisMonthYear && m === thisMonthMonth;
+      }
+
+      return true;
+    });
+
+    const filteredDocIds = new Set(filteredDocs.map((doc) => doc.documentId));
+
+    const filteredLines = salesLines.filter((line) => filteredDocIds.has(line.documentId));
+
+    const totalSales = filteredDocs.reduce(
+      (sum, doc) => sum + (Number(doc.totalAmount) || 0),
+      0
+    );
+
+    const totalReceipts = filteredDocs.length;
+
+    const totalPieces = filteredLines.reduce(
+      (sum, line) => sum + (Number(line.qty) || 0),
+      0
+    );
+
+    const avgTicket = totalReceipts > 0 ? totalSales / totalReceipts : 0;
+
     let withoutRecipeQty = 0;
     let withoutRecipeTotal = 0;
 
-    for (const doc of validDocs) {
-      const docDate = safeDate(doc.date);
-      if (!docDate) continue;
-
-      if (docDate >= todayStart && docDate <= todayEnd) {
-        todaySales += Number(doc.totalAmount) || 0;
-        todayReceipts += 1;
-      }
-
-      if (docDate >= last7Start && docDate <= todayEnd) {
-        last7Sales += Number(doc.totalAmount) || 0;
-      }
-    }
-
-    for (const line of validLines) {
+    for (const line of filteredLines) {
       const hasRecipe = Boolean(line.hasRecipe);
       if (!hasRecipe) {
         withoutRecipeQty += Number(line.qty) || 0;
@@ -184,12 +249,64 @@ export default function DashboardPage({ salesDocuments, salesLines }: Props) {
       }
     }
 
-    const dailyMap = buildLastDaysMap(7);
-    for (const doc of validDocs) {
-      const docDate = safeDate(doc.date);
-      if (!docDate) continue;
+    const todayDocs = validDocs.filter(
+      (doc) => (docBusinessDateById.get(doc.documentId) || "") === todayKey
+    );
 
-      const key = startOfDay(docDate).toISOString().slice(0, 10);
+    const todayDocIds = new Set(todayDocs.map((doc) => doc.documentId));
+
+    const todayLines = salesLines.filter((line) => todayDocIds.has(line.documentId));
+
+    const todaySales = todayDocs.reduce(
+      (sum, doc) => sum + (Number(doc.totalAmount) || 0),
+      0
+    );
+
+    const todayReceipts = todayDocs.length;
+
+    const last7Docs = validDocs.filter((doc) =>
+      last7Keys.includes(docBusinessDateById.get(doc.documentId) || "")
+    );
+
+    const last7Sales = last7Docs.reduce(
+      (sum, doc) => sum + (Number(doc.totalAmount) || 0),
+      0
+    );
+
+    let chartDayKeys: string[] = [];
+
+    if (filter === "TODAY") {
+      chartDayKeys = [todayKey];
+    } else if (filter === "YESTERDAY") {
+      chartDayKeys = [yesterdayKey];
+    } else if (filter === "LAST_7_DAYS") {
+      chartDayKeys = last7Keys;
+    } else if (filter === "LAST_30_DAYS") {
+      chartDayKeys = last30Keys.slice(-10);
+    } else if (filter === "THIS_MONTH") {
+      const docsThisMonth = filteredDocs
+        .map((doc) => docBusinessDateById.get(doc.documentId) || "")
+        .filter(Boolean);
+
+      chartDayKeys = Array.from(new Set(docsThisMonth)).sort();
+    } else {
+      const allKeys = filteredDocs
+        .map((doc) => docBusinessDateById.get(doc.documentId) || "")
+        .filter(Boolean);
+
+      chartDayKeys = Array.from(new Set(allKeys)).sort().slice(-10);
+    }
+
+    if (chartDayKeys.length === 0) {
+      chartDayKeys = last7Keys;
+    }
+
+    const dailyMap = buildDaysMapFromKeys(chartDayKeys);
+
+    for (const doc of filteredDocs) {
+      const key = docBusinessDateById.get(doc.documentId) || "";
+      if (!key) continue;
+
       const row = dailyMap.get(key);
       if (!row) continue;
 
@@ -201,7 +318,7 @@ export default function DashboardPage({ salesDocuments, salesLines }: Props) {
 
     const topItemsMap = new Map<string, TopItemRow>();
 
-    for (const line of validLines) {
+    for (const line of filteredLines) {
       const key = line.sku || line.description || line.id;
       const existing = topItemsMap.get(key);
 
@@ -224,6 +341,15 @@ export default function DashboardPage({ salesDocuments, salesLines }: Props) {
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 10);
 
+    const filterLabelMap: Record<FilterKey, string> = {
+      TODAY: "Oggi",
+      YESTERDAY: "Ieri",
+      LAST_7_DAYS: "Ultimi 7 giorni",
+      LAST_30_DAYS: "Ultimi 30 giorni",
+      THIS_MONTH: "Questo mese",
+      ALL: "Tutto",
+    };
+
     return {
       totalSales,
       totalReceipts,
@@ -236,8 +362,22 @@ export default function DashboardPage({ salesDocuments, salesLines }: Props) {
       withoutRecipeTotal,
       salesByDay,
       topItems,
+      selectedLabel: filterLabelMap[filter],
+      chartTitle:
+        filter === "TODAY"
+          ? "Andamento vendite oggi"
+          : filter === "YESTERDAY"
+            ? "Andamento vendite ieri"
+            : filter === "LAST_30_DAYS"
+              ? "Andamento vendite ultimi 30 giorni"
+              : filter === "THIS_MONTH"
+                ? "Andamento vendite questo mese"
+                : filter === "ALL"
+                  ? "Andamento vendite"
+                  : "Andamento vendite ultimi 7 giorni",
+      todayPieces: todayLines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0),
     };
-  }, [salesDocuments, salesLines]);
+  }, [salesDocuments, salesLines, filter]);
 
   return (
     <div style={styles.page}>
@@ -246,18 +386,57 @@ export default function DashboardPage({ salesDocuments, salesLines }: Props) {
           <h1 style={styles.title}>Dashboard</h1>
           <div style={styles.subtitle}>Panoramica vendite dal flusso scontrini</div>
         </div>
+
+        <div style={styles.filtersWrap}>
+          <button
+            style={{ ...styles.filterBtn, ...(filter === "TODAY" ? styles.filterBtnActive : {}) }}
+            onClick={() => setFilter("TODAY")}
+          >
+            Oggi
+          </button>
+          <button
+            style={{ ...styles.filterBtn, ...(filter === "YESTERDAY" ? styles.filterBtnActive : {}) }}
+            onClick={() => setFilter("YESTERDAY")}
+          >
+            Ieri
+          </button>
+          <button
+            style={{ ...styles.filterBtn, ...(filter === "LAST_7_DAYS" ? styles.filterBtnActive : {}) }}
+            onClick={() => setFilter("LAST_7_DAYS")}
+          >
+            7 giorni
+          </button>
+          <button
+            style={{ ...styles.filterBtn, ...(filter === "LAST_30_DAYS" ? styles.filterBtnActive : {}) }}
+            onClick={() => setFilter("LAST_30_DAYS")}
+          >
+            30 giorni
+          </button>
+          <button
+            style={{ ...styles.filterBtn, ...(filter === "THIS_MONTH" ? styles.filterBtnActive : {}) }}
+            onClick={() => setFilter("THIS_MONTH")}
+          >
+            Mese
+          </button>
+          <button
+            style={{ ...styles.filterBtn, ...(filter === "ALL" ? styles.filterBtnActive : {}) }}
+            onClick={() => setFilter("ALL")}
+          >
+            Tutto
+          </button>
+        </div>
       </div>
 
       <section style={styles.kpiGrid}>
         <KpiCard
-          title="Vendite totali"
+          title={`Vendite ${data.selectedLabel.toLowerCase()}`}
           value={formatCurrency(data.totalSales)}
           subtitle="Documenti validi"
         />
         <KpiCard
           title="Scontrini"
           value={formatNumber(data.totalReceipts)}
-          subtitle="Numero documenti"
+          subtitle={`Periodo: ${data.selectedLabel}`}
         />
         <KpiCard
           title="Pezzi venduti"
@@ -302,7 +481,7 @@ export default function DashboardPage({ salesDocuments, salesLines }: Props) {
 
       <section style={styles.mainGrid}>
         <div style={styles.panel}>
-          <div style={styles.panelTitle}>Andamento vendite ultimi 7 giorni</div>
+          <div style={styles.panelTitle}>{data.chartTitle}</div>
           <MiniBarChart data={data.salesByDay} />
         </div>
 
@@ -368,6 +547,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
   },
 
   title: {
@@ -380,6 +561,28 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 4,
     opacity: 0.7,
     fontSize: 14,
+  },
+
+  filtersWrap: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  filterBtn: {
+    border: "1px solid #d1d5db",
+    background: "#fff",
+    borderRadius: 999,
+    padding: "8px 12px",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+
+  filterBtnActive: {
+    background: "#111827",
+    color: "#fff",
+    border: "1px solid #111827",
   },
 
   kpiGrid: {
