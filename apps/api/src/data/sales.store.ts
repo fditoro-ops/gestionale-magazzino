@@ -30,6 +30,27 @@ export type SaveSalesLineInput = {
   tenantId: string;
 };
 
+function getBusinessDayKey(input: string | Date) {
+  const d = new Date(input);
+
+  if (Number.isNaN(d.getTime())) {
+    return "";
+  }
+
+  // giornata lavorativa:
+  // 06:00 -> 02:59 del giorno successivo
+  // quindi 00:00-05:59 appartengono al giorno prima
+  if (d.getHours() < 6) {
+    d.setDate(d.getDate() - 1);
+  }
+
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 export async function saveSalesDocumentWithLines(
   doc: SaveSalesDocumentInput,
   lines: SaveSalesLineInput[]
@@ -229,8 +250,22 @@ export async function getSalesFeed(params?: {
     values
   );
 
+  const documents = docsRes.rows.map((row) => ({
+    ...row,
+    businessDate: getBusinessDayKey(row.date),
+  }));
+
+  const businessDateByDocumentId = new Map<string, string>(
+    documents.map((doc) => [String(doc.documentId), String(doc.businessDate || "")])
+  );
+
+  const lines = linesRes.rows.map((row) => ({
+    ...row,
+    businessDate: businessDateByDocumentId.get(String(row.documentId)) || "",
+  }));
+
   return {
-    documents: docsRes.rows,
-    lines: linesRes.rows,
+    documents,
+    lines,
   };
 }
