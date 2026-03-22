@@ -910,7 +910,7 @@ if (hasUnresolved && Date.now() - lastEmergencySyncMs > 60_000) {
       Object.entries(cicProductModeCache).map(([_, v]) => [v.sku, v.mode])
     ) as Record<string, "RECIPE" | "IGNORE">;
 
-    const salesLinesToSave = await Promise.all(
+const salesLinesToSave = await Promise.all(
   items.map(async (it, idx) => {
     const sku = String(it.sku || "").trim();
 
