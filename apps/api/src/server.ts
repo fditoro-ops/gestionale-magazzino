@@ -669,6 +669,23 @@ function cicExtractItems(data: any): CicExtractedItem[] {
     .filter((x: any) => x.sku && x.qty);
 }
 
+async function getItemNameBySku(sku: string) {
+  const cleanSku = String(sku || "").trim();
+  if (!cleanSku) return "";
+
+  const res = await pool.query(
+    `
+    SELECT name
+    FROM "Item"
+    WHERE sku = $1
+    LIMIT 1
+    `,
+    [cleanSku]
+  );
+
+  return String(res.rows[0]?.name || "").trim();
+}
+
 /* =========================
    App
    ========================= */
@@ -893,61 +910,69 @@ if (hasUnresolved && Date.now() - lastEmergencySyncMs > 60_000) {
       Object.entries(cicProductModeCache).map(([_, v]) => [v.sku, v.mode])
     ) as Record<string, "RECIPE" | "IGNORE">;
 
-    const salesLinesToSave = items.map((it, idx) => {
-  const sku = String(it.sku || "").trim();
+    const salesLinesToSave = await Promise.all(
+  items.map(async (it, idx) => {
+    const sku = String(it.sku || "").trim();
 
-  const rawRow = rawRows.find((r: any) => {
-    const rowVariant = String(r?.idProductVariant ?? "").trim();
-    const rowProduct = String(r?.idProduct ?? "").trim();
+    const rawRow = rawRows.find((r: any) => {
+      const rowVariant = String(r?.idProductVariant ?? "").trim();
+      const rowProduct = String(r?.idProduct ?? "").trim();
 
-    return (
-      rowVariant === String(it._idProductVariant || "").trim() ||
-      rowProduct === String(it._idProduct || "").trim()
-    );
-  });
+      return (
+        rowVariant === String(it._idProductVariant || "").trim() ||
+        rowProduct === String(it._idProduct || "").trim()
+      );
+    });
 
-  const resolvedOk = Boolean(sku) && !sku.includes("-");
-  const mode = resolvedOk ? cicModesBySku[sku] || "" : "";
-  const hasRecipe =
-    resolvedOk && Array.isArray(bomCache[sku]) && bomCache[sku].length > 0;
+    const resolvedOk = Boolean(sku) && !sku.includes("-");
+    const mode = resolvedOk ? cicModesBySku[sku] || "" : "";
+    const hasRecipe =
+      resolvedOk && Array.isArray(bomCache[sku]) && bomCache[sku].length > 0;
 
-  const description = String(
-    rawRow?.description ||
-      rawRow?.descriptionReceipt ||
-      rawRow?.name ||
-      ""
-  ).trim();
+    let description = String(
+      rawRow?.description ||
+        rawRow?.descriptionReceipt ||
+        rawRow?.name ||
+        ""
+    ).trim();
 
-  const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
-  const unitPrice = Number(rawRow?.price ?? 0) || 0;
-const rawCalculatedAmount = Number(rawRow?.calculatedAmount ?? NaN);
-const rawSubtotal = Number(rawRow?.subtotal ?? NaN);
-const extractedTotal = Number(it.total ?? NaN);
-const fallbackTotal = qty * unitPrice;
+    if (!description && sku) {
+      description = await getItemNameBySku(sku);
+    }
 
-const lineTotal = Number.isFinite(rawCalculatedAmount) && rawCalculatedAmount > 0
-  ? rawCalculatedAmount
-  : Number.isFinite(rawSubtotal) && rawSubtotal > 0
-    ? rawSubtotal
-    : Number.isFinite(extractedTotal) && extractedTotal > 0
-      ? extractedTotal
-      : fallbackTotal;
-    
-  return {
-    lineNo: idx + 1,
-    sku,
-    description,
-    qty,
-    unitPrice,
-    lineTotal,
-    productId: String(it._idProduct || "").trim(),
-    variantId: String(it._idProductVariant || "").trim(),
-    mode,
-    hasRecipe,
-    resolvedOk,
-    tenantId,
-  };
-});
+    const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
+    const unitPrice = Number(rawRow?.price ?? 0) || 0;
+
+    const rawCalculatedAmount = Number(rawRow?.calculatedAmount ?? NaN);
+    const rawSubtotal = Number(rawRow?.subtotal ?? NaN);
+    const extractedTotal = Number(it.total ?? NaN);
+    const fallbackTotal = qty * unitPrice;
+
+    const lineTotal =
+      Number.isFinite(rawCalculatedAmount) && rawCalculatedAmount > 0
+        ? rawCalculatedAmount
+        : Number.isFinite(rawSubtotal) && rawSubtotal > 0
+          ? rawSubtotal
+          : Number.isFinite(extractedTotal) && extractedTotal > 0
+            ? extractedTotal
+            : fallbackTotal;
+
+    return {
+      lineNo: idx + 1,
+      sku,
+      description,
+      qty,
+      unitPrice,
+      lineTotal,
+      productId: String(it._idProduct || "").trim(),
+      variantId: String(it._idProductVariant || "").trim(),
+      mode,
+      hasRecipe,
+      resolvedOk,
+      tenantId,
+    };
+  })
+);
 
     await saveSalesDocumentWithLines(
   {
