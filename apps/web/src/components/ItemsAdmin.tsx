@@ -57,6 +57,13 @@ function parsePositiveNumber(raw: string): number | null {
   return n;
 }
 
+function parseNonNegativeNumber(raw: string): number | null {
+  if (!raw.trim()) return null;
+  const n = Number(raw.replace(",", "."));
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
 function formatItemMeasure(item: any) {
   const um = item?.um;
   const baseQty = Number(item?.baseQty);
@@ -74,6 +81,7 @@ export default function ItemsAdmin() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [newMinStockUnits, setNewMinStockUnits] = useState("");
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
@@ -158,6 +166,7 @@ export default function ItemsAdmin() {
     setNewBaseQty("1");
     setNewLastCostEuro("");
     setNewImageUrl("");
+    setNewMinStockUnits("");
   }
 
   function handleUmChange(nextUm: ItemUm) {
@@ -174,6 +183,7 @@ export default function ItemsAdmin() {
     const sku = normalizeSku(newSku);
     const baseQty = parsePositiveNumber(newBaseQty);
     const packSize = parsePositiveNumber(newPackSize);
+    const minStockUnits = parseNonNegativeNumber(newMinStockUnits);
     
     if (!sku || !newName.trim()) {
       setErr("SKU e Nome articolo sono obbligatori.");
@@ -216,6 +226,7 @@ export default function ItemsAdmin() {
         : null,
       lastCostCents: euroToCents(newLastCostEuro),
       costCurrency: "EUR",
+      minStockUnits,
       imageUrl: newImageUrl.trim() || null,
     };
 
@@ -357,6 +368,21 @@ export default function ItemsAdmin() {
                 />
               </div>
 
+              <div className="col-span-12 md:col-span-3 grid gap-1">
+  <label className={labelCls}>Scorta minima (Unità)</label>
+  <input
+    className={inputCls}
+    type="number"
+    min={0}
+    step="any"
+    value={newMinStockUnits}
+    onChange={(e) => setNewMinStockUnits(e.target.value)}
+    placeholder={newUm === "PZ" ? "Es. 6" : "Es. 2"}
+  />
+  <div className={helpCls}>
+    Quantità minima operativa in unità fisiche.
+  </div>
+</div>
               
               <div className="col-span-12 md:col-span-3 grid gap-1">
                 <label className={labelCls}>Categoria</label>
