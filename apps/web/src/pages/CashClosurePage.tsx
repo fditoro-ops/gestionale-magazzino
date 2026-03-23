@@ -233,8 +233,8 @@ async function loadCicTotalForDate(date: string): Promise<number> {
 
     const sameDay = documents.filter((doc: any) => {
       const raw =
-        doc?.document_date ||
         doc?.date ||
+        doc?.document_date ||
         doc?.created_at ||
         doc?.createdAt ||
         "";
@@ -259,19 +259,20 @@ async function loadCicTotalForDate(date: string): Promise<number> {
 
     const total = sameDay.reduce((sum: number, doc: any) => {
       const candidate =
+        Number(doc?.paymentsTotal) ||
+        Number(doc?.totalAmount) ||
         Number(doc?.payments_total) ||
         Number(doc?.total_amount) ||
         Number(doc?.total) ||
-        Number(doc?.grand_total) ||
+        Number(doc?.grandTotal) ||
+        Number(doc?.grossTotal) ||
         Number(doc?.amount) ||
-        Number(doc?.gross_total) ||
         0;
 
       return sum + (Number.isFinite(candidate) ? candidate : 0);
     }, 0);
 
     console.log("TOTAL CASSA IN CLOUD", total);
-
     return total;
   } catch (err) {
     console.error("loadCicTotalForDate error", err);
