@@ -18,10 +18,13 @@ export async function sendCashClosureEmail(closure: any) {
     return { ok: false, error: "EMAIL NOT CONFIGURED" };
   }
 
-  const date = closure.business_date?.slice(0, 10);
+  // 🔒 sicurezza su date
+  const date = closure.business_date
+    ? closure.business_date.slice(0, 10)
+    : "N/D";
 
   const subject =
-    Math.abs(closure.delta) > 5
+    Math.abs(Number(closure.delta || 0)) > 5
       ? `🚨 Delta ${closure.delta}€ | Chiusura ${date}`
       : `Chiusura Cassa ${date}`;
 
@@ -29,11 +32,11 @@ export async function sendCashClosureEmail(closure: any) {
 Chiusura Cassa
 
 Data: ${date}
-Operatore: ${closure.operator_name || closure.operator_id}
+Operatore: ${closure.operator_name || closure.operator_id || "-"}
 
-Teorico: € ${closure.theoretical_base}
-Dichiarato: € ${closure.declared_total}
-Delta: € ${closure.delta}
+Teorico: € ${closure.theoretical_base ?? 0}
+Dichiarato: € ${closure.declared_total ?? 0}
+Delta: € ${closure.delta ?? 0}
 
 Note:
 ${closure.notes || "-"}
