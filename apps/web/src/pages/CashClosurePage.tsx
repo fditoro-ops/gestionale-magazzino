@@ -218,23 +218,6 @@ function buildNotesWithMeta(notes: string, meta: NotesMeta) {
 
 async function loadCicTotalForDate(date: string): Promise<number> {
   try {
-    const res = await authFetch(`/dashboard/sales/summary?date=${date}`);
-    if (res.ok) {
-      const data = await res.json();
-      const n = Number(
-        data?.total_cassa_in_cloud ??
-          data?.total ??
-          data?.sales_total ??
-          data?.total_amount ??
-          0
-      );
-      if (Number.isFinite(n)) return n;
-    }
-  } catch {
-    // fallback sotto
-  }
-
-  try {
     const res = await authFetch(`/dashboard/sales`);
     if (!res.ok) return 0;
 
@@ -257,6 +240,7 @@ async function loadCicTotalForDate(date: string): Promise<number> {
         Number(doc?.total_amount) ||
         Number(doc?.total) ||
         0;
+
       return sum + (Number.isFinite(candidate) ? candidate : 0);
     }, 0);
 
