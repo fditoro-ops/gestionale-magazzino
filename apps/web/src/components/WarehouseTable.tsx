@@ -113,13 +113,13 @@ export default function WarehouseTable({
                       : `${formatNumber(units, 2)} ${unitsLabel}`}
                   </td>
 
-                  <td style={styles.tdRight}>
-                    {row.minStockBt == null
-                      ? "-"
-                      : `${formatNumber(Number(row.minStockBt || 0), 2)}${
-                          row.um ? ` ${row.um}` : ""
-                        }`}
-                  </td>
+<td style={styles.tdRight}>
+  {row.minStockBt == null
+    ? "-"
+    : `${formatNumber(Number(row.minStockBt || 0), 2)} ${
+        String(row.um || "").toUpperCase() === "PZ" ? "PZ" : "Unità"
+      }`}
+</td>
                 </tr>
               );
             })}
