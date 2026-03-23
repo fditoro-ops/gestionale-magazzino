@@ -29,6 +29,9 @@ type WarehouseRow = {
   stockBt: number;
   minStockBt: number | null;
   underMin: boolean;
+  packSize?: number | null;
+  baseQty?: number | null;
+  um?: string | null;
 };
 
 function CoreApp() {
@@ -42,7 +45,7 @@ function CoreApp() {
   const [items, setItems] = useState<any[]>([]);
   const [salesDocuments, setSalesDocuments] = useState<any[]>([]);
   const [salesLines, setSalesLines] = useState<any[]>([]);
-   
+
   const packSizeBySku = useMemo(() => {
     const arr = Array.isArray(items) ? items : [];
     return Object.fromEntries(
@@ -57,7 +60,29 @@ function CoreApp() {
     ) as Record<string, number>;
   }, [warehouse]);
 
-    const reload = () => {
+  // ✅ QUI STA LA MAGIA ✨
+  const warehouseRowsEnriched = useMemo(() => {
+    const warehouseArr = Array.isArray(warehouse) ? warehouse : [];
+    const itemsArr = Array.isArray(items) ? items : [];
+
+    const itemBySku = new Map(
+      itemsArr.map((it) => [String(it.sku || "").toUpperCase(), it])
+    );
+
+    return warehouseArr.map((row) => {
+      const sku = String(row.sku || "").toUpperCase();
+      const item = itemBySku.get(sku);
+
+      return {
+        ...row,
+        packSize: item?.packSize ?? null,
+        baseQty: item?.baseQty ?? null,
+        um: item?.um ?? null,
+      };
+    });
+  }, [warehouse, items]);
+
+  const reload = () => {
     authFetch(`/movements`)
       .then((r) => r.json())
       .then((data) => setMovements(Array.isArray(data) ? data : []))
@@ -69,12 +94,12 @@ function CoreApp() {
         const rows = Array.isArray(data)
           ? data
           : Array.isArray((data as any)?.rows)
-            ? (data as any).rows
-            : Array.isArray((data as any)?.warehouse)
-              ? (data as any).warehouse
-              : Array.isArray((data as any)?.data)
-                ? (data as any).data
-                : [];
+          ? (data as any).rows
+          : Array.isArray((data as any)?.warehouse)
+          ? (data as any).warehouse
+          : Array.isArray((data as any)?.data)
+          ? (data as any).data
+          : [];
         setWarehouse(rows);
       })
       .catch(console.error);
@@ -84,7 +109,7 @@ function CoreApp() {
       .then((data) => setItems(Array.isArray(data) ? data : []))
       .catch(console.error);
 
-          authFetch(`/dashboard/sales`)
+    authFetch(`/dashboard/sales`)
       .then((r) => r.json())
       .then((data) => {
         setSalesDocuments(Array.isArray(data?.documents) ? data.documents : []);
@@ -92,6 +117,7 @@ function CoreApp() {
       })
       .catch(console.error);
   };
+
   useEffect(() => {
     reload();
   }, []);
@@ -109,12 +135,14 @@ function CoreApp() {
           onModeChange={setMode}
         >
           {tab === "dashboard" && (
-  <DashboardPage
-    salesDocuments={salesDocuments}
-    salesLines={salesLines}
-  />
-)}
-{tab === "users" && <UsersPage />}
+            <DashboardPage
+              salesDocuments={salesDocuments}
+              salesLines={salesLines}
+            />
+          )}
+
+          {tab === "users" && <UsersPage />}
+
           {tab === "movements" && (
             <div className="grid gap-4">
               <NewMovementForm
@@ -132,7 +160,7 @@ function CoreApp() {
 
           {tab === "warehouse" && (
             <WarehouseTable
-              rows={Array.isArray(warehouse) ? warehouse : []}
+              rows={warehouseRowsEnriched}
               onPickSku={(sku) => {
                 setDraftSku(sku);
                 setTab("movements");
@@ -140,21 +168,21 @@ function CoreApp() {
             />
           )}
 
-{tab === "items" && <ItemsAdmin />}
+          {tab === "items" && <ItemsAdmin />}
 
           {tab === "cashClosure" && <CashClosurePage />}
 
-{tab === "inventory" && <InventoryPage />}
+          {tab === "inventory" && <InventoryPage />}
 
-{tab === "orders" && (
-  <OrdersPage
-    items={Array.isArray(items) ? items : []}
-    warehouse={Array.isArray(warehouse) ? warehouse : []}
-    onReload={reload}
-  />
-)}
+          {tab === "orders" && (
+            <OrdersPage
+              items={Array.isArray(items) ? items : []}
+              warehouse={Array.isArray(warehouse) ? warehouse : []}
+              onReload={reload}
+            />
+          )}
 
-{tab === "suppliers" && <SuppliersPage />}
+          {tab === "suppliers" && <SuppliersPage />}
         </AppLayout>
       </div>
     </div>
