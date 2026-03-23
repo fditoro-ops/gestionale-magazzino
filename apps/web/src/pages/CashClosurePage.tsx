@@ -451,58 +451,65 @@ useEffect(() => {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleSave() {
-    setSaving(true);
-    setError("");
-    setMessage("");
+async function handleSave() {
+  setSaving(true);
+  setError("");
+  setMessage("");
 
-    try {
-      const payload = {
-        business_date: form.business_date,
-        operator_name: form.operator_name || null,
-        theoretical_base: cicTotal,
+  try {
+    const cleanNotesOnly = (form.notes || "")
+      .replace(/\[CC_META\][\s\S]*$/m, "")
+      .trim();
 
-        cash_declared: contanti,
-        card_declared: posTotal,
-        satispay_declared: satispay,
-        other_declared: altri,
+    const payload = {
+      business_date: form.business_date,
+      operator_name: form.operator_name || null,
+      theoretical_base: cicTotal,
 
-        notes: buildNotesWithMeta(form.notes || "", {
-          receipt_total: form.receipt_total.trim() ? receiptTotal : undefined,
-          pos1: form.pos1.trim() ? pos1 : undefined,
-          pos2: form.pos2.trim() ? pos2 : undefined,
-          satispay: form.satispay.trim() ? satispay : undefined,
-          contanti: form.contanti.trim() ? contanti : undefined,
-          altri: form.altri.trim() ? altri : undefined,
-          qromo: form.qromo.trim() ? qromo : undefined,
-        }),
-      };
+      cash_declared: contanti,
+      card_declared: posTotal,
+      satispay_declared: satispay,
+      other_declared: altri,
 
-      const res = await authFetch(
-        selectedId ? `/cash-closures/${selectedId}` : "/cash-closures",
-        {
-          method: selectedId ? "PUT" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      notes: buildNotesWithMeta(cleanNotesOnly, {
+        receipt_total: form.receipt_total.trim() ? receiptTotal : undefined,
+        pos1: form.pos1.trim() ? pos1 : undefined,
+        pos2: form.pos2.trim() ? pos2 : undefined,
+        satispay: form.satispay.trim() ? satispay : undefined,
+        contanti: form.contanti.trim() ? contanti : undefined,
+        altri: form.altri.trim() ? altri : undefined,
+        qromo: form.qromo.trim() ? qromo : undefined,
+      }),
+    };
 
-      const json = await res.json();
+    console.log("PAYLOAD CASH CLOSURE", payload);
 
-      if (!res.ok) {
-        throw new Error(json?.error || "Errore salvataggio");
+    const res = await authFetch(
+      selectedId ? `/cash-closures/${selectedId}` : "/cash-closures",
+      {
+        method: selectedId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       }
+    );
 
-      setMessage(selectedId ? "Bozza aggiornata" : "Bozza creata");
-      await loadRows();
-      await loadDetail(json.id);
-    } catch (err: any) {
-      setError(err?.message || "Errore salvataggio");
-    } finally {
-      setSaving(false);
+    const json = await res.json();
+
+    if (!res.ok) {
+      console.error("SAVE CASH CLOSURE ERROR", json);
+      throw new Error(json?.error || "Errore salvataggio");
     }
-  }
 
+    setMessage(selectedId ? "Bozza aggiornata" : "Bozza creata");
+    await loadRows();
+    await loadDetail(json.id);
+  } catch (err: any) {
+    console.error("handleSave error", err);
+    setError(err?.message || "Errore salvataggio");
+  } finally {
+    setSaving(false);
+  }
+}
   async function handleClose() {
     if (!selectedId) return;
 
