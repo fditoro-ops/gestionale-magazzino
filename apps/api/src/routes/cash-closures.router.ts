@@ -296,7 +296,7 @@ router.post("/:id/close", async (req, res) => {
     }
 
     try {
-      await sendCashClosureEmail({ closure: closed });
+      await sendCashClosureEmail(closed);
 
       closed = await updateCashClosureDb(tenant_id, req.params.id, {
         email_sent: true,
