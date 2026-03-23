@@ -15,6 +15,7 @@ export type Item = {
   baseQty?: number | null;
 
   packSize?: number | null;
+  minStockUnits?: number | null;
 
   lastCostCents?: number | null;
   costEur?: number | null;
@@ -57,6 +58,13 @@ function parsePositiveNumber(raw: string): number | null {
   return n;
 }
 
+function parseNonNegativeNumber(raw: string): number | null {
+  if (!raw.trim()) return null;
+  const n = Number(raw.replace(",", "."));
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
 export default function ItemDetailsModal({
   open,
   item,
@@ -80,7 +88,8 @@ export default function ItemDetailsModal({
   const [categoryId, setCategoryId] = useState("");
 
   const [packSize, setPackSize] = useState<string>("");
- 
+  const [minStockUnits, setMinStockUnits] = useState<string>("");
+
   const [um, setUm] = useState<ItemUm>("PZ");
   const [baseQty, setBaseQty] = useState<string>("1");
 
@@ -112,6 +121,12 @@ export default function ItemDetailsModal({
         : ""
     );
 
+    const parsedMinStockUnits = Number(item.minStockUnits);
+    setMinStockUnits(
+      Number.isFinite(parsedMinStockUnits) && parsedMinStockUnits >= 0
+        ? String(parsedMinStockUnits)
+        : ""
+    );
 
     const nextUm: ItemUm = item.um === "CL" ? "CL" : "PZ";
     setUm(nextUm);
@@ -169,6 +184,7 @@ export default function ItemDetailsModal({
 
     const parsedPackSize = parsePositiveNumber(packSize);
     const parsedBaseQty = parsePositiveNumber(baseQty);
+    const parsedMinStockUnits = parseNonNegativeNumber(minStockUnits);
 
     if (um !== "CL" && um !== "PZ") {
       setErr("UM non valida.");
@@ -185,6 +201,14 @@ export default function ItemDetailsModal({
       return;
     }
 
+    if (
+      minStockUnits.trim() !== "" &&
+      parsedMinStockUnits === null
+    ) {
+      setErr("Scorta minima non valida.");
+      return;
+    }
+
     const patch: any = {
       name: name.trim(),
       brand: brand.trim() || null,
@@ -192,6 +216,7 @@ export default function ItemDetailsModal({
       categoryId: categoryId.trim() || null,
       category: categoryId.trim() || null,
       packSize: parsedPackSize,
+      minStockUnits: parsedMinStockUnits,
       um,
       baseQty: parsedBaseQty,
       costEur: lastCostEuro.trim()
@@ -331,6 +356,19 @@ export default function ItemDetailsModal({
                   step="any"
                   value={packSize}
                   onChange={(e) => setPackSize(e.target.value)}
+                />
+              </div>
+
+              <div className="col-span-12 md:col-span-2 min-w-0 grid gap-1">
+                <label className={labelCls}>Scorta minima (Unità)</label>
+                <input
+                  className={inputCls}
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={minStockUnits}
+                  onChange={(e) => setMinStockUnits(e.target.value)}
+                  placeholder={um === "PZ" ? "Es. 6" : "Es. 2"}
                 />
               </div>
 
