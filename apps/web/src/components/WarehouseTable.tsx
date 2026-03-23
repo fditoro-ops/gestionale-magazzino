@@ -40,26 +40,27 @@ export default function WarehouseTable({
     }).format(n);
   }
 
-  function getStockBoxes(row: WarehouseRow): number | null {
+  function getUnits(row: WarehouseRow): number | null {
     const stockTechnical = Number(row.stockBt || 0);
+    const um = String(row.um || "").toUpperCase();
 
-    if (String(row.um || "").toUpperCase() === "PZ") {
+    if (um === "PZ") {
       return stockTechnical;
     }
 
-    const packSize = Number(row.packSize || 0);
-    if (packSize > 0) return stockTechnical / packSize;
-
     const baseQty = Number(row.baseQty || 0);
-    if (baseQty > 0) return stockTechnical / baseQty;
+    if (baseQty > 0) {
+      return stockTechnical / baseQty;
+    }
 
     return null;
   }
 
-  function getBtLabel(row: WarehouseRow): string {
+  function getUnitsLabel(row: WarehouseRow): string {
     const um = String(row.um || "").toUpperCase();
     if (um === "PZ") return "PZ";
-    return "BT";
+    if (um === "CL") return "Unità";
+    return "Unità";
   }
 
   return (
@@ -80,15 +81,15 @@ export default function WarehouseTable({
               <th style={styles.th}>SKU</th>
               <th style={styles.th}>Prodotto</th>
               <th style={styles.thRight}>Giacenza tecnica</th>
-              <th style={styles.thRight}>BT</th>
+              <th style={styles.thRight}>Unità</th>
               <th style={styles.thRight}>Scorta min.</th>
             </tr>
           </thead>
 
           <tbody>
             {filteredRows.map((row) => {
-              const stockBoxes = getStockBoxes(row);
-              const btLabel = getBtLabel(row);
+              const units = getUnits(row);
+              const unitsLabel = getUnitsLabel(row);
 
               return (
                 <tr
@@ -107,9 +108,9 @@ export default function WarehouseTable({
                   </td>
 
                   <td style={styles.tdRight}>
-                    {stockBoxes === null
+                    {units === null
                       ? "-"
-                      : `${formatNumber(stockBoxes, 2)} ${btLabel}`}
+                      : `${formatNumber(units, 2)} ${unitsLabel}`}
                   </td>
 
                   <td style={styles.tdRight}>
