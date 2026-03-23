@@ -205,7 +205,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-router.post("/:id/receipt", upload.single("receipt"), async (req, res) => {
+router.post("/:id/receipt", upload.single("receipt"), async (req: any, res) => {
   try {
     const tenant_id = String(getTenantId(req));
 
@@ -292,17 +292,27 @@ router.post("/:id/close", async (req, res) => {
     });
 
     if (!closed) {
-      return res.status(500).json({ ok: false, error: "Errore chiusura record" });
+      return res.status(500).json({
+        ok: false,
+        error: "Errore chiusura record",
+      });
     }
 
     try {
-      await sendCashClosureEmail(closed);
+      const mailResult = await sendCashClosureEmail(closed);
 
-      closed = await updateCashClosureDb(tenant_id, req.params.id, {
-        email_sent: true,
-        email_sent_at: new Date().toISOString(),
-        email_error: null,
-      });
+      if (mailResult?.ok) {
+        closed = await updateCashClosureDb(tenant_id, req.params.id, {
+          email_sent: true,
+          email_sent_at: new Date().toISOString(),
+          email_error: null,
+        });
+      } else {
+        closed = await updateCashClosureDb(tenant_id, req.params.id, {
+          email_sent: false,
+          email_error: mailResult?.error || "EMAIL_SEND_FAILED",
+        });
+      }
     } catch (mailError: any) {
       console.error("Cash closure email error", mailError);
 
