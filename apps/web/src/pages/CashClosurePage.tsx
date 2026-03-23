@@ -219,33 +219,62 @@ function buildNotesWithMeta(notes: string, meta: NotesMeta) {
 async function loadCicTotalForDate(date: string): Promise<number> {
   try {
     const res = await authFetch(`/dashboard/sales`);
-    if (!res.ok) return 0;
+    if (!res.ok) {
+      console.log("dashboard/sales status", res.status);
+      return 0;
+    }
 
     const data = await res.json();
+    console.log("dashboard/sales DATA", data);
+
     const documents = Array.isArray(data?.documents) ? data.documents : [];
+    console.log("DOCUMENTS LEN", documents.length);
+    console.log("FIRST DOCUMENT", documents[0]);
 
     const sameDay = documents.filter((doc: any) => {
-      const dt =
+      const raw =
         doc?.document_date ||
         doc?.date ||
         doc?.created_at ||
         doc?.createdAt ||
         "";
-      return String(dt).slice(0, 10) === date;
+
+      if (!raw) return false;
+
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) {
+        return String(raw).slice(0, 10) === date;
+      }
+
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      const normalized = `${yyyy}-${mm}-${dd}`;
+
+      return normalized === date;
     });
+
+    console.log("SAMEDAY LEN", sameDay.length);
+    console.log("FIRST SAMEDAY", sameDay[0]);
 
     const total = sameDay.reduce((sum: number, doc: any) => {
       const candidate =
         Number(doc?.payments_total) ||
         Number(doc?.total_amount) ||
         Number(doc?.total) ||
+        Number(doc?.grand_total) ||
+        Number(doc?.amount) ||
+        Number(doc?.gross_total) ||
         0;
 
       return sum + (Number.isFinite(candidate) ? candidate : 0);
     }, 0);
 
+    console.log("TOTAL CASSA IN CLOUD", total);
+
     return total;
-  } catch {
+  } catch (err) {
+    console.error("loadCicTotalForDate error", err);
     return 0;
   }
 }
