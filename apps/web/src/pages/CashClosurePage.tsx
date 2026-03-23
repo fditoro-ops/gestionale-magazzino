@@ -304,7 +304,21 @@ export default function CashClosurePage() {
 
   const isDraft = selected?.status === "DRAFT";
   const canEdit = !selected || isDraft;
+useEffect(() => {
+  if (!form.business_date) return;
 
+  console.log("🔥 FETCH CASSA IN CLOUD", form.business_date);
+
+  loadCicTotalForDate(form.business_date).then((total) => {
+    console.log("💰 TOTALE TROVATO:", total);
+
+    setForm((prev) => ({
+      ...prev,
+      total_cic: String(total || 0),
+    }));
+  });
+}, [form.business_date]);
+  
   useEffect(() => {
     void loadRows();
   }, []);
