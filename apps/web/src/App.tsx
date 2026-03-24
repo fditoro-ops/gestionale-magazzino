@@ -32,6 +32,7 @@ type WarehouseRow = {
   packSize?: number | null;
   baseQty?: number | null;
   um?: string | null;
+  minStockUnits?: number | null;
 };
 
 function CoreApp() {
@@ -61,27 +62,49 @@ function CoreApp() {
   }, [warehouse]);
 
   // ✅ QUI STA LA MAGIA ✨
-  const warehouseRowsEnriched = useMemo(() => {
-    const warehouseArr = Array.isArray(warehouse) ? warehouse : [];
-    const itemsArr = Array.isArray(items) ? items : [];
+const warehouseRowsEnriched = useMemo(() => {
+  const warehouseArr = Array.isArray(warehouse) ? warehouse : [];
+  const itemsArr = Array.isArray(items) ? items : [];
 
-    const itemBySku = new Map(
-      itemsArr.map((it) => [String(it.sku || "").toUpperCase(), it])
-    );
+  const itemBySku = new Map(
+    itemsArr.map((it) => [String(it.sku || "").toUpperCase(), it])
+  );
 
-    return warehouseArr.map((row) => {
-      const sku = String(row.sku || "").toUpperCase();
-      const item = itemBySku.get(sku);
+  return warehouseArr.map((row) => {
+    const sku = String(row.sku || "").toUpperCase();
+    const item = itemBySku.get(sku);
 
-      return {
-        ...row,
-        packSize: item?.packSize ?? null,
-        baseQty: item?.baseQty ?? null,
-        um: item?.um ?? null,
-      };
-    });
-  }, [warehouse, items]);
+    const stockBt = Number(row.stockBt ?? 0);
+    const um = String(item?.um ?? row.um ?? "").toUpperCase();
+    const baseQty = Number(item?.baseQty ?? row.baseQty ?? 0);
+    const minStockUnits =
+      item?.minStockUnits != null ? Number(item.minStockUnits) : null;
 
+    const units =
+      um === "PZ"
+        ? stockBt
+        : baseQty > 0
+        ? stockBt / baseQty
+        : null;
+
+    const underMin =
+      units != null &&
+      minStockUnits != null &&
+      Number.isFinite(minStockUnits) &&
+      minStockUnits > 0 &&
+      units < minStockUnits;
+
+    return {
+      ...row,
+      packSize: item?.packSize ?? null,
+      baseQty: item?.baseQty ?? null,
+      um: item?.um ?? null,
+      minStockUnits,
+      underMin,
+    };
+  });
+}, [warehouse, items]);
+  
   const reload = () => {
     authFetch(`/movements`)
       .then((r) => r.json())
@@ -158,15 +181,15 @@ function CoreApp() {
             </div>
           )}
 
-          {tab === "warehouse" && (
-            <WarehouseTable
-              rows={warehouseRowsEnriched}
-              onPickSku={(sku) => {
-                setDraftSku(sku);
-                setTab("movements");
-              }}
-            />
-          )}
+{tab === "warehouse" && (
+  <WarehouseTable
+    rows={warehouseRowsEnriched}
+    onPickSku={(sku) => {
+      setDraftSku(sku);
+      setTab("movements");
+    }}
+  />
+)}
 
           {tab === "items" && <ItemsAdmin />}
 
