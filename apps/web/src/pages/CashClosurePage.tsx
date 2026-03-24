@@ -16,13 +16,21 @@ type CashClosure = {
   operator_name: string | null;
 
   theoretical_base: number;
+  receipt_total: number | null;
+
   cash_declared: number;
   card_declared: number;
   satispay_declared: number;
   other_declared: number;
 
+  pos1_declared: number;
+  pos2_declared: number;
+  qromo_declared: number;
+
+  electronic_total: number | null;
   declared_total: number;
   delta: number;
+  receipt_delta: number | null;
 
   receipt_image_url: string | null;
   receipt_image_name: string | null;
@@ -58,17 +66,6 @@ type FormState = {
   notes: string;
 };
 
-type NotesMeta = {
-  receipt_total?: number;
-  pos1?: number;
-  pos2?: number;
-  satispay?: number;
-  contanti?: number;
-  altri?: number;
-  qromo?: number;
-};
-
-const NOTES_META_PREFIX = "\n\n[CC_META]";
 const EMPTY_FORM: FormState = {
   business_date: getTodayLocalDate(),
   operator_name: "",
@@ -180,41 +177,6 @@ function deltaColor(value: number) {
   return "#B91C1C";
 }
 
-function extractNotesMeta(rawNotes?: string | null): {
-  cleanNotes: string;
-  meta: NotesMeta;
-} {
-  const notes = rawNotes || "";
-  const idx = notes.indexOf(NOTES_META_PREFIX);
-
-  if (idx === -1) {
-    return { cleanNotes: notes, meta: {} };
-  }
-
-  const cleanNotes = notes.slice(0, idx).trimEnd();
-  const metaRaw = notes.slice(idx + NOTES_META_PREFIX.length).trim();
-
-  try {
-    const parsed = JSON.parse(metaRaw);
-    return {
-      cleanNotes,
-      meta: parsed && typeof parsed === "object" ? parsed : {},
-    };
-  } catch {
-    return { cleanNotes: notes, meta: {} };
-  }
-}
-
-function buildNotesWithMeta(notes: string, meta: NotesMeta) {
-  const clean = (notes || "").trimEnd();
-  const hasAnyMeta = Object.values(meta).some(
-    (v) => v !== undefined && v !== null && v !== 0
-  );
-
-  if (!hasAnyMeta) return clean;
-
-  return `${clean}${NOTES_META_PREFIX}${JSON.stringify(meta)}`;
-}
 
 async function loadCicTotalForDate(date: string): Promise<number> {
   try {
@@ -257,23 +219,23 @@ async function loadCicTotalForDate(date: string): Promise<number> {
     console.log("SAMEDAY LEN", sameDay.length);
     console.log("FIRST SAMEDAY", sameDay[0]);
 
-    const total = sameDay.reduce((sum: number, doc: any) => {
-      const candidate =
-        Number(doc?.paymentsTotal) ||
-        Number(doc?.totalAmount) ||
-        Number(doc?.payments_total) ||
-        Number(doc?.total_amount) ||
-        Number(doc?.total) ||
-        Number(doc?.grandTotal) ||
-        Number(doc?.grossTotal) ||
-        Number(doc?.amount) ||
-        0;
+const total = sameDay.reduce((sum: number, doc: any) => {
+  const candidate =
+    Number(doc?.paymentsTotal) ||
+    Number(doc?.totalAmount) ||
+    Number(doc?.payments_total) ||
+    Number(doc?.total_amount) ||
+    Number(doc?.total) ||
+    Number(doc?.grandTotal) ||
+    Number(doc?.grossTotal) ||
+    Number(doc?.amount) ||
+    0;
 
-      return sum + (Number.isFinite(candidate) ? candidate : 0);
-    }, 0);
+  return sum + (Number.isFinite(candidate) ? candidate : 0);
+}, 0);
 
-    console.log("TOTAL CASSA IN CLOUD", total);
-    return total;
+console.log("TOTAL CASSA IN CLOUD", total);
+return Number(total.toFixed(2));
   } catch (err) {
     console.error("loadCicTotalForDate error", err);
     return 0;
@@ -334,20 +296,6 @@ export default function CashClosurePage() {
 
   const isDraft = selected?.status === "DRAFT";
   const canEdit = !selected || isDraft;
-useEffect(() => {
-  if (!form.business_date) return;
-
-  console.log("🔥 FETCH CASSA IN CLOUD", form.business_date);
-
-  loadCicTotalForDate(form.business_date).then((total) => {
-    console.log("💰 TOTALE TROVATO:", total);
-
-    setForm((prev) => ({
-      ...prev,
-      total_cic: String(total || 0),
-    }));
-  });
-}, [form.business_date]);
   
   useEffect(() => {
     void loadRows();
@@ -388,53 +336,42 @@ useEffect(() => {
     }
   }
 
-  async function loadDetail(id: string) {
-    setLoadingDetail(true);
-    setError("");
-    setMessage("");
+async function loadDetail(id: string) {
+  setLoadingDetail(true);
+  setError("");
+  setMessage("");
 
-    try {
-      const res = await authFetch(`/cash-closures/${id}`);
-      if (!res.ok) throw new Error("Errore caricamento dettaglio");
+  try {
+    const res = await authFetch(`/cash-closures/${id}`);
+    if (!res.ok) throw new Error("Errore caricamento dettaglio");
 
-      const data = (await res.json()) as CashClosure;
-      const { cleanNotes, meta } = extractNotesMeta(data.notes);
+    const data = (await res.json()) as CashClosure;
 
-      setSelected(data);
-      setSelectedId(data.id);
+    setSelected(data);
+    setSelectedId(data.id);
 
-      setForm({
-        business_date: data.business_date.slice(0, 10),
-        operator_name: data.operator_name ?? "",
-        total_cic: String(data.theoretical_base ?? 0),
-        receipt_total:
-          meta.receipt_total !== undefined ? String(meta.receipt_total) : "",
-        pos1:
-          meta.pos1 !== undefined
-            ? String(meta.pos1)
-            : String(data.card_declared ?? 0),
-        pos2: meta.pos2 !== undefined ? String(meta.pos2) : "",
-        satispay:
-          meta.satispay !== undefined
-            ? String(meta.satispay)
-            : String(data.satispay_declared ?? 0),
-        contanti:
-          meta.contanti !== undefined
-            ? String(meta.contanti)
-            : String(data.cash_declared ?? 0),
-        altri:
-          meta.altri !== undefined
-            ? String(meta.altri)
-            : String(data.other_declared ?? 0),
-        qromo: meta.qromo !== undefined ? String(meta.qromo) : "",
-        notes: cleanNotes,
-      });
-    } catch (err: any) {
-      setError(err?.message || "Errore caricamento dettaglio");
-    } finally {
-      setLoadingDetail(false);
-    }
+    setForm({
+      business_date: data.business_date.slice(0, 10),
+      operator_name: data.operator_name ?? "",
+      total_cic: String(data.theoretical_base ?? 0),
+      receipt_total:
+        data.receipt_total !== null && data.receipt_total !== undefined
+          ? String(data.receipt_total)
+          : "",
+      pos1: String(data.pos1_declared ?? 0),
+      pos2: String(data.pos2_declared ?? 0),
+      satispay: String(data.satispay_declared ?? 0),
+      contanti: String(data.cash_declared ?? 0),
+      altri: String(data.other_declared ?? 0),
+      qromo: String(data.qromo_declared ?? 0),
+      notes: data.notes ?? "",
+    });
+  } catch (err: any) {
+    setError(err?.message || "Errore caricamento dettaglio");
+  } finally {
+    setLoadingDetail(false);
   }
+}
 
   function handleNew() {
     setSelected(null);
@@ -457,29 +394,26 @@ async function handleSave() {
   setMessage("");
 
   try {
-    const cleanNotesOnly = (form.notes || "")
-      .replace(/\[CC_META\][\s\S]*$/m, "")
-      .trim();
-
     const payload = {
       business_date: form.business_date,
       operator_name: form.operator_name || null,
       theoretical_base: cicTotal,
+
+      receipt_total: form.receipt_total.trim() ? receiptTotal : null,
 
       cash_declared: contanti,
       card_declared: posTotal,
       satispay_declared: satispay,
       other_declared: altri,
 
-      notes: buildNotesWithMeta(cleanNotesOnly, {
-        receipt_total: form.receipt_total.trim() ? receiptTotal : undefined,
-        pos1: form.pos1.trim() ? pos1 : undefined,
-        pos2: form.pos2.trim() ? pos2 : undefined,
-        satispay: form.satispay.trim() ? satispay : undefined,
-        contanti: form.contanti.trim() ? contanti : undefined,
-        altri: form.altri.trim() ? altri : undefined,
-        qromo: form.qromo.trim() ? qromo : undefined,
-      }),
+      pos1_declared: pos1,
+      pos2_declared: pos2,
+      qromo_declared: qromo,
+
+      electronic_total: electronicTotal,
+      receipt_delta: form.receipt_total.trim() ? deltaReceipt : null,
+
+      notes: form.notes || null,
     };
 
     console.log("PAYLOAD CASH CLOSURE", payload);
@@ -510,6 +444,7 @@ async function handleSave() {
     setSaving(false);
   }
 }
+  
   async function handleClose() {
     if (!selectedId) return;
 
