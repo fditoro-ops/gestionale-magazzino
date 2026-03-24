@@ -1166,6 +1166,28 @@ return res.status(200).send("OK");
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 
+app.use((err: any, _req: any, res: any, next: any) => {
+  if (err?.type === "entity.parse.failed") {
+    console.error("❌ JSON parse failed:", err.message);
+    return res.status(400).json({
+      ok: false,
+      error: "JSON non valido",
+      details: err.message,
+    });
+  }
+
+  if (err?.type === "entity.too.large") {
+    console.error("❌ Payload too large:", err.message);
+    return res.status(413).json({
+      ok: false,
+      error: "Payload troppo grande",
+      details: err.message,
+    });
+  }
+
+  return next(err);
+});
+
 /* =========================
    Debug / Health
    ========================= */
