@@ -37,6 +37,10 @@ function getUserInfo(req: any) {
   };
 }
 
+function round2(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
 router.get("/", async (req, res) => {
   try {
     const tenant_id = String(getTenantId(req));
@@ -96,6 +100,25 @@ router.post("/", async (req, res) => {
 
     const data = parsed.data;
 
+    const electronic_total =
+      data.electronic_total ??
+      round2(
+        (data.pos1_declared ?? 0) +
+          (data.pos2_declared ?? 0) +
+          (data.satispay_declared ?? 0) +
+          (data.other_declared ?? 0)
+      );
+
+    const comparable_total = round2(
+      electronic_total + (data.cash_declared ?? 0)
+    );
+
+    const receipt_delta =
+      data.receipt_delta ??
+      (data.receipt_total != null
+        ? round2(data.receipt_total - comparable_total)
+        : null);
+
     const totals = computeCashClosureTotals({
       theoretical_base: data.theoretical_base,
       cash_declared: data.cash_declared,
@@ -118,13 +141,24 @@ router.post("/", async (req, res) => {
       business_date: data.business_date,
       operator_id: data.operator_id ?? null,
       operator_name: data.operator_name ?? null,
+
       theoretical_base: data.theoretical_base,
+      receipt_total: data.receipt_total ?? null,
+
       cash_declared: data.cash_declared ?? 0,
       card_declared: data.card_declared ?? 0,
       satispay_declared: data.satispay_declared ?? 0,
       other_declared: data.other_declared ?? 0,
+
+      pos1_declared: data.pos1_declared ?? 0,
+      pos2_declared: data.pos2_declared ?? 0,
+      qromo_declared: data.qromo_declared ?? 0,
+
+      electronic_total,
       declared_total: totals.declared_total,
       delta: totals.delta,
+      receipt_delta,
+
       notes: data.notes ?? null,
       alert_flags: alerts,
     });
@@ -167,19 +201,62 @@ router.put("/:id", async (req, res) => {
       business_date: patch.business_date ?? existing.business_date,
       operator_id: patch.operator_id ?? existing.operator_id,
       operator_name: patch.operator_name ?? existing.operator_name,
+
       theoretical_base: patch.theoretical_base ?? existing.theoretical_base,
+      receipt_total:
+        patch.receipt_total !== undefined
+          ? patch.receipt_total
+          : existing.receipt_total,
+
       cash_declared: patch.cash_declared ?? existing.cash_declared,
       card_declared: patch.card_declared ?? existing.card_declared,
-      satispay_declared: patch.satispay_declared ?? existing.satispay_declared,
+      satispay_declared:
+        patch.satispay_declared ?? existing.satispay_declared,
       other_declared: patch.other_declared ?? existing.other_declared,
+
+      pos1_declared: patch.pos1_declared ?? existing.pos1_declared,
+      pos2_declared: patch.pos2_declared ?? existing.pos2_declared,
+      qromo_declared: patch.qromo_declared ?? existing.qromo_declared,
+
       notes: patch.notes ?? existing.notes,
       receipt_image_url: existing.receipt_image_url,
     };
 
-    const totals = computeCashClosureTotals(merged);
+    const electronic_total =
+      patch.electronic_total ??
+      existing.electronic_total ??
+      round2(
+        merged.pos1_declared +
+          merged.pos2_declared +
+          merged.satispay_declared +
+          merged.other_declared
+      );
+
+    const comparable_total = round2(
+      electronic_total + merged.cash_declared
+    );
+
+    const receipt_delta =
+      patch.receipt_delta !== undefined
+        ? patch.receipt_delta
+        : merged.receipt_total != null
+          ? round2(merged.receipt_total - comparable_total)
+          : null;
+
+    const totals = computeCashClosureTotals({
+      theoretical_base: merged.theoretical_base,
+      cash_declared: merged.cash_declared,
+      card_declared: merged.card_declared,
+      satispay_declared: merged.satispay_declared,
+      other_declared: merged.other_declared,
+    });
+
     const alerts = buildCashClosureAlerts({
-      ...merged,
-      ...totals,
+      theoretical_base: merged.theoretical_base,
+      cash_declared: merged.cash_declared,
+      card_declared: merged.card_declared,
+      satispay_declared: merged.satispay_declared,
+      other_declared: merged.other_declared,
       receipt_image_url: existing.receipt_image_url,
     });
 
@@ -187,14 +264,25 @@ router.put("/:id", async (req, res) => {
       business_date: merged.business_date,
       operator_id: merged.operator_id,
       operator_name: merged.operator_name,
+
       theoretical_base: merged.theoretical_base,
+      receipt_total: merged.receipt_total,
+
       cash_declared: merged.cash_declared,
       card_declared: merged.card_declared,
       satispay_declared: merged.satispay_declared,
       other_declared: merged.other_declared,
-      notes: merged.notes,
+
+      pos1_declared: merged.pos1_declared,
+      pos2_declared: merged.pos2_declared,
+      qromo_declared: merged.qromo_declared,
+
+      electronic_total,
       declared_total: totals.declared_total,
       delta: totals.delta,
+      receipt_delta,
+
+      notes: merged.notes,
       alert_flags: alerts,
     });
 
@@ -265,6 +353,24 @@ router.post("/:id/close", async (req, res) => {
       });
     }
 
+    const electronic_total =
+      existing.electronic_total ??
+      round2(
+        existing.pos1_declared +
+          existing.pos2_declared +
+          existing.satispay_declared +
+          existing.other_declared
+      );
+
+    const comparable_total = round2(
+      electronic_total + existing.cash_declared
+    );
+
+    const receipt_delta =
+      existing.receipt_total != null
+        ? round2(existing.receipt_total - comparable_total)
+        : null;
+
     const totals = computeCashClosureTotals({
       theoretical_base: existing.theoretical_base,
       cash_declared: existing.cash_declared,
@@ -284,8 +390,10 @@ router.post("/:id/close", async (req, res) => {
     });
 
     let closed = await updateCashClosureDb(tenant_id, req.params.id, {
+      electronic_total,
       declared_total: totals.declared_total,
       delta: totals.delta,
+      receipt_delta,
       alert_flags: alerts,
       status: "CLOSED",
       closed_at: new Date().toISOString(),
