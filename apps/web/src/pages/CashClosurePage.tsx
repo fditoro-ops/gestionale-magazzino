@@ -427,7 +427,15 @@ async function handleSave() {
       }
     );
 
-    const json = await res.json();
+const rawText = await res.text();
+
+let json: any = null;
+try {
+  json = rawText ? JSON.parse(rawText) : null;
+} catch {
+  console.error("RAW NON-JSON RESPONSE", rawText);
+  throw new Error(rawText || "Risposta non JSON dal server");
+}
 
 if (!res.ok) {
   console.error("SAVE CASH CLOSURE ERROR", json);
