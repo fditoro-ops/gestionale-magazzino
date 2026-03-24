@@ -13,14 +13,21 @@ export type CashClosure = {
   operator_name: string | null;
 
   theoretical_base: number;
+  receipt_total: number | null;
 
   cash_declared: number;
   card_declared: number;
   satispay_declared: number;
   other_declared: number;
 
+  pos1_declared: number;
+  pos2_declared: number;
+  qromo_declared: number;
+
+  electronic_total: number | null;
   declared_total: number;
   delta: number;
+  receipt_delta: number | null;
 
   receipt_image_url: string | null;
   receipt_image_name: string | null;
