@@ -831,6 +831,80 @@ function buildCicWebhookDebugDump(
    CIC webhook
    ========================= */
 
+app.post("/admin/sales/backfill-descriptions", async (_req, res) => {
+  try {
+    const tenantId = String(process.env.TENANT_ID || "IMP001");
+
+    const rowsRes = await pool.query(`
+      SELECT id, sku
+      FROM sales_lines
+      WHERE tenant_id = $1
+        AND (description IS NULL OR BTRIM(description) = '' OR sku LIKE '%-%')
+      LIMIT 5000
+    `, [tenantId]);
+
+    const rows = rowsRes.rows;
+
+    let updated = 0;
+    let skipped = 0;
+
+    for (const row of rows) {
+      let rawSku = String(row.sku || "").trim();
+      if (!rawSku) {
+        skipped++;
+        continue;
+      }
+
+      // 🔥 usa la tua logica già esistente
+      let resolvedSku = cicResolveSku(rawSku);
+
+      if (!resolvedSku || resolvedSku.includes("-")) {
+        skipped++;
+        continue;
+      }
+
+      // 🔍 prendi nome da Item
+      const itemRes = await pool.query(
+        `SELECT name FROM "Item" WHERE sku = $1 LIMIT 1`,
+        [resolvedSku]
+      );
+
+      const name = String(itemRes.rows[0]?.name || "").trim();
+      if (!name) {
+        skipped++;
+        continue;
+      }
+
+      // ✏️ aggiorna riga
+      await pool.query(
+        `
+        UPDATE sales_lines
+        SET
+          sku = $1,
+          description = $2
+        WHERE id = $3
+        `,
+        [resolvedSku, name, row.id]
+      );
+
+      updated++;
+    }
+
+    res.json({
+      ok: true,
+      total: rows.length,
+      updated,
+      skipped,
+    });
+  } catch (err: any) {
+    console.error("❌ backfill error:", err);
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message ?? err),
+    });
+  }
+});
+
 app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
   try {
     const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";
