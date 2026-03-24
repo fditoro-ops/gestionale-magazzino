@@ -16,19 +16,19 @@ export const CreateCashClosureSchema = z.object({
 
   theoretical_base: MoneySchema,
 
-  receipt_total: MoneySchema.nullable().optional(),
+  receipt_total: z.number().nullable().optional(),
 
   cash_declared: MoneySchema.optional().default(0),
   card_declared: MoneySchema.optional().default(0),
   satispay_declared: MoneySchema.optional().default(0),
   other_declared: MoneySchema.optional().default(0),
 
-  pos1_declared: MoneySchema.optional().default(0),
-  pos2_declared: MoneySchema.optional().default(0),
-  qromo_declared: MoneySchema.optional().default(0),
+  pos1_declared: z.number().optional(),
+  pos2_declared: z.number().optional(),
+  qromo_declared: z.number().optional(),
 
-  electronic_total: MoneySchema.nullable().optional(),
-  receipt_delta: z.coerce.number().nullable().optional(),
+  electronic_total: z.number().optional(),
+  receipt_delta: z.number().nullable().optional(),
 
   notes: z.string().trim().nullable().optional(),
 });
@@ -40,19 +40,19 @@ export const UpdateCashClosureSchema = z.object({
 
   theoretical_base: MoneySchema.optional(),
 
-  receipt_total: MoneySchema.nullable().optional(),
+  receipt_total: z.number().nullable().optional(),
 
   cash_declared: MoneySchema.optional(),
   card_declared: MoneySchema.optional(),
   satispay_declared: MoneySchema.optional(),
   other_declared: MoneySchema.optional(),
 
-  pos1_declared: MoneySchema.optional(),
-  pos2_declared: MoneySchema.optional(),
-  qromo_declared: MoneySchema.optional(),
+  pos1_declared: z.number().optional(),
+  pos2_declared: z.number().optional(),
+  qromo_declared: z.number().optional(),
 
-  electronic_total: MoneySchema.nullable().optional(),
-  receipt_delta: z.coerce.number().nullable().optional(),
+  electronic_total: z.number().optional(),
+  receipt_delta: z.number().nullable().optional(),
 
   notes: z.string().trim().nullable().optional(),
 });
