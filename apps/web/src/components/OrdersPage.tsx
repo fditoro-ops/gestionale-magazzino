@@ -78,31 +78,44 @@ export default function OrdersPage({
     ) as Record<string, number | null>;
   }, [itemsSafe]);
 
-  const itemsForSearch = useMemo(() => {
-    const supplierKey = String(supplier || "").toUpperCase().trim();
+const itemsForSearch = useMemo(() => {
+  const supplierKey = String(supplier || "").toUpperCase().trim();
 
-    return itemsSafe
-      .filter((it: any) => it?.active !== false)
-      .filter((it: any) => {
-        const itemSupplier = String(it?.supplier || "").toUpperCase().trim();
-        return !supplierKey || itemSupplier === supplierKey;
-      })
-      .map((it: any) => {
-        const sku = String(it.sku || "").toUpperCase().trim();
-        const name = String(it.name || "").trim();
-        const brand = String(it.brand || "").trim();
-        const stock = Number(stockBySku[sku] ?? 0);
+  return itemsSafe
+    .filter((it: any) => it?.active !== false)
+    .filter((it: any) => {
+      const itemSupplier = String(it?.supplier || "").toUpperCase().trim();
+      return !supplierKey || itemSupplier === supplierKey;
+    })
+    .map((it: any) => {
+      const sku = String(it.sku || "").toUpperCase().trim();
+      const name = String(it.name || "").trim();
+      const brand = String(it.brand || "").trim();
 
-        return {
-          sku,
-          name,
-          brand,
-          stock,
-          searchText: `${name} ${brand}`.toUpperCase(),
-        };
-      })
-      .sort((a, b) => a.name.localeCompare(b.name, "it"));
-  }, [itemsSafe, stockBySku, supplier]);
+      const rawStock = Number(stockBySku[sku] ?? 0);
+      const um = String(it.um || "").toUpperCase().trim();
+      const baseQtyRaw = Number(it.baseQty ?? 1);
+      const baseQty =
+        Number.isFinite(baseQtyRaw) && baseQtyRaw > 0 ? baseQtyRaw : 1;
+
+      const displayStock =
+        um === "CL" ? rawStock / baseQty : rawStock;
+
+      const displayUm = um === "CL" ? "BT" : "PZ";
+
+      return {
+        sku,
+        name,
+        brand,
+        stock: rawStock,
+        displayStock,
+        displayUm,
+        searchText: `${name} ${brand}`.toUpperCase(),
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "it"));
+}, [itemsSafe, stockBySku, supplier]);
+  
 
   const itemsBySku = useMemo(() => {
     return Object.fromEntries(
@@ -577,23 +590,23 @@ async function editOrder(order: Order) {
                         style={{ ...inp, width: 220 }}
                       />
 
-                      {l.open && filtered.length > 0 && (
-                        <div style={dropdown}>
-                          {filtered.map((it) => (
-                            <button
-                              key={it.sku}
-                              type="button"
-                              onClick={() => selectItem(idx, it)}
-                              style={dropdownItem}
-                            >
-                              <span>{it.name}</span>
-                              <span style={stockTag(it.stock)}>
-                                disp. {it.stock}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
+{l.open && filtered.length > 0 && (
+  <div style={dropdown}>
+    {filtered.map((it) => (
+      <button
+        key={it.sku}
+        type="button"
+        onClick={() => selectItem(idx, it)}
+        style={dropdownItem}
+      >
+        <span>{it.name}</span>
+        <span style={stockTag(it.displayStock)}>
+          disp. {formatDisplayStock(it.displayStock)} {it.displayUm}
+        </span>
+      </button>
+    ))}
+  </div>
+)}
                     </div>
 
                     <input
@@ -853,6 +866,16 @@ const totalRow: React.CSSProperties = {
   borderRadius: 12,
   background: "white",
 };
+
+function formatDisplayStock(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+
+  if (Math.abs(value - Math.round(value)) < 0.001) {
+    return String(Math.round(value));
+  }
+
+  return value.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+}
 
 function stockTag(stock: number): React.CSSProperties {
   return {
