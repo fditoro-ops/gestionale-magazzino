@@ -429,10 +429,17 @@ async function handleSave() {
 
     const json = await res.json();
 
-    if (!res.ok) {
-      console.error("SAVE CASH CLOSURE ERROR", json);
-      throw new Error(json?.error || "Errore salvataggio");
-    }
+if (!res.ok) {
+  console.error("SAVE CASH CLOSURE ERROR", json);
+
+  const detailsText = json?.details
+    ? JSON.stringify(json.details, null, 2)
+    : "";
+
+  throw new Error(
+    [json?.error || "Errore salvataggio", detailsText].filter(Boolean).join("\n")
+  );
+}
 
     setMessage(selectedId ? "Bozza aggiornata" : "Bozza creata");
     await loadRows();
