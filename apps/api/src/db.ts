@@ -387,6 +387,37 @@ await pool.query(`
 
   console.log("✅ Tabella cash_closures pronta");
 
+  await pool.query(`
+  ALTER TABLE cash_closures
+  ADD COLUMN IF NOT EXISTS receipt_total NUMERIC;
+`);
+
+await pool.query(`
+  ALTER TABLE cash_closures
+  ADD COLUMN IF NOT EXISTS pos1_declared NUMERIC NOT NULL DEFAULT 0;
+`);
+
+await pool.query(`
+  ALTER TABLE cash_closures
+  ADD COLUMN IF NOT EXISTS pos2_declared NUMERIC NOT NULL DEFAULT 0;
+`);
+
+await pool.query(`
+  ALTER TABLE cash_closures
+  ADD COLUMN IF NOT EXISTS qromo_declared NUMERIC NOT NULL DEFAULT 0;
+`);
+
+  await pool.query(`
+  ALTER TABLE cash_closures
+  ADD COLUMN IF NOT EXISTS electronic_total NUMERIC;
+`);
+
+await pool.query(`
+  ALTER TABLE cash_closures
+  ADD COLUMN IF NOT EXISTS receipt_delta NUMERIC;
+`);
+  
+  
   
   /* =========================
      CIC UNRESOLVED
