@@ -6,6 +6,8 @@ type WarehouseRow = {
   name: string;
   stockBt: number;
   minStockBt?: number | null;
+  minStockUnits?: number | null;
+  underMin?: boolean;
   packSize?: number | null;
   baseQty?: number | null;
   um?: string | null;
@@ -59,7 +61,6 @@ export default function WarehouseTable({
   function getUnitsLabel(row: WarehouseRow): string {
     const um = String(row.um || "").toUpperCase();
     if (um === "PZ") return "PZ";
-    if (um === "CL") return "Unità";
     return "Unità";
   }
 
@@ -90,6 +91,7 @@ export default function WarehouseTable({
             {filteredRows.map((row) => {
               const units = getUnits(row);
               const unitsLabel = getUnitsLabel(row);
+              const isUnderMin = Boolean(row.underMin);
 
               return (
                 <tr
@@ -97,9 +99,16 @@ export default function WarehouseTable({
                   onClick={() => onPickSku?.(row.sku)}
                   style={{
                     cursor: onPickSku ? "pointer" : "default",
+                    background: isUnderMin ? "#fef2f2" : "transparent",
                   }}
                 >
-                  <td style={styles.td}>{row.sku}</td>
+                  <td style={styles.td}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {isUnderMin ? <span style={styles.badgeAlert}>Sotto scorta</span> : null}
+                      <span>{row.sku}</span>
+                    </div>
+                  </td>
+
                   <td style={styles.td}>{row.name}</td>
 
                   <td style={styles.tdRight}>
@@ -107,19 +116,27 @@ export default function WarehouseTable({
                     {row.um ? ` ${row.um}` : ""}
                   </td>
 
-                  <td style={styles.tdRight}>
-                    {units === null
-                      ? "-"
-                      : `${formatNumber(units, 2)} ${unitsLabel}`}
+                  <td
+                    style={{
+                      ...styles.tdRight,
+                      color: isUnderMin ? "#b91c1c" : "#0f172a",
+                      fontWeight: isUnderMin ? 700 : 400,
+                    }}
+                  >
+                    {units === null ? "-" : `${formatNumber(units, 2)} ${unitsLabel}`}
                   </td>
 
-<td style={styles.tdRight}>
-  {row.minStockBt == null
-    ? "-"
-    : `${formatNumber(Number(row.minStockBt || 0), 2)} ${
-        String(row.um || "").toUpperCase() === "PZ" ? "PZ" : "Unità"
-      }`}
-</td>
+                  <td
+                    style={{
+                      ...styles.tdRight,
+                      color: isUnderMin ? "#b91c1c" : "#0f172a",
+                      fontWeight: isUnderMin ? 700 : 400,
+                    }}
+                  >
+                    {row.minStockUnits == null
+                      ? "-"
+                      : `${formatNumber(Number(row.minStockUnits || 0), 2)} ${unitsLabel}`}
+                  </td>
                 </tr>
               );
             })}
@@ -197,5 +214,17 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 24,
     textAlign: "center",
     color: "#64748b",
+  },
+  badgeAlert: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "2px 8px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 700,
+    background: "#fee2e2",
+    color: "#b91c1c",
+    border: "1px solid #fecaca",
+    whiteSpace: "nowrap",
   },
 };
