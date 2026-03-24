@@ -9,7 +9,11 @@ export async function authFetch(
   const token = localStorage.getItem(TOKEN_KEY);
 
   const headers = new Headers(options.headers || {});
-  headers.set("Content-Type", "application/json");
+  const isFormData = options.body instanceof FormData;
+
+  if (!isFormData && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
 
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
