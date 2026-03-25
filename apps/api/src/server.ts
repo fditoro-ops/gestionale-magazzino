@@ -1789,17 +1789,13 @@ if (!payload?.document?.rows) continue;
       const rows = payload.document.rows;
 
       for (const r of rows) {
-const desc = String(
-  r?.description ||
-  r?.descriptionReceipt ||
-  r?.name ||
-  ""
-).trim();
+const idProduct = String(r?.idProduct || "").trim();
+const idVariant = String(r?.idProductVariant || "").trim();
 
-        const idProduct = String(r?.idProduct || "").trim();
-        const idVariant = String(r?.idProductVariant || "").trim();
-
-        if (!desc) continue;
+if (!idProduct && !idVariant) {
+  skipped++;
+  continue;
+}
 
         // match su Item
 const cicId = idVariant || idProduct;
