@@ -35,7 +35,8 @@ type InventoryLine = {
   note?: string | null;
   counted_by?: string | null;
   counted_at?: string | null;
-  pack_size?: string | number | null;
+  base_qty?: string | number | null;
+  um?: string | null;
 };
 
 type InventorySummary = {
@@ -722,10 +723,10 @@ export default function InventoryPage() {
                       <tr>
                         <th style={styles.th}>SKU</th>
                         <th style={{ ...styles.th, minWidth: 320 }}>Articolo</th>
-                        <th style={styles.th}>Teorico BT</th>
-                        <th style={styles.th}>Contato</th>
-                        <th style={styles.th}>BT contati</th>
-                        <th style={styles.th}>Differenza BT</th>
+ <th style={styles.th}>Teorico</th>
+<th style={styles.th}>Contato</th>
+<th style={styles.th}>Quantità contata</th>
+<th style={styles.th}>Differenza</th>
                         <th style={styles.th}>Valore €</th>
                         <th style={{ ...styles.th, minWidth: 240 }}>Note</th>
                       </tr>
@@ -742,23 +743,23 @@ export default function InventoryPage() {
                         lines.map((line) => {
                           const theoreticalBt = toNumber(line.theoretical_qty_bt);
 
-                          const draftQtyRaw = draftQtyByLineId[line.id] ?? "";
-                          const countedHuman =
-                            draftQtyRaw.trim() === ""
-                              ? null
-                              : toLocaleNumber(draftQtyRaw);
+const draftQtyRaw = draftQtyByLineId[line.id] ?? "";
+const countedHuman =
+  draftQtyRaw.trim() === ""
+    ? null
+    : toLocaleNumber(draftQtyRaw);
 
-                          const packSize = safePackSize(line.pack_size);
-                          const countedBt =
-                            countedHuman === null ? null : countedHuman * packSize;
+const baseQty = safeBaseQty(line.base_qty);
+const countedBt =
+  countedHuman === null ? null : countedHuman * baseQty;
 
-                          const diffBt =
-                            countedBt === null ? null : countedBt - theoreticalBt;
+const diffBt =
+  countedBt === null ? null : countedBt - theoreticalBt;
 
-                          const currentValueCents =
-                            diffBt !== null && line.cost_snapshot !== null
-                              ? diffBt * toNumber(line.cost_snapshot)
-                              : null;
+const currentValueCents =
+  diffBt !== null && line.cost_snapshot !== null
+    ? diffBt * toNumber(line.cost_snapshot)
+    : null;
 
                           const isEditable = editableSession;
                           const isDirty = dirtyLineIds.includes(line.id);
@@ -858,7 +859,7 @@ function toLocaleNumber(v: string) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function safePackSize(v: string | number | null | undefined) {
+function safeBaseQty(v: string | number | null | undefined) {
   const n = Number(v ?? 1);
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
