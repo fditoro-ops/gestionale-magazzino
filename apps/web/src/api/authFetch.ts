@@ -29,6 +29,10 @@ export async function authFetch(
     window.location.href = "/login";
     throw new Error("Sessione scaduta");
   }
+
+  return response;
+}
+
 export async function authDownload(path: string, filename?: string) {
   const token = localStorage.getItem(TOKEN_KEY);
 
@@ -53,7 +57,6 @@ export async function authDownload(path: string, filename?: string) {
     throw new Error(text || "Errore download file");
   }
 
-  // 👇 qui succede la magia
   const blob = await response.blob();
   const url = window.URL.createObjectURL(blob);
 
@@ -66,6 +69,4 @@ export async function authDownload(path: string, filename?: string) {
   a.remove();
 
   window.URL.revokeObjectURL(url);
-}
-  return response;
 }
