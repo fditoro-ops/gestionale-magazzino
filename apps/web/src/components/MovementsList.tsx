@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { authDownload } from "../lib/autofetch";
+import { authDownload } from "../api/authFetch";
 import type { Movement } from "../types/movement";
 
 type ItemLite = {
