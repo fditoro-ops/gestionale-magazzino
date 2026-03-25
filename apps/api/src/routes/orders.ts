@@ -27,6 +27,7 @@ import type { Movement } from "../types/movement.js";
 import { insertManyMovements } from "../data/movements.store.js";
 
 const router = Router();
+const TENANT_ID = "IMP001";
 
 router.get("/_ping", (_req, res) => {
   res.json({ ok: true, route: "/orders/_ping" });
@@ -385,15 +386,17 @@ router.post("/:id/receive", async (req, res) => {
       const qtyBt = await confToBt(r.sku, r.qtyReceivedNowConf);
 
       const mv: Movement = {
-        id: randomUUID(),
-        sku: r.sku,
-        quantity: qtyBt,
-        type: "IN",
-        reason: "RICEZIONE_ORDINE",
-        date: new Date().toISOString(),
-        note: note ? `ORD:${req.params.id} | ${note}` : `ORD:${req.params.id}`,
-      };
-
+  id: randomUUID(),
+  sku: r.sku,
+  quantity: qtyBt,
+  type: "IN",
+  reason: "RICEZIONE_ORDINE",
+  date: new Date().toISOString(),
+  note: note ? `ORD:${req.params.id} | ${note}` : `ORD:${req.params.id}`,
+  documento: `ORD:${req.params.id}`,
+  tenant_id: "IMP001",
+} as Movement;
+      
       newMovements.push(mv);
     }
 
