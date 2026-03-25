@@ -1764,6 +1764,91 @@ app.post("/admin/cic/reprocess-pending", async (_req, res) => {
   }
 });
 
+app.post("/admin/sales/backfill-from-raw", async (_req, res) => {
+  try {
+    const tenantId = String(process.env.TENANT_ID || "IMP001");
+
+    const docsRes = await pool.query(`
+      SELECT document_id, raw_payload
+      FROM sales_documents
+      WHERE tenant_id = $1
+      LIMIT 500
+    `, [tenantId]);
+
+    let updated = 0;
+    let skipped = 0;
+
+    for (const doc of docsRes.rows) {
+      const payload =
+  typeof doc.raw_payload === "string"
+    ? JSON.parse(doc.raw_payload)
+    : doc.raw_payload;
+
+if (!payload?.document?.rows) continue;
+
+      const rows = payload.document.rows;
+
+      for (const r of rows) {
+const desc = String(
+  r?.description ||
+  r?.descriptionReceipt ||
+  r?.name ||
+  ""
+).trim();
+
+        const idProduct = String(r?.idProduct || "").trim();
+        const idVariant = String(r?.idProductVariant || "").trim();
+
+        if (!desc) continue;
+
+        // match su Item
+        const itemRes = await pool.query(
+          `
+          SELECT sku, name
+          FROM "Item"
+          WHERE LOWER(name) LIKE LOWER($1)
+          LIMIT 1
+          `,
+          [`%${desc}%`]
+        );
+
+        if (!itemRes.rows.length) {
+          skipped++;
+          continue;
+        }
+
+        const { sku, name } = itemRes.rows[0];
+
+        // aggiorna sales_lines collegate
+        await pool.query(
+          `
+          UPDATE sales_lines
+          SET sku = $1,
+              description = $2
+          WHERE document_id = $3
+          AND (sku = $4 OR sku = $5)
+          `,
+          [sku, name, doc.document_id, idProduct, idVariant]
+        );
+
+        updated++;
+      }
+    }
+
+    res.json({
+      ok: true,
+      updated,
+      skipped,
+    });
+  } catch (err: any) {
+    console.error("❌ backfill raw error:", err);
+    res.status(500).json({
+      ok: false,
+      error: String(err?.message ?? err),
+    });
+  }
+});
+
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
