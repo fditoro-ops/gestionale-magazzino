@@ -440,15 +440,20 @@ router.get("/sessions/:id", async (req, res) => {
       return res.status(404).json({ ok: false, error: "Sessione non trovata" });
     }
 
-    const l = await pool.query(
-      `
-      SELECT *
-      FROM inventory_lines
-      WHERE session_id = $1
-      ORDER BY sku ASC
-      `,
-      [id]
-    );
+const l = await pool.query(
+  `
+  SELECT
+    l.*,
+    COALESCE(i."baseQty", l.inventory_multiplier, 1) AS base_qty,
+    COALESCE(i.um, 'PZ') AS um
+  FROM inventory_lines l
+  LEFT JOIN "Item" i
+    ON i.sku = l.sku
+  WHERE l.session_id = $1
+  ORDER BY l.sku ASC
+  `,
+  [id]
+);
 
     res.json({
       ok: true,
