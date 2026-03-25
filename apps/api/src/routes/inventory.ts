@@ -584,19 +584,23 @@ router.patch("/lines/:id", async (req, res) => {
       });
     }
 
-    const q = await pool.query(
-      `
-      SELECT
-        l.*,
-        s.status
-      FROM inventory_lines l
-      INNER JOIN inventory_sessions s
-        ON s.id = l.session_id
-      WHERE l.id = $1
-      LIMIT 1
-      `,
-      [id]
-    );
+const q = await pool.query(
+  `
+  SELECT
+    l.*,
+    s.status,
+    COALESCE(i."baseQty", 1) AS base_qty,
+    COALESCE(i.um, 'PZ') AS um
+  FROM inventory_lines l
+  INNER JOIN inventory_sessions s
+    ON s.id = l.session_id
+  LEFT JOIN "Item" i
+    ON i.sku = l.sku
+  WHERE l.id = $1
+  LIMIT 1
+  `,
+  [id]
+);
 
     const row = q.rows[0];
     if (!row) {
@@ -614,9 +618,9 @@ router.patch("/lines/:id", async (req, res) => {
     const costSnapshot =
       row.cost_snapshot !== null ? Number(row.cost_snapshot) : null;
 
-    const baseQtyRaw = Number(row.inventory_multiplier);
-    const baseQty =
-      Number.isFinite(baseQtyRaw) && baseQtyRaw > 0 ? baseQtyRaw : 1;
+  const baseQtyRaw = Number(row.base_qty ?? 1);
+const baseQty =
+  Number.isFinite(baseQtyRaw) && baseQtyRaw > 0 ? baseQtyRaw : 1;
 
     const countedBt = countedInput * baseQty;
     const difference = countedBt - theoretical;
