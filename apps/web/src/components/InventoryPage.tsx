@@ -76,6 +76,7 @@ export default function InventoryPage() {
   const [draftQtyByLineId, setDraftQtyByLineId] = useState<Record<string, string>>({});
   const [draftNoteByLineId, setDraftNoteByLineId] = useState<Record<string, string>>({});
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [focusMode, setFocusMode] = useState(false);
 
   const [newSessionName, setNewSessionName] = useState("Inventario manuale");
   const [newSessionDateTime, setNewSessionDateTime] = useState(
@@ -197,6 +198,11 @@ export default function InventoryPage() {
     }
   }
 
+  async function openSessionInFocus(sessionId: string) {
+    await loadSessionDetail(sessionId);
+    setFocusMode(true);
+  }
+
   async function createSession() {
     try {
       setBusyAction("create");
@@ -230,6 +236,7 @@ export default function InventoryPage() {
 
       if (data.session?.id) {
         await loadSessionDetail(data.session.id);
+        setFocusMode(true);
       }
     } catch (err: any) {
       alert(err.message || "Errore creazione inventario");
@@ -254,6 +261,7 @@ export default function InventoryPage() {
 
       await loadSessions();
       await loadSessionDetail(sessionId);
+      setFocusMode(true);
     } catch (err: any) {
       alert(err.message || "Errore generazione righe");
     } finally {
@@ -388,6 +396,7 @@ export default function InventoryPage() {
         setLines([]);
         setDraftQtyByLineId({});
         setDraftNoteByLineId({});
+        setFocusMode(false);
       }
 
       alert("Inventario eliminato correttamente");
@@ -458,6 +467,8 @@ export default function InventoryPage() {
     loadItems();
   }, []);
 
+  const isFocus = focusMode && !!selectedSession;
+
   return (
     <div style={styles.page}>
       <div style={styles.header}>
@@ -500,124 +511,126 @@ export default function InventoryPage() {
 
       {error && <div style={styles.error}>{error}</div>}
 
-      <div style={styles.layout}>
-        <div style={styles.leftCol}>
-          {loadingSessions ? (
-            <div style={styles.info}>Caricamento inventari...</div>
-          ) : (
-            <div style={styles.tableWrap}>
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={styles.th}>Codice</th>
-                    <th style={styles.th}>Nome</th>
-                    <th style={styles.th}>Stato</th>
-                    <th style={styles.th}>Data inventario</th>
-                    <th style={styles.th}>Azioni</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {sessions.length === 0 ? (
+      <div style={isFocus ? styles.layoutFocus : styles.layout}>
+        {!isFocus && (
+          <div style={styles.leftCol}>
+            {loadingSessions ? (
+              <div style={styles.info}>Caricamento inventari...</div>
+            ) : (
+              <div style={styles.tableWrap}>
+                <table style={styles.table}>
+                  <thead>
                     <tr>
-                      <td style={styles.empty} colSpan={5}>
-                        Nessuna sessione inventario trovata
-                      </td>
+                      <th style={styles.th}>Codice</th>
+                      <th style={styles.th}>Nome</th>
+                      <th style={styles.th}>Stato</th>
+                      <th style={styles.th}>Data inventario</th>
+                      <th style={styles.th}>Azioni</th>
                     </tr>
-                  ) : (
-                    sessions.map((s) => (
-                      <tr
-                        key={s.id}
-                        style={
-                          selectedSessionId === s.id ? styles.selectedRow : undefined
-                        }
-                      >
-                        <td style={styles.td}>{s.code}</td>
-                        <td style={styles.td}>{s.name || "-"}</td>
-                        <td style={styles.td}>
-                          <span style={badgeStyle(s.status)}>{s.status}</span>
-                        </td>
-                        <td style={styles.td}>{formatDateTime(s.effective_at)}</td>
-                        <td style={styles.td}>
-                          <div style={styles.actionWrap}>
-                            <button
-                              style={styles.actionBtn}
-                              onClick={() => loadSessionDetail(s.id)}
-                            >
-                              Apri
-                            </button>
+                  </thead>
 
-                            {s.status === "DRAFT" && (
-                              <button
-                                style={styles.actionBtn}
-                                onClick={() => generateLines(s.id)}
-                                disabled={busyAction === `generate:${s.id}`}
-                              >
-                                Genera righe
-                              </button>
-                            )}
-
-                            {s.status === "COUNTING" && (
-                              <button
-                                style={styles.actionBtn}
-                                onClick={() => closeSession(s.id)}
-                                disabled={busyAction === `close:${s.id}`}
-                              >
-                                Chiudi
-                              </button>
-                            )}
-
-                            {s.status === "CLOSED" && (
-                              <>
-                                <button
-                                  style={styles.actionBtn}
-                                  onClick={() => reopenSession(s.id)}
-                                  disabled={busyAction === `reopen:${s.id}`}
-                                >
-                                  Riapri
-                                </button>
-
-                                <button
-                                  style={styles.successBtn}
-                                  onClick={() => applySession(s.id)}
-                                  disabled={busyAction === `apply:${s.id}`}
-                                >
-                                  Applica
-                                </button>
-                              </>
-                            )}
-
-                            {s.status !== "APPLIED" && s.status !== "CANCELLED" && (
-                              <button
-                                style={styles.dangerBtn}
-                                onClick={() => cancelSession(s.id)}
-                                disabled={busyAction === `cancel:${s.id}`}
-                              >
-                                Annulla
-                              </button>
-                            )}
-
-                            {s.status !== "CANCELLED" && (
-                              <button
-                                style={styles.dangerBtn}
-                                onClick={() => deleteSession(s)}
-                                disabled={busyAction === `delete:${s.id}`}
-                              >
-                                Elimina
-                              </button>
-                            )}
-                          </div>
+                  <tbody>
+                    {sessions.length === 0 ? (
+                      <tr>
+                        <td style={styles.empty} colSpan={5}>
+                          Nessuna sessione inventario trovata
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                    ) : (
+                      sessions.map((s) => (
+                        <tr
+                          key={s.id}
+                          style={
+                            selectedSessionId === s.id ? styles.selectedRow : undefined
+                          }
+                        >
+                          <td style={styles.td}>{s.code}</td>
+                          <td style={styles.td}>{s.name || "-"}</td>
+                          <td style={styles.td}>
+                            <span style={badgeStyle(s.status)}>{s.status}</span>
+                          </td>
+                          <td style={styles.td}>{formatDateTime(s.effective_at)}</td>
+                          <td style={styles.td}>
+                            <div style={styles.actionWrap}>
+                              <button
+                                style={styles.actionBtn}
+                                onClick={() => openSessionInFocus(s.id)}
+                              >
+                                Apri
+                              </button>
 
-        <div style={styles.rightCol}>
+                              {s.status === "DRAFT" && (
+                                <button
+                                  style={styles.actionBtn}
+                                  onClick={() => generateLines(s.id)}
+                                  disabled={busyAction === `generate:${s.id}`}
+                                >
+                                  Genera righe
+                                </button>
+                              )}
+
+                              {s.status === "COUNTING" && (
+                                <button
+                                  style={styles.actionBtn}
+                                  onClick={() => closeSession(s.id)}
+                                  disabled={busyAction === `close:${s.id}`}
+                                >
+                                  Chiudi
+                                </button>
+                              )}
+
+                              {s.status === "CLOSED" && (
+                                <>
+                                  <button
+                                    style={styles.actionBtn}
+                                    onClick={() => reopenSession(s.id)}
+                                    disabled={busyAction === `reopen:${s.id}`}
+                                  >
+                                    Riapri
+                                  </button>
+
+                                  <button
+                                    style={styles.successBtn}
+                                    onClick={() => applySession(s.id)}
+                                    disabled={busyAction === `apply:${s.id}`}
+                                  >
+                                    Applica
+                                  </button>
+                                </>
+                              )}
+
+                              {s.status !== "APPLIED" && s.status !== "CANCELLED" && (
+                                <button
+                                  style={styles.dangerBtn}
+                                  onClick={() => cancelSession(s.id)}
+                                  disabled={busyAction === `cancel:${s.id}`}
+                                >
+                                  Annulla
+                                </button>
+                              )}
+
+                              {s.status !== "CANCELLED" && (
+                                <button
+                                  style={styles.dangerBtn}
+                                  onClick={() => deleteSession(s)}
+                                  disabled={busyAction === `delete:${s.id}`}
+                                >
+                                  Elimina
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={isFocus ? styles.rightColFocus : styles.rightCol}>
           {!selectedSession ? (
             <div style={styles.placeholder}>
               Seleziona un inventario e premi <strong>Apri</strong> per vedere il
@@ -627,6 +640,15 @@ export default function InventoryPage() {
             <div style={styles.detailCard}>
               <div style={styles.detailHeader}>
                 <div>
+                  {isFocus && (
+                    <button
+                      style={styles.backBtn}
+                      onClick={() => setFocusMode(false)}
+                    >
+                      ← Torna alla lista
+                    </button>
+                  )}
+
                   <h3 style={styles.detailTitle}>
                     {selectedSession.code} · {selectedSession.name || "Inventario"}
                   </h3>
@@ -943,12 +965,21 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "start",
   },
 
+  layoutFocus: {
+    display: "block",
+  },
+
   leftCol: {
     minWidth: 0,
   },
 
   rightCol: {
     minWidth: 0,
+  },
+
+  rightColFocus: {
+    minWidth: 0,
+    width: "100%",
   },
 
   primaryBtn: {
@@ -968,6 +999,16 @@ const styles: Record<string, CSSProperties> = {
     padding: "10px 14px",
     cursor: "pointer",
     fontWeight: 600,
+  },
+
+  backBtn: {
+    border: "1px solid #d9e2ec",
+    background: "#fff",
+    borderRadius: 10,
+    padding: "8px 12px",
+    cursor: "pointer",
+    fontWeight: 700,
+    marginBottom: 12,
   },
 
   actionWrap: {
@@ -1097,6 +1138,8 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 14,
     background: "#fff",
     padding: 16,
+    width: "100%",
+    boxSizing: "border-box",
   },
 
   detailHeader: {
