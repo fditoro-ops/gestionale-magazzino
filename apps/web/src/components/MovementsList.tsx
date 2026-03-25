@@ -267,16 +267,16 @@ export default function MovementsList({ movements, items }: Props) {
 
       const recipeGroups = Array.from(recipeMap.values());
 
-const rawDocumentLabel = first.documento ?? first.documentId ?? undefined;
+      const rawDocumentLabel = first.documento ?? first.documentId ?? undefined;
 
-const documentLabel = formatDocumentoLabel(
-  rawDocumentLabel,
-  first.note ?? undefined
-);
+      const documentLabel = formatDocumentoLabel(
+        rawDocumentLabel,
+        first.note ?? undefined
+      );
 
-const title = documentLabel
-  ? `${getEventTypeLabel(firstType)} • ${documentLabel}`
-  : `${getEventTypeLabel(firstType)} • ${formatDateTime(firstDate)}`;
+      const title = documentLabel
+        ? `${getEventTypeLabel(firstType)} • ${documentLabel}`
+        : `${getEventTypeLabel(firstType)} • ${formatDateTime(firstDate)}`;
 
       const subtitleParts = [
         first.source ? `Origine: ${first.source}` : "",
@@ -316,27 +316,27 @@ const title = documentLabel
     setToDate("");
   };
 
-async function handleExportCsv() {
-  try {
-    const params = new URLSearchParams();
+  async function handleExportCsv() {
+    try {
+      const params = new URLSearchParams();
 
-    if (query.trim()) params.set("sku", query.trim());
-    if (eventType !== "ALL") params.set("type", eventType);
-    if (fromDate) params.set("dateFrom", fromDate);
-    if (toDate) params.set("dateTo", toDate);
+      if (query.trim()) params.set("sku", query.trim());
+      if (eventType !== "ALL") params.set("type", eventType);
+      if (fromDate) params.set("dateFrom", fromDate);
+      if (toDate) params.set("dateTo", toDate);
 
-    const qs = params.toString();
+      const qs = params.toString();
 
-    await authDownload(
-      `/movements/export${qs ? `?${qs}` : ""}`,
-      `movimentazioni_${new Date().toISOString().slice(0, 10)}.csv`
-    );
-  } catch (err) {
-    console.error("Errore export CSV:", err);
-    alert("Errore durante l'esportazione CSV");
+      await authDownload(
+        `/movements/export${qs ? `?${qs}` : ""}`,
+        `movimentazioni_${new Date().toISOString().slice(0, 10)}.csv`
+      );
+    } catch (err) {
+      console.error("Errore export CSV:", err);
+      alert("Errore durante l'esportazione CSV");
+    }
   }
-}
-  
+
   const totalRows = filteredMovements.length;
 
   return (
@@ -387,23 +387,24 @@ async function handleExportCsv() {
           </select>
         </div>
 
-<div className="flex items-end gap-2">
-  <button
-    type="button"
-    onClick={clearFilters}
-    className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
-  >
-    Pulisci filtri
-  </button>
+        <div className="flex items-end gap-2">
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
+          >
+            Pulisci filtri
+          </button>
 
-  <button
-    type="button"
-    onClick={handleExportCsv}
-    className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
-  >
-    Esporta CSV
-  </button>
-</div>
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
+          >
+            Esporta CSV
+          </button>
+        </div>
+
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">
             Data da
