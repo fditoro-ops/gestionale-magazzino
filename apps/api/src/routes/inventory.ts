@@ -46,8 +46,8 @@ function toNum(v: unknown): number | null {
  *   viene mantenuta temporaneamente, ma contiene baseQty
  */
 async function buildGiacenzeAsOf(effectiveAt: string) {
-  const movementsQ = await pool.query(
-    `
+const movementsQ = await pool.query(
+  `
     SELECT
       sku,
       quantity,
@@ -55,14 +55,14 @@ async function buildGiacenzeAsOf(effectiveAt: string) {
       date,
       id
     FROM movements
-    WHERE tenant_id = $1
+    WHERE (tenant_id = $1 OR tenant_id IS NULL)
       AND date <= $2
       AND sku IS NOT NULL
       AND sku <> ''
     ORDER BY sku ASC, date ASC, id ASC
     `,
-    [TENANT_ID, effectiveAt]
-  );
+  [TENANT_ID, effectiveAt]
+);
 
   const itemsQ = await pool.query(
     `
