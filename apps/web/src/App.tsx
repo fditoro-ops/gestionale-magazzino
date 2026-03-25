@@ -21,6 +21,7 @@ import UsersPage from "./components/UsersPage";
 import InventoryPage from "./components/InventoryPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import CashClosurePage from "./pages/CashClosurePage";
+import RecipesPage from "./components/RecipesPage";
 
 type WarehouseRow = {
   itemId: string;
@@ -196,6 +197,8 @@ const warehouseRowsEnriched = useMemo(() => {
           {tab === "cashClosure" && <CashClosurePage />}
 
           {tab === "inventory" && <InventoryPage />}
+
+          {tab === "recipes" && <RecipesPage />}
 
           {tab === "orders" && (
             <OrdersPage
