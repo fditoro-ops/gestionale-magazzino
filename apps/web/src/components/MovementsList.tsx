@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { authDownload } from "../lib/autofetch";
 import type { Movement } from "../types/movement";
 
 type ItemLite = {
@@ -315,6 +316,27 @@ const title = documentLabel
     setToDate("");
   };
 
+async function handleExportCsv() {
+  try {
+    const params = new URLSearchParams();
+
+    if (query.trim()) params.set("sku", query.trim());
+    if (eventType !== "ALL") params.set("type", eventType);
+    if (fromDate) params.set("dateFrom", fromDate);
+    if (toDate) params.set("dateTo", toDate);
+
+    const qs = params.toString();
+
+    await authDownload(
+      `/movements/export${qs ? `?${qs}` : ""}`,
+      `movimentazioni_${new Date().toISOString().slice(0, 10)}.csv`
+    );
+  } catch (err) {
+    console.error("Errore export CSV:", err);
+    alert("Errore durante l'esportazione CSV");
+  }
+}
+  
   const totalRows = filteredMovements.length;
 
   return (
@@ -365,16 +387,23 @@ const title = documentLabel
           </select>
         </div>
 
-        <div className="flex items-end">
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
-          >
-            Pulisci filtri
-          </button>
-        </div>
+<div className="flex items-end gap-2">
+  <button
+    type="button"
+    onClick={clearFilters}
+    className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
+  >
+    Pulisci filtri
+  </button>
 
+  <button
+    type="button"
+    onClick={handleExportCsv}
+    className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
+  >
+    Esporta CSV
+  </button>
+</div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">
             Data da
