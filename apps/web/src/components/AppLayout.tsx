@@ -6,11 +6,12 @@ export type TabKey =
   | "movements"
   | "warehouse"
   | "items"
-  | "inventory"
-  | "cashClosure"
+  | "recipes"
   | "orders"
   | "suppliers"
-  | "users";
+  | "inventory"
+  | "users"
+  | "cashClosure";
 
 export default function AppLayout({
   tab,
