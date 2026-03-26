@@ -1014,6 +1014,14 @@ app.get("/debug/cic-products-full", async (_req, res) => {
   }
 });
 
+app.get("/debug/recipes-db", (_req, res) => {
+  const bom = getRecipesDbCache();
+  res.json({
+    count: Object.keys(bom).length,
+    sample: Object.entries(bom).slice(0, 5),
+  });
+});
+
 app.get("/debug/cic-products-export-sheet", async (_req, res) => {
   try {
     const rows = await fetchAllCicProducts();
