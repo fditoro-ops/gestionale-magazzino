@@ -36,6 +36,7 @@ import {
   getRecipesDbCache,
 } from "./services/recipesDb.service.js";
 import { cicResolveSku, cicExtractItems } from "./services/cicMapping.service.js";
+import dashboardRouter from "./routes/dashboard.router.js";
 
 
 /* =========================
@@ -1596,6 +1597,7 @@ app.use("/inventory", inventoryRouter);
 app.use("/recipes", recipesRouter);
 app.use("/cash-closures", cashClosuresRouter);
 app.use("/webhooks/cic", webhooksCicRouter);
+app.use("/dashboard", dashboardRouter);
 
 app.get("/dashboard/sales", async (req, res) => {
   try {
