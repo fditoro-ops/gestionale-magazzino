@@ -9,7 +9,7 @@ import {
   cicExtractItems,
   syncCicProducts,
   getItemNameBySku,
-  getBomCache,
+  getActiveBom,
   getCicProductModesCache,
   getLastEmergencySyncMs,
   setLastEmergencySyncMs,
@@ -206,7 +206,7 @@ export async function processCicWebhook(req: any, res: any) {
       items = cicExtractItems(data);
     }
 
-    const bom = getBomCache();
+   const bom = getActiveBom();
     const cicProductModeCache = getCicProductModesCache();
 
     const cicModesBySku = Object.fromEntries(
