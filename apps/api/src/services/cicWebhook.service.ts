@@ -1,9 +1,9 @@
 import crypto from "crypto";
-import { appendCicWebhookDump } from "../data/cicWebhookDump.store";
-import { upsertUnresolved } from "../data/cicUnresolved.store";
-import { upsertPendingRow } from "../data/cicPendingRows.store";
-import { saveSalesDocumentWithLines } from "../data/sales.store";
-import { applyRecipeStock } from "./recipeStock.service";
+import { appendCicWebhookDump } from "../data/cicWebhookDump.store.js";
+import { upsertUnresolved } from "../data/cicUnresolved.store.js";
+import { upsertPendingRow } from "../data/cicPendingRows.store.js";
+import { saveSalesDocumentWithLines } from "../data/sales.store.js";
+import { applyRecipeStock } from "./recipeStock.service.js";
 
 import {
   cicExtractItems,
@@ -13,7 +13,7 @@ import {
   getCicProductModesCache,
   getLastEmergencySyncMs,
   setLastEmergencySyncMs,
-} from "../server";
+} from "../server.js";
 
 const CIC_WEBHOOK_SECRET = process.env.CIC_WEBHOOK_SECRET || "";
 
@@ -197,7 +197,7 @@ export async function processCicWebhook(req: any, res: any) {
       0
     );
 
-    const hasUnresolved = items.some((it) => String(it.sku).includes("-"));
+    const hasUnresolved = items.some((it: any) => String(it.sku).includes("-"));
 
     if (hasUnresolved && Date.now() - getLastEmergencySyncMs() > 60_000) {
       console.log("ℹ️ CIC: trovati ID non risolti, provo sync prodotti…");
@@ -210,11 +210,11 @@ export async function processCicWebhook(req: any, res: any) {
     const cicProductModeCache = getCicProductModesCache();
 
     const cicModesBySku = Object.fromEntries(
-      Object.entries(cicProductModeCache).map(([_, v]) => [v.sku, v.mode])
+      Object.entries(cicProductModeCache).map(([_, v]: [string, any]) => [v.sku, v.mode])
     ) as Record<string, "RECIPE" | "IGNORE">;
 
     const salesLinesToSave = await Promise.all(
-      items.map(async (it, idx) => {
+      items.map(async (it: any, idx: number) => {
         const sku = String(it.sku || "").trim();
 
         const rawRow = rawRows.find((r: any) => {
@@ -230,7 +230,7 @@ export async function processCicWebhook(req: any, res: any) {
         const resolvedOk = Boolean(sku) && !sku.includes("-");
         const mode = resolvedOk ? cicModesBySku[sku] || "" : "";
         const hasRecipe =
-          resolvedOk && Array.isArray(bom[sku]) && bom[sku].length > 0;
+          resolvedOk && Array.isArray((bom as any)[sku]) && (bom as any)[sku].length > 0;
 
         let description = String(
           rawRow?.description ||
@@ -297,7 +297,7 @@ export async function processCicWebhook(req: any, res: any) {
     for (const it of items) {
       const sku = String(it.sku || "").trim();
       const mode = cicModesBySku[sku];
-      const hasRecipe = Array.isArray(bom[sku]) && bom[sku].length > 0;
+      const hasRecipe = Array.isArray((bom as any)[sku]) && (bom as any)[sku].length > 0;
 
       const rawRow = rawRows.find((r: any) => {
         const rowVariant = String(r?.idProductVariant ?? "").trim();
