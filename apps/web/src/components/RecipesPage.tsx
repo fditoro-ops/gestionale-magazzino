@@ -57,6 +57,7 @@ const colors = {
   selectedBorder: "#87EAF2",
   primary: "#0B7285",
   dangerText: "#B91C1C",
+  dangerSoft: "#FEE2E2",
   successSoft: "#D1FAE5",
   successText: "#065F46",
   warningSoft: "#FEF3C7",
@@ -105,6 +106,16 @@ const secondaryButtonStyle: React.CSSProperties = {
   border: `1px solid ${colors.borderStrong}`,
   background: "#FFFFFF",
   color: colors.text,
+  padding: "10px 14px",
+  cursor: "pointer",
+  fontWeight: 700,
+};
+
+const dangerButtonStyle: React.CSSProperties = {
+  borderRadius: 12,
+  border: "1px solid #FCA5A5",
+  background: "#FFFFFF",
+  color: colors.dangerText,
   padding: "10px 14px",
   cursor: "pointer",
   fontWeight: 700,
@@ -279,12 +290,22 @@ export default function RecipesPage() {
   const [newRecipeSellingPrice, setNewRecipeSellingPrice] = useState("");
   const [creatingRecipe, setCreatingRecipe] = useState(false);
 
+  const [editingRecipeName, setEditingRecipeName] = useState("");
+  const [editingRecipeSellingPrice, setEditingRecipeSellingPrice] = useState("");
+  const [savingRecipe, setSavingRecipe] = useState(false);
+
   const [ingredientQuery, setIngredientQuery] = useState("");
   const [selectedIngredientItem, setSelectedIngredientItem] = useState<Item | null>(null);
   const [newIngredientQty, setNewIngredientQty] = useState("");
   const [addingIngredient, setAddingIngredient] = useState(false);
 
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  const [ingredientDrafts, setIngredientDrafts] = useState<
+    Record<string, { ingredient_name_snapshot: string; quantity: string }>
+  >({});
+  const [savingIngredientId, setSavingIngredientId] = useState("");
+  const [deletingIngredientId, setDeletingIngredientId] = useState("");
 
   const activeItems = useMemo(
     () => items.filter((it) => it.active !== false),
@@ -353,10 +374,24 @@ export default function RecipesPage() {
         throw new Error(json.error || "Errore caricamento ingredienti");
       }
 
-      setIngredients(Array.isArray(json.data) ? json.data : []);
+      const rows = Array.isArray(json.data) ? json.data : [];
+      setIngredients(rows);
+
+      const drafts: Record<
+        string,
+        { ingredient_name_snapshot: string; quantity: string }
+      > = {};
+      for (const ing of rows) {
+        drafts[ing.id] = {
+          ingredient_name_snapshot: ing.ingredient_name_snapshot || "",
+          quantity: String(normalizeNum(ing.quantity)),
+        };
+      }
+      setIngredientDrafts(drafts);
     } catch (err: any) {
       setIngredientsError(String(err?.message || err));
       setIngredients([]);
+      setIngredientDrafts({});
     } finally {
       setLoadingIngredients(false);
     }
@@ -369,8 +404,23 @@ export default function RecipesPage() {
 
   useEffect(() => {
     if (selectedRecipeId) loadIngredients(selectedRecipeId);
-    else setIngredients([]);
+    else {
+      setIngredients([]);
+      setIngredientDrafts({});
+    }
   }, [selectedRecipeId]);
+
+  useEffect(() => {
+    if (selectedRecipe) {
+      setEditingRecipeName(selectedRecipe.name || "");
+      setEditingRecipeSellingPrice(
+        selectedRecipe.selling_price == null ? "" : String(selectedRecipe.selling_price)
+      );
+    } else {
+      setEditingRecipeName("");
+      setEditingRecipeSellingPrice("");
+    }
+  }, [selectedRecipe]);
 
   function handlePickProduct(item: Item) {
     setSelectedProduct(item);
@@ -434,6 +484,52 @@ export default function RecipesPage() {
       alert(String(err?.message || err));
     } finally {
       setCreatingRecipe(false);
+    }
+  }
+
+  async function handleSaveRecipe() {
+    if (!selectedRecipe) return;
+
+    const name = editingRecipeName.trim();
+    const price =
+      editingRecipeSellingPrice.trim() === ""
+        ? null
+        : Number(editingRecipeSellingPrice.replace(",", "."));
+
+    if (!name) {
+      alert("Il nome ricetta è obbligatorio.");
+      return;
+    }
+
+    if (price != null && (!Number.isFinite(price) || price < 0)) {
+      alert("Prezzo vendita non valido.");
+      return;
+    }
+
+    setSavingRecipe(true);
+
+    try {
+      const res = await authFetch(`/recipes/${selectedRecipe.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name,
+          selling_price: price,
+        }),
+      });
+
+      const json: ApiResponse<Recipe> = await res.json();
+
+      if (!res.ok || json.ok === false || !json.data) {
+        throw new Error(json.error || "Errore salvataggio ricetta");
+      }
+
+      setRecipes((prev) =>
+        prev.map((r) => (r.id === selectedRecipe.id ? json.data! : r))
+      );
+    } catch (err: any) {
+      alert(String(err?.message || err));
+    } finally {
+      setSavingRecipe(false);
     }
   }
 
@@ -514,6 +610,94 @@ export default function RecipesPage() {
       alert(String(err?.message || err));
     } finally {
       setAddingIngredient(false);
+    }
+  }
+
+  function updateIngredientDraft(
+    ingredientId: string,
+    patch: Partial<{ ingredient_name_snapshot: string; quantity: string }>
+  ) {
+    setIngredientDrafts((prev) => ({
+      ...prev,
+      [ingredientId]: {
+        ingredient_name_snapshot:
+          patch.ingredient_name_snapshot ??
+          prev[ingredientId]?.ingredient_name_snapshot ??
+          "",
+        quantity: patch.quantity ?? prev[ingredientId]?.quantity ?? "",
+      },
+    }));
+  }
+
+  async function handleSaveIngredient(ing: RecipeIngredient) {
+    if (!selectedRecipe) return;
+
+    const draft = ingredientDrafts[ing.id];
+    const qty = Number(String(draft?.quantity || "").replace(",", "."));
+
+    if (!Number.isFinite(qty) || qty <= 0) {
+      alert("Quantità ingrediente non valida.");
+      return;
+    }
+
+    setSavingIngredientId(ing.id);
+
+    try {
+      const res = await authFetch(
+        `/recipes/${selectedRecipe.id}/ingredients/${ing.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            ingredient_name_snapshot:
+              (draft?.ingredient_name_snapshot || "").trim() || null,
+            quantity: qty,
+          }),
+        }
+      );
+
+      const json: ApiResponse<RecipeIngredient> = await res.json();
+
+      if (!res.ok || json.ok === false || !json.data) {
+        throw new Error(json.error || "Errore salvataggio ingrediente");
+      }
+
+      await loadIngredients(selectedRecipe.id);
+    } catch (err: any) {
+      alert(String(err?.message || err));
+    } finally {
+      setSavingIngredientId("");
+    }
+  }
+
+  async function handleDeleteIngredient(ing: RecipeIngredient) {
+    if (!selectedRecipe) return;
+
+    const confirmed = window.confirm(
+      `Eliminare l'ingrediente ${ing.ingredient_name_snapshot || ing.ingredient_sku}?`
+    );
+    if (!confirmed) return;
+
+    setDeletingIngredientId(ing.id);
+
+    try {
+      const res = await authFetch(
+        `/recipes/${selectedRecipe.id}/ingredients/${ing.id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const json = await res.json();
+
+      if (!res.ok || json.ok === false) {
+        throw new Error(json.error || "Errore eliminazione ingrediente");
+      }
+
+      await loadIngredients(selectedRecipe.id);
+    } catch (err: any) {
+      alert(String(err?.message || err));
+    } finally {
+      setDeletingIngredientId("");
     }
   }
 
@@ -707,17 +891,53 @@ export default function RecipesPage() {
                     marginBottom: 14,
                   }}
                 >
-                  <div>
-                    <div style={{ fontSize: 26, fontWeight: 800 }}>{selectedRecipe.name}</div>
-                    <div style={{ color: colors.textSoft, marginTop: 6 }}>
-                      SKU prodotto: <strong style={{ color: colors.text }}>{selectedRecipe.product_sku}</strong>
-                    </div>
-                    <div style={{ color: colors.textSoft, marginTop: 6 }}>
-                      Prezzo base: <strong style={{ color: colors.text }}>€ {normalizeMoney(selectedRecipe.selling_price)}</strong>
-                    </div>
-                    <div style={{ color: colors.textMuted, fontSize: 12, marginTop: 6 }}>
+                  <div style={{ minWidth: 300, flex: 1 }}>
+                    <div style={labelStyle}>SKU prodotto</div>
+                    <input
+                      style={readonlyStyle}
+                      value={selectedRecipe.product_sku}
+                      readOnly
+                    />
+
+                    <div style={{ height: 10 }} />
+
+                    <div style={labelStyle}>Nome ricetta</div>
+                    <input
+                      style={inputStyle}
+                      value={editingRecipeName}
+                      onChange={(e) => setEditingRecipeName(e.target.value)}
+                    />
+
+                    <div style={{ height: 10 }} />
+
+                    <div style={labelStyle}>Prezzo base</div>
+                    <input
+                      style={inputStyle}
+                      value={editingRecipeSellingPrice}
+                      onChange={(e) => setEditingRecipeSellingPrice(e.target.value)}
+                      placeholder="Es. 10,00"
+                      inputMode="decimal"
+                    />
+
+                    <div
+                      style={{
+                        color: colors.textMuted,
+                        fontSize: 12,
+                        marginTop: 10,
+                      }}
+                    >
                       Creata: {formatDate(selectedRecipe.created_at)} | Aggiornata:{" "}
                       {formatDate(selectedRecipe.updated_at)}
+                    </div>
+
+                    <div style={{ marginTop: 12 }}>
+                      <button
+                        style={buttonStyle}
+                        onClick={handleSaveRecipe}
+                        disabled={savingRecipe}
+                      >
+                        {savingRecipe ? "Salvataggio..." : "Salva ricetta"}
+                      </button>
                     </div>
                   </div>
 
@@ -869,18 +1089,65 @@ export default function RecipesPage() {
                       <th style={thStyleRight}>Q.tà</th>
                       <th style={thStyle}>UM</th>
                       <th style={thStyle}>Aggiornato</th>
+                      <th style={thStyle}>Azioni</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {ingredients.map((ing) => (
-                      <tr key={ing.id}>
-                        <td style={tdStyle}>{ing.ingredient_sku}</td>
-                        <td style={tdStyle}>{ing.ingredient_name_snapshot || "—"}</td>
-                        <td style={tdStyleRight}>{normalizeNum(ing.quantity)}</td>
-                        <td style={tdStyle}>{ing.um}</td>
-                        <td style={tdStyle}>{formatDate(ing.updated_at)}</td>
-                      </tr>
-                    ))}
+                    {ingredients.map((ing) => {
+                      const draft = ingredientDrafts[ing.id] || {
+                        ingredient_name_snapshot: ing.ingredient_name_snapshot || "",
+                        quantity: String(normalizeNum(ing.quantity)),
+                      };
+
+                      return (
+                        <tr key={ing.id}>
+                          <td style={tdStyle}>{ing.ingredient_sku}</td>
+                          <td style={tdStyle}>
+                            <input
+                              style={inputStyle}
+                              value={draft.ingredient_name_snapshot}
+                              onChange={(e) =>
+                                updateIngredientDraft(ing.id, {
+                                  ingredient_name_snapshot: e.target.value,
+                                })
+                              }
+                            />
+                          </td>
+                          <td style={tdStyleRight}>
+                            <input
+                              style={{ ...inputStyle, textAlign: "right" }}
+                              value={draft.quantity}
+                              onChange={(e) =>
+                                updateIngredientDraft(ing.id, {
+                                  quantity: e.target.value,
+                                })
+                              }
+                              inputMode="decimal"
+                            />
+                          </td>
+                          <td style={tdStyle}>{ing.um}</td>
+                          <td style={tdStyle}>{formatDate(ing.updated_at)}</td>
+                          <td style={tdStyle}>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button
+                                style={secondaryButtonStyle}
+                                onClick={() => handleSaveIngredient(ing)}
+                                disabled={savingIngredientId === ing.id}
+                              >
+                                {savingIngredientId === ing.id ? "Salvo..." : "Salva"}
+                              </button>
+                              <button
+                                style={dangerButtonStyle}
+                                onClick={() => handleDeleteIngredient(ing)}
+                                disabled={deletingIngredientId === ing.id}
+                              >
+                                {deletingIngredientId === ing.id ? "Elimino..." : "Elimina"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -918,6 +1185,7 @@ const tdStyle: React.CSSProperties = {
   borderBottom: `1px solid ${colors.border}`,
   fontSize: 14,
   color: colors.text,
+  verticalAlign: "middle",
 };
 
 const tdStyleRight: React.CSSProperties = {
