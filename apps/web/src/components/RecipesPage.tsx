@@ -34,24 +34,45 @@ type ApiResponse<T> = {
   error?: string;
 };
 
+const colors = {
+  text: "#102A43",
+  textSoft: "#486581",
+  textMuted: "#7B8794",
+  border: "#D9E2EC",
+  borderStrong: "#BCCCDC",
+  panel: "#FFFFFF",
+  panelAlt: "#F8FBFC",
+  selected: "#E6FFFB",
+  selectedBorder: "#87EAF2",
+  primary: "#0B7285",
+  primaryHover: "#095C6B",
+  dangerSoft: "#FEE2E2",
+  dangerText: "#B91C1C",
+  successSoft: "#D1FAE5",
+  successText: "#065F46",
+  warningSoft: "#FEF3C7",
+  warningText: "#92400E",
+  inactiveSoft: "#E5E7EB",
+  inactiveText: "#374151",
+};
+
 const panelStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.10)",
+  background: colors.panel,
+  border: `1px solid ${colors.border}`,
   borderRadius: 18,
   padding: 16,
-  backdropFilter: "blur(12px)",
-  WebkitBackdropFilter: "blur(12px)",
-  boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+  boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
 };
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
   borderRadius: 12,
-  border: "1px solid #D9E2EC",
-  background: "white",
-  color: "#102A43",
+  border: `1px solid ${colors.border}`,
+  background: "#FFFFFF",
+  color: colors.text,
   padding: "10px 12px",
   outline: "none",
+  boxSizing: "border-box",
 };
 
 const selectStyle: React.CSSProperties = {
@@ -61,8 +82,8 @@ const selectStyle: React.CSSProperties = {
 
 const buttonStyle: React.CSSProperties = {
   borderRadius: 12,
-  border: "1px solid #BCCCDC",
-  background: "#0B7285",
+  border: `1px solid ${colors.primary}`,
+  background: colors.primary,
   color: "white",
   padding: "10px 14px",
   cursor: "pointer",
@@ -70,9 +91,13 @@ const buttonStyle: React.CSSProperties = {
 };
 
 const secondaryButtonStyle: React.CSSProperties = {
-  ...buttonStyle,
-  background: "white",
-  color: "#243B53",
+  borderRadius: 12,
+  border: `1px solid ${colors.borderStrong}`,
+  background: "#FFFFFF",
+  color: colors.text,
+  padding: "10px 14px",
+  cursor: "pointer",
+  fontWeight: 700,
 };
 
 function formatDate(value?: string | null) {
@@ -93,11 +118,11 @@ function statusBadgeStyle(status: RecipeStatus): React.CSSProperties {
     return {
       padding: "4px 10px",
       borderRadius: 999,
-      background: "rgba(52, 211, 153, 0.18)",
-      color: "#a7f3d0",
+      background: colors.successSoft,
+      color: colors.successText,
       fontSize: 12,
       fontWeight: 700,
-      border: "1px solid rgba(52,211,153,0.30)",
+      border: "1px solid rgba(16,185,129,0.22)",
       display: "inline-block",
     };
   }
@@ -106,11 +131,11 @@ function statusBadgeStyle(status: RecipeStatus): React.CSSProperties {
     return {
       padding: "4px 10px",
       borderRadius: 999,
-      background: "rgba(248, 113, 113, 0.16)",
-      color: "#fecaca",
+      background: colors.inactiveSoft,
+      color: colors.inactiveText,
       fontSize: 12,
       fontWeight: 700,
-      border: "1px solid rgba(248,113,113,0.28)",
+      border: "1px solid rgba(107,114,128,0.18)",
       display: "inline-block",
     };
   }
@@ -118,11 +143,11 @@ function statusBadgeStyle(status: RecipeStatus): React.CSSProperties {
   return {
     padding: "4px 10px",
     borderRadius: 999,
-    background: "rgba(250, 204, 21, 0.14)",
-    color: "#fde68a",
+    background: colors.warningSoft,
+    color: colors.warningText,
     fontSize: 12,
     fontWeight: 700,
-    border: "1px solid rgba(250,204,21,0.24)",
+    border: "1px solid rgba(245,158,11,0.20)",
     display: "inline-block",
   };
 }
@@ -343,7 +368,7 @@ export default function RecipesPage() {
   const ingredientCount = ingredients.length;
 
   return (
-    <div style={{ padding: 20, color: "#102A43" }}>
+    <div style={{ padding: 20, color: colors.text }}>
       <div
         style={{
           display: "flex",
@@ -355,8 +380,10 @@ export default function RecipesPage() {
         }}
       >
         <div>
-          <div style={{ fontSize: 28, fontWeight: 800 }}>Ricettario</div>
-          <div style={{ opacity: 0.72, marginTop: 4 }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: colors.text }}>
+            Ricettario
+          </div>
+          <div style={{ color: colors.textSoft, marginTop: 4 }}>
             Gestione ricette, ingredienti e stato operativo.
           </div>
         </div>
@@ -370,18 +397,22 @@ export default function RecipesPage() {
           alignItems: "start",
         }}
       >
-        {/* COLONNA SINISTRA */}
         <div style={{ display: "grid", gap: 16 }}>
           <div style={panelStyle}>
-            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                marginBottom: 12,
+                color: colors.text,
+              }}
+            >
               Nuova ricetta
             </div>
 
             <div style={{ display: "grid", gap: 10 }}>
               <div>
-                <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
-                  SKU prodotto
-                </div>
+                <div style={labelStyle}>SKU prodotto</div>
                 <input
                   style={inputStyle}
                   value={newRecipeSku}
@@ -391,9 +422,7 @@ export default function RecipesPage() {
               </div>
 
               <div>
-                <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
-                  Nome ricetta
-                </div>
+                <div style={labelStyle}>Nome ricetta</div>
                 <input
                   style={inputStyle}
                   value={newRecipeName}
@@ -421,7 +450,11 @@ export default function RecipesPage() {
                 marginBottom: 12,
               }}
             >
-              <div style={{ fontSize: 18, fontWeight: 700 }}>Ricette</div>
+              <div
+                style={{ fontSize: 18, fontWeight: 700, color: colors.text }}
+              >
+                Ricette
+              </div>
               <button
                 style={secondaryButtonStyle}
                 onClick={loadRecipes}
@@ -432,11 +465,13 @@ export default function RecipesPage() {
             </div>
 
             {recipesError ? (
-              <div style={{ color: "#fecaca" }}>{recipesError}</div>
+              <div style={{ color: colors.dangerText }}>{recipesError}</div>
             ) : null}
 
             {!loadingRecipes && recipes.length === 0 ? (
-              <div style={{ opacity: 0.7 }}>Nessuna ricetta presente.</div>
+              <div style={{ color: colors.textSoft }}>
+                Nessuna ricetta presente.
+              </div>
             ) : null}
 
             <div style={{ display: "grid", gap: 10 }}>
@@ -452,13 +487,11 @@ export default function RecipesPage() {
                       borderRadius: 14,
                       padding: 12,
                       cursor: "pointer",
-                     color: "#102A43",
+                      color: colors.text,
                       border: selected
-                        ? "1px solid rgba(255,255,255,0.22)"
-                        : "1px solid rgba(255,255,255,0.08)",
-                      background: selected
-                        ? "rgba(255,255,255,0.12)"
-                        : "rgba(255,255,255,0.04)",
+                        ? `1px solid ${colors.selectedBorder}`
+                        : `1px solid ${colors.border}`,
+                      background: selected ? colors.selected : colors.panelAlt,
                     }}
                   >
                     <div
@@ -471,7 +504,13 @@ export default function RecipesPage() {
                     >
                       <div>
                         <div style={{ fontWeight: 700 }}>{recipe.name}</div>
-                        <div style={{ fontSize: 12, opacity: 0.72, marginTop: 4 }}>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: colors.textSoft,
+                            marginTop: 4,
+                          }}
+                        >
                           {recipe.product_sku}
                         </div>
                       </div>
@@ -487,11 +526,10 @@ export default function RecipesPage() {
           </div>
         </div>
 
-        {/* COLONNA DESTRA */}
         <div style={{ display: "grid", gap: 16 }}>
           <div style={panelStyle}>
             {!selectedRecipe ? (
-              <div style={{ opacity: 0.7 }}>
+              <div style={{ color: colors.textSoft }}>
                 Seleziona una ricetta per vedere il dettaglio.
               </div>
             ) : (
@@ -507,13 +545,28 @@ export default function RecipesPage() {
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: 26, fontWeight: 800 }}>
+                    <div
+                      style={{
+                        fontSize: 26,
+                        fontWeight: 800,
+                        color: colors.text,
+                      }}
+                    >
                       {selectedRecipe.name}
                     </div>
-                    <div style={{ opacity: 0.72, marginTop: 6 }}>
-                      SKU prodotto: <strong>{selectedRecipe.product_sku}</strong>
+                    <div style={{ color: colors.textSoft, marginTop: 6 }}>
+                      SKU prodotto:{" "}
+                      <strong style={{ color: colors.text }}>
+                        {selectedRecipe.product_sku}
+                      </strong>
                     </div>
-                    <div style={{ opacity: 0.56, fontSize: 12, marginTop: 6 }}>
+                    <div
+                      style={{
+                        color: colors.textMuted,
+                        fontSize: 12,
+                        marginTop: 6,
+                      }}
+                    >
                       Creata: {formatDate(selectedRecipe.created_at)} | Aggiornata:{" "}
                       {formatDate(selectedRecipe.updated_at)}
                     </div>
@@ -536,7 +589,9 @@ export default function RecipesPage() {
                     </button>
                     <button
                       style={secondaryButtonStyle}
-                      disabled={updatingStatus || selectedRecipe.status === "INACTIVE"}
+                      disabled={
+                        updatingStatus || selectedRecipe.status === "INACTIVE"
+                      }
                       onClick={() => handleChangeStatus("INACTIVE")}
                     >
                       INACTIVE
@@ -548,7 +603,7 @@ export default function RecipesPage() {
                   <div style={statusBadgeStyle(selectedRecipe.status)}>
                     {selectedRecipe.status}
                   </div>
-                  <div style={{ opacity: 0.72 }}>
+                  <div style={{ color: colors.textSoft }}>
                     Ingredienti presenti: <strong>{ingredientCount}</strong>
                   </div>
                 </div>
@@ -557,12 +612,19 @@ export default function RecipesPage() {
           </div>
 
           <div style={panelStyle}>
-            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                marginBottom: 12,
+                color: colors.text,
+              }}
+            >
               Aggiungi ingrediente
             </div>
 
             {!selectedRecipe ? (
-              <div style={{ opacity: 0.7 }}>
+              <div style={{ color: colors.textSoft }}>
                 Seleziona prima una ricetta dalla colonna sinistra.
               </div>
             ) : (
@@ -575,9 +637,7 @@ export default function RecipesPage() {
                 }}
               >
                 <div>
-                  <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
-                    SKU ingrediente
-                  </div>
+                  <div style={labelStyle}>SKU ingrediente</div>
                   <input
                     style={inputStyle}
                     value={newIngredientSku}
@@ -587,9 +647,7 @@ export default function RecipesPage() {
                 </div>
 
                 <div>
-                  <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
-                    Nome snapshot
-                  </div>
+                  <div style={labelStyle}>Nome snapshot</div>
                   <input
                     style={inputStyle}
                     value={newIngredientName}
@@ -599,9 +657,7 @@ export default function RecipesPage() {
                 </div>
 
                 <div>
-                  <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
-                    Quantità
-                  </div>
+                  <div style={labelStyle}>Quantità</div>
                   <input
                     style={inputStyle}
                     value={newIngredientQty}
@@ -612,9 +668,7 @@ export default function RecipesPage() {
                 </div>
 
                 <div>
-                  <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
-                    UM
-                  </div>
+                  <div style={labelStyle}>UM</div>
                   <select
                     style={selectStyle}
                     value={newIngredientUm}
@@ -650,7 +704,9 @@ export default function RecipesPage() {
                 marginBottom: 12,
               }}
             >
-              <div style={{ fontSize: 18, fontWeight: 700 }}>
+              <div
+                style={{ fontSize: 18, fontWeight: 700, color: colors.text }}
+              >
                 Ingredienti ricetta
               </div>
 
@@ -666,26 +722,30 @@ export default function RecipesPage() {
             </div>
 
             {ingredientsError ? (
-              <div style={{ color: "#fecaca", marginBottom: 10 }}>
+              <div style={{ color: colors.dangerText, marginBottom: 10 }}>
                 {ingredientsError}
               </div>
             ) : null}
 
             {!selectedRecipe ? (
-              <div style={{ opacity: 0.7 }}>
+              <div style={{ color: colors.textSoft }}>
                 Seleziona una ricetta per vedere gli ingredienti.
               </div>
             ) : loadingIngredients ? (
-              <div style={{ opacity: 0.7 }}>Caricamento ingredienti...</div>
+              <div style={{ color: colors.textSoft }}>
+                Caricamento ingredienti...
+              </div>
             ) : ingredients.length === 0 ? (
-              <div style={{ opacity: 0.7 }}>Nessun ingrediente inserito.</div>
+              <div style={{ color: colors.textSoft }}>
+                Nessun ingrediente inserito.
+              </div>
             ) : (
               <div style={{ overflowX: "auto" }}>
                 <table
                   style={{
                     width: "100%",
                     borderCollapse: "collapse",
-                    color: "#102A43",
+                    color: colors.text,
                   }}
                 >
                   <thead>
@@ -724,13 +784,19 @@ export default function RecipesPage() {
   );
 }
 
+const labelStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: colors.textSoft,
+  marginBottom: 6,
+};
+
 const thStyle: React.CSSProperties = {
   textAlign: "left",
   fontSize: 12,
-  opacity: 0.7,
+  color: colors.textSoft,
   fontWeight: 700,
   padding: "10px 8px",
-  borderBottom: "1px solid rgba(255,255,255,0.10)",
+  borderBottom: `1px solid ${colors.border}`,
   whiteSpace: "nowrap",
 };
 
@@ -741,8 +807,9 @@ const thStyleRight: React.CSSProperties = {
 
 const tdStyle: React.CSSProperties = {
   padding: "12px 8px",
-  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  borderBottom: `1px solid ${colors.border}`,
   fontSize: 14,
+  color: colors.text,
 };
 
 const tdStyleRight: React.CSSProperties = {
