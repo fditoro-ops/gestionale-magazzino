@@ -202,7 +202,7 @@ router.post("/", async (req, res) => {
   try {
     const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
 
-    const { product_sku, name } = req.body;
+    const { product_sku, name, selling_price } = req.body;
 
     if (!product_sku || !name) {
       return res.status(400).json({
@@ -215,6 +215,10 @@ router.post("/", async (req, res) => {
       tenant_id: tenantId,
       product_sku,
       name,
+      selling_price:
+        selling_price != null && selling_price !== ""
+          ? Number(selling_price)
+          : null,
     });
 
     res.json({ ok: true, data: recipe });
@@ -238,11 +242,17 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, product_sku } = req.body;
+    const { name, product_sku, selling_price } = req.body;
 
     const recipe = await updateRecipe(id, {
       name,
       product_sku,
+      selling_price:
+        selling_price != null && selling_price !== ""
+          ? Number(selling_price)
+          : selling_price === null
+          ? null
+          : undefined,
     });
 
     if (!recipe) {
