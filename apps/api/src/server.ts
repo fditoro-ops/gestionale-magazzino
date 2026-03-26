@@ -31,6 +31,11 @@ import { saveSalesDocumentWithLines, getSalesFeed } from "./data/sales.store.js"
 import recipesRouter from "./routes/recipes.router.js";
 import cashClosuresRouter from "./routes/cash-closures.router.js";
 import webhooksCicRouter from "./routes/webhooks.cic.router.js";
+import {
+  syncRecipesDbCache,
+  getRecipesDbCache,
+} from "./services/recipesDb.service.js";
+
 
 /* =========================
    BOM (Google Sheet) Reader
@@ -91,6 +96,12 @@ export function getCicProductModesCache() {
 
 export function getLastEmergencySyncMs() {
   return lastEmergencySyncMs;
+}
+
+export function getActiveBom() {
+  const dbBom = getRecipesDbCache();
+  if (Object.keys(dbBom).length > 0) return dbBom;
+  return bomCache;
 }
 
 export function setLastEmergencySyncMs(value: number) {
@@ -1679,9 +1690,11 @@ app.listen(PORT, "0.0.0.0", async () => {
   await syncCicProducts();
   await syncCicProductModes();
   await syncBom();
+  await syncRecipesDbCache();
 
   const msCic = Math.max(1, CIC_PRODUCTS_SYNC_HOURS) * 60 * 60 * 1000;
   setInterval(() => syncCicProducts(), msCic);
   setInterval(() => syncBom(), 5 * 60 * 1000);
   setInterval(() => syncCicProductModes(), 5 * 60 * 1000);
+  setInterval(() => syncRecipesDbCache(), 5 * 60 * 1000);
 });
