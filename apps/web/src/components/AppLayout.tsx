@@ -66,6 +66,13 @@ export default function AppLayout({
           </SideItem>
 
           <SideItem
+            active={tab === "recipes"}
+            onClick={() => onTabChange("recipes")}
+          >
+            Ricettario
+          </SideItem>
+
+          <SideItem
             active={tab === "inventory"}
             onClick={() => onTabChange("inventory")}
           >
