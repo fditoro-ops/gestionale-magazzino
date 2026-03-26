@@ -976,6 +976,17 @@ app.get("/debug/cic-product-modes", (_req, res) => {
   });
 });
 
+app.get("/debug/active-bom-source", (_req, res) => {
+  const dbBom = getRecipesDbCache();
+  const usingDb = Object.keys(dbBom).length > 0;
+
+  res.json({
+    using: usingDb ? "RECIPES_DB" : "GOOGLE_SHEET",
+    dbCount: Object.keys(dbBom).length,
+    sheetCount: Object.keys(bomCache).length,
+  });
+});
+
 app.get("/debug/cic-unresolved", async (_req, res) => {
   try {
     const rows = await listUnresolved();
