@@ -66,6 +66,29 @@ type DashboardSummary = {
   topProducts: SummaryTopProduct[];
 };
 
+type PendingReasonRow = {
+  reason: string;
+  rowsCount: number;
+  salesTotal: number;
+};
+
+type PendingTopRow = {
+  sku: string;
+  description: string;
+  reason: string;
+  rowsCount: number;
+  qtyTotal: number;
+  salesTotal: number;
+};
+
+type PendingAlertsData = {
+  pendingRows: number;
+  pendingEntities: number;
+  pendingSalesTotal: number;
+  byReason: PendingReasonRow[];
+  topPending: PendingTopRow[];
+};
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("it-IT", {
     style: "currency",
@@ -210,10 +233,28 @@ export default function DashboardPage({ salesDocuments, salesLines }: Props) {
     }
   }
 
-  useEffect(() => {
-    loadSummary();
-  }, []);
+  const [pendingAlerts, setPendingAlerts] = useState<PendingAlertsData | null>(null);
+  const [pendingAlertsLoading, setPendingAlertsLoading] = useState(false);
 
+  async function loadPendingAlerts() {
+    try {
+      setPendingAlertsLoading(true);
+      const res = await authFetch("/dashboard/pending-alerts");
+      const json = await res.json();
+      setPendingAlerts(json?.data ?? null);
+    } catch (err) {
+      console.error("Errore caricamento pending alerts:", err);
+    } finally {
+      setPendingAlertsLoading(false);
+    }
+  }
+
+ useEffect(() => {
+    loadSummary();
+    loadPendingAlerts();
+ }, []);
+
+  
   const data = useMemo(() => {
     const validDocs = salesDocuments.filter((doc) => doc.status === "VALID");
 
@@ -494,6 +535,45 @@ export default function DashboardPage({ salesDocuments, salesLines }: Props) {
           subtitle="Conteggio sales_lines"
         />
       </section>
+
+      <section style={styles.kpiGrid}>
+        <KpiCard
+          title="Vendite in attesa di scarico"
+          value={
+            pendingAlertsLoading
+              ? "..."
+              : formatCurrency(pendingAlerts?.pendingSalesTotal || 0)
+          }
+          subtitle="Vendite con scarico sospeso"
+        />
+        <KpiCard
+          title="Righe pending"
+          value={
+            pendingAlertsLoading
+              ? "..."
+              : formatNumber(pendingAlerts?.pendingRows || 0)
+          }
+          subtitle="Eventi da risolvere"
+        />
+        <KpiCard
+          title="Elementi coinvolti"
+          value={
+            pendingAlertsLoading
+              ? "..."
+              : formatNumber(pendingAlerts?.pendingEntities || 0)
+          }
+          subtitle="SKU / ID / entità aperte"
+        />
+        <KpiCard
+          title="Motivo principale"
+          value={
+            pendingAlertsLoading
+              ? "..."
+              : pendingAlerts?.byReason?.[0]?.reason || "-"
+          }
+          subtitle="Prima causa per volume"
+        />
+      </section>
       
       <section style={styles.kpiGrid}>
         <KpiCard
@@ -588,6 +668,93 @@ export default function DashboardPage({ salesDocuments, salesLines }: Props) {
                     <td style={styles.tdRight}>
                       {formatCurrency(item.totalSales)}
                     </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section style={styles.panel}>
+        <div style={styles.panelTitle}>Vendite in attesa di scarico</div>
+
+        <div style={styles.pendingReasonWrap}>
+          {pendingAlertsLoading ? (
+            <div style={styles.cardSubtitle}>Caricamento motivi...</div>
+          ) : !pendingAlerts || pendingAlerts.byReason.length === 0 ? (
+            <div style={styles.cardSubtitle}>Nessuna anomalia aperta</div>
+          ) : (
+            pendingAlerts.byReason.map((row) => (
+              <span
+                key={row.reason}
+                style={{
+                  ...styles.badge,
+                  ...(row.reason === "UNMAPPED_PRODUCT"
+                    ? styles.badgeWarn
+                    : row.reason === "RECIPE_NOT_FOUND"
+                    ? styles.badgeSoftDanger
+                    : styles.badgeNeutral),
+                }}
+              >
+                {row.reason} · {formatNumber(row.rowsCount)}
+              </span>
+            ))
+          )}
+        </div>
+
+        <div style={styles.tableWrap}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Elemento</th>
+                <th style={styles.th}>Motivo</th>
+                <th style={styles.thRight}>Righe</th>
+                <th style={styles.thRight}>Q.tà</th>
+                <th style={styles.thRight}>Venduto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingAlertsLoading ? (
+                <tr>
+                  <td colSpan={5} style={styles.emptyTd}>
+                    Caricamento...
+                  </td>
+                </tr>
+              ) : !pendingAlerts || pendingAlerts.topPending.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={styles.emptyTd}>
+                    Nessuna vendita in attesa di scarico
+                  </td>
+                </tr>
+              ) : (
+                pendingAlerts.topPending.map((row) => (
+                  <tr key={`${row.sku}-${row.reason}`} style={styles.tr}>
+                    <td style={styles.td}>
+                      <div style={styles.pendingMainText}>
+                        {row.description && row.description !== "Senza descrizione"
+                          ? row.description
+                          : row.sku || "-"}
+                      </div>
+                      <div style={styles.pendingSubText}>{row.sku || "-"}</div>
+                    </td>
+                    <td style={styles.td}>
+                      <span
+                        style={{
+                          ...styles.badge,
+                          ...(row.reason === "UNMAPPED_PRODUCT"
+                            ? styles.badgeWarn
+                            : row.reason === "RECIPE_NOT_FOUND"
+                            ? styles.badgeSoftDanger
+                            : styles.badgeNeutral),
+                        }}
+                      >
+                        {row.reason}
+                      </span>
+                    </td>
+                    <td style={styles.tdRight}>{formatNumber(row.rowsCount)}</td>
+                    <td style={styles.tdRight}>{formatNumber(row.qtyTotal)}</td>
+                    <td style={styles.tdRight}>{formatCurrency(row.salesTotal)}</td>
                   </tr>
                 ))
               )}
@@ -866,4 +1033,33 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#fef3c7",
     color: "#92400e",
   },
+  pendingReasonWrap: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    marginBottom: 14,
+  },
+
+  pendingMainText: {
+    fontSize: 14,
+    fontWeight: 700,
+  },
+
+  pendingSubText: {
+    fontSize: 12,
+    opacity: 0.65,
+    marginTop: 4,
+    wordBreak: "break-all",
+  },
+
+  badgeSoftDanger: {
+    background: "#fee2e2",
+    color: "#991b1b",
+  },
+
+  badgeNeutral: {
+    background: "#e5e7eb",
+    color: "#374151",
+  },
+  
 };
