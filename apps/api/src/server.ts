@@ -1186,9 +1186,10 @@ app.post("/debug/cic-pending-reprocess", async (_req, res) => {
       }
 
       const mode = cicModesBySku[resolvedSku];
-      const hasRecipe =
-        Array.isArray(bomCache[resolvedSku]) && bomCache[resolvedSku].length > 0;
-
+const activeBom = getActiveBom();
+const hasRecipe =
+  Array.isArray(activeBom[resolvedSku]) && activeBom[resolvedSku].length > 0;
+      
       if (!mode) {
         results.push({
           id: row.id,
@@ -1234,7 +1235,7 @@ app.post("/debug/cic-pending-reprocess", async (_req, res) => {
             qty: Number(row.qty || 0),
           },
         ],
-        bom: bomCache,
+        bom: activeBom,
         cicProductModes: cicModesBySku,
         movementSign: row.operation === "RECEIPT/DELETE" ? 1 : -1,
       });
@@ -1372,8 +1373,9 @@ app.post("/admin/cic/reprocess-pending", async (_req, res) => {
       }
 
       const mode = cicModesBySku[resolvedSku];
-      const hasRecipe =
-        Array.isArray(bomCache[resolvedSku]) && bomCache[resolvedSku].length > 0;
+const activeBom = getActiveBom();
+const hasRecipe =
+  Array.isArray(activeBom[resolvedSku]) && activeBom[resolvedSku].length > 0;
 
       if (!mode) {
         results.push({
@@ -1420,7 +1422,7 @@ app.post("/admin/cic/reprocess-pending", async (_req, res) => {
             qty: Number(row.qty || 0),
           },
         ],
-        bom: bomCache,
+        bom: activeBom,
         cicProductModes: cicModesBySku,
         movementSign: row.operation === "RECEIPT/DELETE" ? 1 : -1,
       });
