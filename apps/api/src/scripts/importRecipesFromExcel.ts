@@ -34,7 +34,7 @@ type ValidationIssue = {
 
 const TENANT_ID = process.env.TENANT_ID || "IMP001";
 const FILE_PATH =
-  process.env.RECIPES_XLSX_PATH || "/mnt/data/RICETTARIO 2.0.xlsx";
+  process.env.RECIPES_XLSX_PATH || process.env.RECIPES_XLSX_PATH || "";
 const APPLY = process.env.APPLY === "1";
 
 function toStr(v: unknown): string {
@@ -108,7 +108,8 @@ function parseRicetteSheet(rows: any[]): RecipeExcelRow[] {
     const productSku = toSku(row["SKU_PRODOTTO"]);
     const productName = toStr(row["NOME_PRODOTTO"]);
     const ingredientSku = toSku(row["SKU_INGREDIENTE"]);
-    const ingredientName = toStr(row["INGREDIENTE"]);
+    const ingredientName =
+      toStr(row["INGREDIENTE"]) || toStr(row["NOME_INGREDIENTE"]);
     const quantity = toNum(row["QTA"]);
     const um = toUm(row["UM"]);
 
@@ -129,6 +130,10 @@ function parseRicetteSheet(rows: any[]): RecipeExcelRow[] {
 }
 
 async function main() {
+  if (!FILE_PATH) {
+    throw new Error("RECIPES_XLSX_PATH mancante");
+  }
+
   console.log("📘 File:", FILE_PATH);
   console.log("🏢 Tenant:", TENANT_ID);
   console.log("🧪 Mode:", APPLY ? "APPLY" : "DRY RUN");
@@ -138,12 +143,8 @@ async function main() {
   const ricetteWs = workbook.Sheets["RICETTE"];
   const menuWs = workbook.Sheets["MENU"];
 
-  if (!ricetteWs) {
-    throw new Error("Foglio 'RICETTE' non trovato");
-  }
-  if (!menuWs) {
-    throw new Error("Foglio 'MENU' non trovato");
-  }
+  if (!ricetteWs) throw new Error("Foglio 'RICETTE' non trovato");
+  if (!menuWs) throw new Error("Foglio 'MENU' non trovato");
 
   const ricetteRaw = readSheetRows(ricetteWs);
   const menuRaw = readSheetRows(menuWs);
@@ -158,18 +159,7 @@ async function main() {
   recipeRows.forEach((row, idx) => {
     const rowNumber = idx + 2;
 
-    const productItem = itemsMap.get(row.productSku);
     const ingredientItem = itemsMap.get(row.ingredientSku);
-
-    if (!productItem) {
-      issues.push({
-        level: "ERROR",
-        code: "PRODUCT_SKU_NOT_FOUND",
-        message: `SKU prodotto non trovato in Item: ${row.productSku}`,
-        rowNumber,
-        productSku: row.productSku,
-      });
-    }
 
     if (!ingredientItem) {
       issues.push({
@@ -253,12 +243,10 @@ async function main() {
     for (const [productSku, rows] of grouped.entries()) {
       const first = rows[0];
       const menu = menuMap.get(productSku);
-      const item = itemsMap.get(productSku);
 
       const recipeName =
         toStr(menu?.description) ||
         toStr(first.productName) ||
-        toStr(item?.name) ||
         productSku;
 
       const sellingPrice = menu?.sellingPrice ?? null;
