@@ -4,9 +4,9 @@ import { upsertUnresolved } from "../data/cicUnresolved.store.js";
 import { upsertPendingRow } from "../data/cicPendingRows.store.js";
 import { saveSalesDocumentWithLines } from "../data/sales.store.js";
 import { applyRecipeStock } from "./recipeStock.service.js";
+import { cicExtractItems } from "./cicMapping.service.js";
 
 import {
-  cicExtractItems,
   syncCicProducts,
   getItemNameBySku,
   getActiveBom,
