@@ -7,6 +7,7 @@ export type Recipe = {
   product_sku: string;
   name: string;
   status: "DRAFT" | "ACTIVE" | "INACTIVE";
+  selling_price: string | number | null;
   created_at: string;
   updated_at: string;
 };
@@ -73,16 +74,29 @@ export async function createRecipe(input: {
   tenant_id: string;
   product_sku: string;
   name: string;
+  selling_price?: number | null;
 }) {
   const id = randomUUID();
 
   const res = await pool.query(
     `
-    INSERT INTO recipes (id, tenant_id, product_sku, name)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO recipes (
+      id,
+      tenant_id,
+      product_sku,
+      name,
+      selling_price
+    )
+    VALUES ($1, $2, $3, $4, $5)
     RETURNING *
     `,
-    [id, input.tenant_id, input.product_sku, input.name]
+    [
+      id,
+      input.tenant_id,
+      input.product_sku,
+      input.name,
+      input.selling_price ?? null,
+    ]
   );
 
   return res.rows[0];
@@ -96,6 +110,7 @@ export async function updateRecipe(
   input: {
     name?: string;
     product_sku?: string;
+    selling_price?: number | null;
   }
 ) {
   const fields: string[] = [];
@@ -110,6 +125,11 @@ export async function updateRecipe(
   if (input.product_sku !== undefined) {
     fields.push(`product_sku = $${i++}`);
     values.push(input.product_sku);
+  }
+
+  if (input.selling_price !== undefined) {
+    fields.push(`selling_price = $${i++}`);
+    values.push(input.selling_price);
   }
 
   if (fields.length === 0) return null;
