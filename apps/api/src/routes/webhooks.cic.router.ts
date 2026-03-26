@@ -1,5 +1,5 @@
 import express, { Router } from "express";
-import { processCicWebhook } from "../services/cicWebhook.service";
+import { processCicWebhook } from "../services/cicWebhook.service.js";
 
 const router = Router();
 
