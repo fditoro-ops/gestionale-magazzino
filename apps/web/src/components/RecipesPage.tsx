@@ -47,9 +47,9 @@ const panelStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   width: "100%",
   borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.06)",
-  color: "white",
+  border: "1px solid #D9E2EC",
+  background: "white",
+  color: "#102A43",
   padding: "10px 12px",
   outline: "none",
 };
@@ -61,17 +61,18 @@ const selectStyle: React.CSSProperties = {
 
 const buttonStyle: React.CSSProperties = {
   borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.10)",
+  border: "1px solid #BCCCDC",
+  background: "#0B7285",
   color: "white",
   padding: "10px 14px",
   cursor: "pointer",
-  fontWeight: 600,
+  fontWeight: 700,
 };
 
 const secondaryButtonStyle: React.CSSProperties = {
   ...buttonStyle,
-  background: "rgba(255,255,255,0.06)",
+  background: "white",
+  color: "#243B53",
 };
 
 function formatDate(value?: string | null) {
@@ -342,7 +343,7 @@ export default function RecipesPage() {
   const ingredientCount = ingredients.length;
 
   return (
-    <div style={{ padding: 20, color: "white" }}>
+    <div style={{ padding: 20, color: "#102A43" }}>
       <div
         style={{
           display: "flex",
@@ -451,7 +452,7 @@ export default function RecipesPage() {
                       borderRadius: 14,
                       padding: 12,
                       cursor: "pointer",
-                      color: "white",
+                     color: "#102A43",
                       border: selected
                         ? "1px solid rgba(255,255,255,0.22)"
                         : "1px solid rgba(255,255,255,0.08)",
@@ -684,7 +685,7 @@ export default function RecipesPage() {
                   style={{
                     width: "100%",
                     borderCollapse: "collapse",
-                    color: "white",
+                    color: "#102A43",
                   }}
                 >
                   <thead>
