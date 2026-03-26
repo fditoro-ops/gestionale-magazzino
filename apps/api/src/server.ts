@@ -30,6 +30,8 @@ import inventoryRouter from "./routes/inventory.js";
 import { saveSalesDocumentWithLines, getSalesFeed } from "./data/sales.store.js";
 import recipesRouter from "./routes/recipes.router.js";
 import cashClosuresRouter from "./routes/cash-closures.router.js";
+import webhooksCicRouter from "./routes/webhooks.cic.router.js";
+
 
 /* =========================
    BOM (Google Sheet) Reader
@@ -1934,6 +1936,8 @@ app.use("/users", usersRouter);
 app.use("/inventory", inventoryRouter);
 app.use("/recipes", recipesRouter);
 app.use("/cash-closures", cashClosuresRouter);
+app.use("/webhooks/cic", webhooksCicRouter);
+
 app.get("/dashboard/sales", async (req, res) => {
   try {
     const tenantId = String(process.env.TENANT_ID || "IMP001");
