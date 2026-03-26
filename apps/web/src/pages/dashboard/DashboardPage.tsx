@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { authFetch } from "../../api/authFetch";
 
 type SalesDocumentStatus = "VALID" | "VOID" | "REFUND";
 
@@ -49,6 +50,21 @@ type FilterKey =
   | "LAST_30_DAYS"
   | "THIS_MONTH"
   | "ALL";
+
+type SummaryTopProduct = {
+  productName: string;
+  sku: string;
+  qtySold: number;
+  totalSales: number;
+};
+
+type DashboardSummary = {
+  documentsCount: number;
+  totalSales: number;
+  avgTicket: number;
+  linesCount: number;
+  topProducts: SummaryTopProduct[];
+};
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("it-IT", {
@@ -177,6 +193,26 @@ function KpiCard({
 
 export default function DashboardPage({ salesDocuments, salesLines }: Props) {
   const [filter, setFilter] = useState<FilterKey>("LAST_7_DAYS");
+
+    const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
+  async function loadSummary() {
+    try {
+      setSummaryLoading(true);
+      const res = await authFetch("/dashboard/summary");
+      const json = await res.json();
+      setSummary(json?.data ?? null);
+    } catch (err) {
+      console.error("Errore caricamento dashboard summary:", err);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadSummary();
+  }, []);
 
   const data = useMemo(() => {
     const validDocs = salesDocuments.filter((doc) => doc.status === "VALID");
@@ -422,6 +458,45 @@ export default function DashboardPage({ salesDocuments, salesLines }: Props) {
 
       <section style={styles.kpiGrid}>
         <KpiCard
+          title="Vendite Totali Storiche"
+          value={
+            summaryLoading
+              ? "..."
+              : formatCurrency(summary?.totalSales || 0)
+          }
+          subtitle="Da sales_documents"
+        />
+        <KpiCard
+          title="Ticket Medio Storico"
+          value={
+            summaryLoading
+              ? "..."
+              : formatCurrency(summary?.avgTicket || 0)
+          }
+          subtitle="Media documento valido"
+        />
+        <KpiCard
+          title="Documenti Totali"
+          value={
+            summaryLoading
+              ? "..."
+              : formatNumber(summary?.documentsCount || 0)
+          }
+          subtitle="Conteggio documenti validi"
+        />
+        <KpiCard
+          title="Righe Totali"
+          value={
+            summaryLoading
+              ? "..."
+              : formatNumber(summary?.linesCount || 0)
+          }
+          subtitle="Conteggio sales_lines"
+        />
+      </section>
+      
+      <section style={styles.kpiGrid}>
+        <KpiCard
           title={`Vendite ${data.selectedLabel.toLowerCase()}`}
           value={formatCurrency(data.totalSales)}
           subtitle="Documenti validi"
@@ -478,6 +553,49 @@ export default function DashboardPage({ salesDocuments, salesLines }: Props) {
           <MiniBarChart data={data.salesByDay} />
         </div>
 
+              <section style={styles.panel}>
+        <div style={styles.panelTitle}>Top prodotti da dashboard summary</div>
+
+        <div style={styles.tableWrap}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Prodotto</th>
+                <th style={styles.th}>SKU</th>
+                <th style={styles.thRight}>Q.tà</th>
+                <th style={styles.thRight}>Venduto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summaryLoading ? (
+                <tr>
+                  <td colSpan={4} style={styles.emptyTd}>
+                    Caricamento...
+                  </td>
+                </tr>
+              ) : !summary || summary.topProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={4} style={styles.emptyTd}>
+                    Nessun dato disponibile
+                  </td>
+                </tr>
+              ) : (
+                summary.topProducts.map((item) => (
+                  <tr key={`${item.sku}-${item.productName}`} style={styles.tr}>
+                    <td style={styles.td}>{item.productName || "-"}</td>
+                    <td style={styles.td}>{item.sku || "-"}</td>
+                    <td style={styles.tdRight}>{formatNumber(item.qtySold)}</td>
+                    <td style={styles.tdRight}>
+                      {formatCurrency(item.totalSales)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+        
         <div style={styles.panel}>
           <div style={styles.panelTitle}>Top articoli venduti</div>
 
