@@ -32,7 +32,6 @@ import recipesRouter from "./routes/recipes.router.js";
 import cashClosuresRouter from "./routes/cash-closures.router.js";
 import webhooksCicRouter from "./routes/webhooks.cic.router.js";
 
-
 /* =========================
    BOM (Google Sheet) Reader
    ========================= */
@@ -81,6 +80,22 @@ let bomLastError: string | null = null;
 let cicProductModeCache: CicProductMap = {};
 let cicProductModeLastSyncAt: string | null = null;
 let cicProductModeLastError: string | null = null;
+
+export function getBomCache() {
+  return bomCache;
+}
+
+export function getCicProductModesCache() {
+  return cicProductModeCache;
+}
+
+export function getLastEmergencySyncMs() {
+  return lastEmergencySyncMs;
+}
+
+export function setLastEmergencySyncMs(value: number) {
+  lastEmergencySyncMs = value;
+}
 
 /* =========================
    BOM
@@ -477,7 +492,7 @@ const variantPrice = Number(variantRawPrice ?? 0);
 
   return rows;
 }
-async function syncCicProducts() {
+export async function syncCicProducts() {
   try {
     if (!CIC_API_KEY) {
       console.log("⚠️ CIC_API_KEY mancante: sync prodotti disattivata");
@@ -614,7 +629,7 @@ async function syncCicProducts() {
    CIC resolve helpers
    ========================= */
 
-function cicResolveSku(id: string) {
+export  function cicResolveSku(id: string) {
   if (!id) return id;
 
   if (id.startsWith("SKU")) return id;
@@ -630,7 +645,7 @@ function cicResolveSku(id: string) {
   return id;
 }
 
-function cicExtractItems(data: any): CicExtractedItem[] {
+export function cicExtractItems(data: any): CicExtractedItem[] {
   const rows = data?.document?.rows ?? [];
   if (!Array.isArray(rows)) return [];
 
@@ -671,7 +686,7 @@ function cicExtractItems(data: any): CicExtractedItem[] {
     .filter((x: any) => x.sku && x.qty);
 }
 
-async function getItemNameBySku(sku: string) {
+export async function getItemNameBySku(sku: string) {
   const cleanSku = String(sku || "").trim();
   if (!cleanSku) return "";
 
@@ -712,10 +727,6 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
-
-app.get("/webhooks/cic", (_req, res) => res.status(200).send("OK"));
-app.head("/webhooks/cic", (_req, res) => res.status(200).end());
-app.options("/webhooks/cic", (_req, res) => res.status(200).end());
 
 function buildCicWebhookDebugDump(
   data: any,
@@ -907,38 +918,7 @@ app.post("/admin/sales/backfill-descriptions", async (_req, res) => {
   }
 });
 
-app.post("/webhooks/cic", express.raw({ type: "*/*" }), async (req, res) => {
-  try {
-    const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";
 
-    const signature = (req.header("x-cn-signature") || "").trim();
-    const operation = (req.header("x-cn-operation") || "").trim();
-    console.log("CIC x-cn-operation:", operation);
-
-    if (CIC_WEBHOOK_SECRET && signature) {
-      const expected = crypto
-        .createHmac("sha1", CIC_WEBHOOK_SECRET)
-        .update(raw, "utf8")
-        .digest("hex");
-
-      if (signature !== expected) {
-        console.error("❌ CIC signature mismatch");
-        return res.status(401).send("Invalid signature");
-      }
-    }
-
-    if (!operation.startsWith("RECEIPT/")) {
-      console.log("CIC skipped (not receipt):", operation);
-      return res.status(200).send("OK");
-    }
-
-    const data = JSON.parse(raw);
-
-    const debugDump = buildCicWebhookDebugDump(data, operation, {
-      "x-cn-operation": req.header("x-cn-operation") || "",
-      "x-cn-signature": req.header("x-cn-signature") || "",
-      "content-type": req.header("content-type") || "",
-    });
 
     await appendCicWebhookDump(debugDump);
 
