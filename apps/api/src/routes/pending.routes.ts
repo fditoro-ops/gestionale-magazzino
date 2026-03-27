@@ -7,7 +7,7 @@ import { cicResolveSku } from "../services/cicMapping.service.js";
 const router = Router();
 
 /**
- * POST /pending/:id/reprocess
+ * POST /pending/reprocess-all
  */
 router.post("/pending/reprocess-all", async (_req, res) => {
   try {
@@ -42,62 +42,6 @@ router.post("/pending/reprocess-all", async (_req, res) => {
 
         errors++;
       }
-    }
-
-    return res.json({
-      ok: true,
-      total: rows.length,
-      processed,
-      skipped,
-      errors,
-    });
-  } catch (err: any) {
-    console.error("❌ reprocess-all error:", err);
-
-    return res.status(500).json({
-      ok: false,
-      error: "REPROCESS_ALL_FAILED",
-      message: err.message,
-    });
-  }
-});
-
-/**
- * POST /pending/reprocess-all
- */
-router.post("/pending/reprocess-all", async (_req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT id
-      FROM cic_pending_rows
-      WHERE status = 'PENDING'
-      ORDER BY created_at ASC
-      LIMIT 200
-    `);
-
-    const rows = result.rows;
-
-    let processed = 0;
-    let skipped = 0;
-    let errors = 0;
-
-    for (const r of rows) {
-      try {
-        const out = await reprocessSinglePending({
-          pendingId: r.id,
-        });
-
-        if (out.status === "PROCESSED") processed++;
-        else skipped++;
-catch (err: any) {
-  console.error("❌ row error FULL:", {
-    id: r.id,
-    message: err?.message,
-    stack: err?.stack,
-  });
-
-  errors++;
-}
     }
 
     return res.json({
