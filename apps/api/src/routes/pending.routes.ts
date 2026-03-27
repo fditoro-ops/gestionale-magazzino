@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { reprocessSinglePending } from "../services/reprocessPending.service.js";
+import { reprocessSinglePending } from "../services/pendingReprocess.service.js";
 
 const router = Router();
 
