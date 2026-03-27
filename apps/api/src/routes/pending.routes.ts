@@ -185,5 +185,77 @@ router.get("/pending", async (_req, res) => {
     });
   }
 });
+router.post("/pending/reprocess-ready", async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT *
+      FROM cic_pending_rows
+      WHERE status = 'PENDING'
+      ORDER BY created_at ASC
+      LIMIT 200
+    `);
+
+    const rows = result.rows;
+
+    let processed = 0;
+    let skipped = 0;
+
+    for (const row of rows) {
+      const candidateIds = [
+        String(row.variant_id || "").trim(),
+        String(row.product_id || "").trim(),
+        String(row.barcode || "").trim(),
+      ].filter(Boolean);
+
+      let resolvedSku: string | null = null;
+
+      for (const id of candidateIds) {
+        const resolved = cicResolveSku(id);
+        if (resolved) {
+          resolvedSku = resolved;
+          break;
+        }
+      }
+
+      if (!resolvedSku) continue;
+
+      const cicProductModeCache = getCicProductModesCache();
+      const activeBom = getActiveBom();
+
+      const cicModesBySku = Object.fromEntries(
+        Object.entries(cicProductModeCache).map(([_, v]: [string, any]) => [
+          v.sku,
+          v.mode,
+        ])
+      ) as Record<string, "RECIPE" | "IGNORE">;
+
+      const mode = cicModesBySku[resolvedSku];
+
+      const hasRecipe =
+        Array.isArray(activeBom[resolvedSku]) &&
+        activeBom[resolvedSku].length > 0;
+
+      if (mode === "RECIPE" && hasRecipe) {
+        try {
+          await reprocessSinglePending({ pendingId: row.id });
+          processed++;
+        } catch {
+          skipped++;
+        }
+      }
+    }
+
+    return res.json({
+      ok: true,
+      processed,
+      skipped,
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
+  }
+});
 
 export default router;
