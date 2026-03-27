@@ -8,7 +8,6 @@ const router = Router();
 
 /**
  * POST /pending/:id/reprocess
- * Riprocessa una singola riga
  */
 router.post("/pending/:id/reprocess", async (req, res) => {
   try {
@@ -32,19 +31,16 @@ router.post("/pending/:id/reprocess", async (req, res) => {
 
 /**
  * POST /pending/reprocess-all
- * Riprocessa tutte le pending
  */
 router.post("/pending/reprocess-all", async (_req, res) => {
   try {
-    const result = await pool.query(
-      `
+    const result = await pool.query(`
       SELECT id
       FROM cic_pending_rows
       WHERE status = 'PENDING'
       ORDER BY created_at ASC
       LIMIT 200
-      `
-    );
+    `);
 
     const rows = result.rows;
 
@@ -60,14 +56,13 @@ router.post("/pending/reprocess-all", async (_req, res) => {
 
         if (out.status === "PROCESSED") processed++;
         else skipped++;
-catch (err: any) {
-  console.error("❌ row error:", {
-    id: r.id,
-    message: err?.message,
-    stack: err?.stack,
-  });
-  errors++;
-}
+      } catch (err: any) {
+        console.error("❌ row error:", {
+          id: r.id,
+          message: err?.message,
+        });
+        errors++;
+      }
     }
 
     return res.json({
@@ -87,9 +82,9 @@ catch (err: any) {
     });
   }
 });
+
 /**
  * GET /pending
- * Lista pending con reason calcolata
  */
 router.get("/pending", async (_req, res) => {
   try {
@@ -114,11 +109,9 @@ router.get("/pending", async (_req, res) => {
     ) as Record<string, "RECIPE" | "IGNORE">;
 
     const enriched = rows.map((row: any) => {
-      // 🔧 resolve SKU (logica coerente con il tuo sistema)
       const candidateIds = [
         String(row.variant_id || "").trim(),
         String(row.product_id || "").trim(),
-        String(row.barcode || "").trim(),
       ].filter(Boolean);
 
       let resolvedSku: string | null = null;
@@ -155,32 +148,23 @@ router.get("/pending", async (_req, res) => {
         }
       }
 
-return {
-  id: row.id,
-  skuResolved: resolvedSku,
-  rawProductId: row.product_id,
-  rawVariantId: row.variant_id,
-  qty: Number(row.qty || 0),
-
-  // 🔥 AGGIUNGI QUESTO
-  description: row.description,
-  price: Number(row.price || 0),
-
-  reason,
-  canProcess: reason === "READY",
-  createdAt: row.created_at,
-};    });
-
-    // 📊 summary utile per UI
-    const summary = enriched.reduce((acc: any, r: any) => {
-      acc[r.reason] = (acc[r.reason] || 0) + 1;
-      return acc;
-    }, {});
+      return {
+        id: row.id,
+        skuResolved: resolvedSku,
+        rawProductId: row.product_id,
+        rawVariantId: row.variant_id,
+        qty: Number(row.qty || 0),
+        description: row.description,
+        price: Number(row.price || 0),
+        reason,
+        canProcess: reason === "READY",
+        createdAt: row.created_at,
+      };
+    });
 
     return res.json({
       ok: true,
       total: enriched.length,
-      summary,
       rows: enriched,
     });
   } catch (err: any) {
@@ -190,78 +174,6 @@ return {
       ok: false,
       error: "PENDING_LIST_FAILED",
       message: err.message,
-    });
-  }
-});
-router.post("/pending/reprocess-ready", async (_req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT *
-      FROM cic_pending_rows
-      WHERE status = 'PENDING'
-      ORDER BY created_at ASC
-      LIMIT 200
-    `);
-
-    const rows = result.rows;
-
-    let processed = 0;
-    let skipped = 0;
-
-    for (const row of rows) {
-      const candidateIds = [
-        String(row.variant_id || "").trim(),
-        String(row.product_id || "").trim(),
-        String(row.barcode || "").trim(),
-      ].filter(Boolean);
-
-      let resolvedSku: string | null = null;
-
-      for (const id of candidateIds) {
-        const resolved = cicResolveSku(id);
-        if (resolved) {
-          resolvedSku = resolved;
-          break;
-        }
-      }
-
-      if (!resolvedSku) continue;
-
-      const cicProductModeCache = getCicProductModesCache();
-      const activeBom = getActiveBom();
-
-      const cicModesBySku = Object.fromEntries(
-        Object.entries(cicProductModeCache).map(([_, v]: [string, any]) => [
-          v.sku,
-          v.mode,
-        ])
-      ) as Record<string, "RECIPE" | "IGNORE">;
-
-      const mode = cicModesBySku[resolvedSku];
-
-      const hasRecipe =
-        Array.isArray(activeBom[resolvedSku]) &&
-        activeBom[resolvedSku].length > 0;
-
-      if (mode === "RECIPE" && hasRecipe) {
-        try {
-          await reprocessSinglePending({ pendingId: row.id });
-          processed++;
-        } catch {
-          skipped++;
-        }
-      }
-    }
-
-    return res.json({
-      ok: true,
-      processed,
-      skipped,
-    });
-  } catch (err: any) {
-    return res.status(500).json({
-      ok: false,
-      error: err.message,
     });
   }
 });
