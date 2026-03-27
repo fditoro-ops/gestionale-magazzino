@@ -309,7 +309,7 @@ export async function processCicWebhook(req: any, res: any) {
         );
       });
 
-      if (!sku || sku.includes("-")) {
+      if (!sku) {
         console.warn("❗CIC UNMAPPED PRODUCT:", {
           productId: it._idProduct,
           variantId: it._idProductVariant,
