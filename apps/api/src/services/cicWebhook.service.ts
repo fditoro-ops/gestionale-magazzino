@@ -1,10 +1,10 @@
 import crypto from "crypto";
-import { appendCicWebhookDump } from "../data/cicWebhookDump.store.js";
 import { upsertUnresolved } from "../data/cicUnresolved.store.js";
 import { upsertPendingRow } from "../data/cicPendingRows.store.js";
 import { saveSalesDocumentWithLines } from "../data/sales.store.js";
 import { applyRecipeStock } from "./recipeStock.service.js";
 import { cicExtractItems } from "./cicMapping.service.js";
+import { pool } from "../db.js";
 
 import {
   syncCicProducts,
@@ -162,7 +162,17 @@ export async function processCicWebhook(req: any, res: any) {
       "content-type": req.header("content-type") || "",
     });
 
-    await appendCicWebhookDump(debugDump);
+await pool.query(
+  `
+  INSERT INTO cic_webhook_dumps (id, operation, payload, captured_at)
+  VALUES ($1, $2, $3, NOW())
+  `,
+  [
+    crypto.randomUUID(),
+    operation,
+    JSON.stringify(debugDump),
+  ]
+);
 
     const docId = "CIC-" + String(data?.document?.id || data?.id || "");
     const receiptNumber = String(
