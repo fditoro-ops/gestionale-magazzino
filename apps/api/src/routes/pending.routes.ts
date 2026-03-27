@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { pool } from "../db.js";
 import { reprocessSinglePending } from "../services/pendingReprocess.service.js";
+import { getActiveBom, getCicProductModesCache } from "../server.js";
+import { cicResolveSku } from "../services/cicMapping.service.js";
 
 const router = Router();
 
