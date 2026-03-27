@@ -1,32 +1,44 @@
 import { getCicIdToSkuMap, getCicProductModesCache } from "../server.js";
 
 export type CicExtractedItem = {
-  sku: string;
+  sku: string | null;
   qty: number;
   total: number;
   _idProduct: string;
   _idProductVariant: string;
 };
 
-export function cicResolveSku(id: string) {
-  if (!id) return id;
+/**
+ * Risolve uno SKU partendo da un ID CIC (product / variant / barcode)
+ */
+export function cicResolveSku(id: string): string | null {
+  if (!id) return null;
 
-  if (id.startsWith("SKU")) return id;
+  const cleanId = String(id).trim();
+
+  // ✅ già uno SKU Core
+  if (cleanId.startsWith("SKU")) return cleanId;
 
   const cicProductModeCache = getCicProductModesCache();
   const cicIdToSkuMap = getCicIdToSkuMap();
 
-  if (cicProductModeCache[id]) {
-    return cicProductModeCache[id].sku;
+  // 1️⃣ mapping da configurazione CIC (più affidabile)
+  if (cicProductModeCache[cleanId]?.sku) {
+    return cicProductModeCache[cleanId].sku;
   }
 
-  if (cicIdToSkuMap[id]) {
-    return cicIdToSkuMap[id];
+  // 2️⃣ mapping diretto ID → SKU
+  if (cicIdToSkuMap[cleanId]) {
+    return cicIdToSkuMap[cleanId];
   }
 
-  return id;
+  // ❌ non risolto
+  return null;
 }
 
+/**
+ * Estrae gli articoli da uno scontrino CIC
+ */
 export function cicExtractItems(data: any): CicExtractedItem[] {
   const rows = data?.document?.rows ?? [];
   if (!Array.isArray(rows)) return [];
@@ -39,23 +51,26 @@ export function cicExtractItems(data: any): CicExtractedItem[] {
       const idVariant = String(r?.idProductVariant ?? "").trim();
       const idProduct = String(r?.idProduct ?? "").trim();
 
-      let resolved = "";
+      // 🔥 priorità: variant → product
+      const resolvedSku =
+        cicResolveSku(idVariant) ||
+        cicResolveSku(idProduct);
 
-      if (idVariant) {
-        resolved = cicResolveSku(idVariant);
-      }
-
-      if (!resolved || resolved.includes("-")) {
-        resolved = cicResolveSku(idProduct);
+      // 🔎 debug utile (opzionale ma consigliato)
+      if (!resolvedSku) {
+        console.warn("⚠️ SKU non risolto", {
+          idVariant,
+          idProduct,
+        });
       }
 
       return {
-        sku: resolved,
+        sku: resolvedSku,
         qty,
         total: qty * price,
         _idProduct: idProduct,
         _idProductVariant: idVariant,
       };
     })
-    .filter((x: any) => x.sku && x.qty);
+    .filter((x: CicExtractedItem) => x.sku && x.qty > 0);
 }
