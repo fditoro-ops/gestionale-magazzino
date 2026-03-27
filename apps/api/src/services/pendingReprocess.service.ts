@@ -44,11 +44,21 @@ export async function reprocessSinglePending({
     }
 
     // ✅ resolve SKU corretto (async)
-    const resolvedSku = await cicResolveSku({
-      idProduct: row.product_id,
-      idProductVariant: row.variant_id,
-      barcode: row.barcode,
-    });
+const candidateIds = [
+  String(row.variant_id || "").trim(),
+  String(row.product_id || "").trim(),
+  String(row.barcode || "").trim(),
+].filter(Boolean);
+
+let resolvedSku: string | null = null;
+
+for (const id of candidateIds) {
+  const resolved = cicResolveSku(id);
+  if (resolved) {
+    resolvedSku = resolved;
+    break;
+  }
+}
 
     if (!resolvedSku) {
       await client.query("COMMIT");
