@@ -60,10 +60,14 @@ router.post("/pending/reprocess-all", async (_req, res) => {
 
         if (out.status === "PROCESSED") processed++;
         else skipped++;
-      } catch (err) {
-        console.error("❌ row error:", r.id, err);
-        errors++;
-      }
+catch (err: any) {
+  console.error("❌ row error:", {
+    id: r.id,
+    message: err?.message,
+    stack: err?.stack,
+  });
+  errors++;
+}
     }
 
     return res.json({
