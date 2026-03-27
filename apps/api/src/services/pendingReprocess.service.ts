@@ -43,22 +43,21 @@ export async function reprocessSinglePending({
       };
     }
 
-    // ✅ resolve SKU corretto (async)
-const candidateIds = [
-  String(row.variant_id || "").trim(),
-  String(row.product_id || "").trim(),
-  String(row.barcode || "").trim(),
-].filter(Boolean);
+    // 🔍 resolve SKU
+    const candidateIds = [
+      String(row.variant_id || "").trim(),
+      String(row.product_id || "").trim(),
+    ].filter(Boolean);
 
-let resolvedSku: string | null = null;
+    let resolvedSku: string | null = null;
 
-for (const id of candidateIds) {
-  const resolved = cicResolveSku(id);
-  if (resolved) {
-    resolvedSku = resolved;
-    break;
-  }
-}
+    for (const id of candidateIds) {
+      const resolved = cicResolveSku(id);
+      if (resolved) {
+        resolvedSku = resolved;
+        break;
+      }
+    }
 
     if (!resolvedSku) {
       await client.query("COMMIT");
@@ -89,7 +88,7 @@ for (const id of candidateIds) {
       Array.isArray(activeBom[resolvedSku]) &&
       activeBom[resolvedSku].length > 0;
 
-    // 🚫 non classificato
+    // 🚫 SKU non classificato
     if (!mode) {
       await client.query("COMMIT");
       return {
@@ -127,7 +126,7 @@ for (const id of candidateIds) {
       };
     }
 
-    // 🚫 RECIPE ma non esiste
+    // 🚫 RECIPE ma senza BOM
     if (mode === "RECIPE" && !hasRecipe) {
       await client.query("COMMIT");
       return {
@@ -139,9 +138,14 @@ for (const id of candidateIds) {
       };
     }
 
+    // ❗ sicurezza: doc_id obbligatorio
+    if (!row.doc_id) {
+      throw new Error("DOC_ID mancante nel pending");
+    }
+
     // ⚙️ applico scarico ricetta
     const inserted = await applyRecipeStock({
-      docId: row.doc_id || `REPROCESS:${pendingId}`,
+      docId: row.doc_id,
       receiptNumber: "",
       tenantId: String(row.tenant_id || "IMP001"),
       orderDate: row.order_date ? new Date(row.order_date) : new Date(),
@@ -157,42 +161,28 @@ for (const id of candidateIds) {
         String(row.operation || "") === "RECEIPT/DELETE" ? 1 : -1,
     });
 
-    // ✅ se ha creato movimenti → segno processato
-    if (inserted > 0) {
-      await client.query(
-        `
-        UPDATE cic_pending_rows
-        SET
-          status = 'PROCESSED',
-          processed_at = NOW(),
-          updated_at = NOW()
-        WHERE id = $1
-        `,
-        [pendingId]
-      );
+    // ✅ segno SEMPRE processato (evita loop infiniti)
+    await client.query(
+      `
+      UPDATE cic_pending_rows
+      SET
+        status = 'PROCESSED',
+        processed_at = NOW(),
+        updated_at = NOW()
+      WHERE id = $1
+      `,
+      [pendingId]
+    );
 
-      await client.query("COMMIT");
-
-      return {
-        ok: true,
-        status: "PROCESSED",
-        reason: "MOVEMENTS_CREATED",
-        pendingId,
-        sku: resolvedSku,
-        inserted,
-      };
-    }
-
-    // ⚠️ nessun movimento creato
     await client.query("COMMIT");
 
     return {
       ok: true,
-      status: "SKIPPED",
-      reason: "NO_MOVEMENTS_CREATED",
+      status: "PROCESSED",
+      reason: inserted > 0 ? "MOVEMENTS_CREATED" : "NO_MOVEMENTS_CREATED",
       pendingId,
       sku: resolvedSku,
-      inserted: 0,
+      inserted,
     };
   } catch (err: any) {
     await client.query("ROLLBACK");
