@@ -952,12 +952,28 @@ app.get("/debug/cic-unresolved", async (_req, res) => {
   }
 });
 
-app.get("/debug/cic-webhook-dumps", (_req, res) => {
-  const rows = loadCicWebhookDumps();
-  res.json({
-    count: rows.length,
-    sample: rows.slice(-20),
-  });
+app.get("/debug/cic-webhook-dumps", async (_req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT *
+      FROM cic_webhook_dumps
+      ORDER BY captured_at DESC
+      LIMIT 50
+    `);
+
+    res.json({
+      ok: true,
+      count: result.rows.length,
+      rows: result.rows,
+    });
+  } catch (err: any) {
+    console.error("❌ cic-webhook-dumps error:", err);
+
+    res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
+  }
 });
 
 app.get("/debug/cic-products-full", async (_req, res) => {
