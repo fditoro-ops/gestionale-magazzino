@@ -688,6 +688,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
+app.use("/webhooks/cic", webhooksCicRouter);
+
 function buildCicWebhookDebugDump(
   data: any,
   operation: string,
@@ -1612,7 +1614,6 @@ app.use("/users", usersRouter);
 app.use("/inventory", inventoryRouter);
 app.use("/recipes", recipesRouter);
 app.use("/cash-closures", cashClosuresRouter);
-app.use("/webhooks/cic", webhooksCicRouter);
 app.use("/dashboard", dashboardRouter);
 app.use("/api", pendingRouter);
 
