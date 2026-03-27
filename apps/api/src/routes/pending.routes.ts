@@ -151,17 +151,21 @@ router.get("/pending", async (_req, res) => {
         }
       }
 
-      return {
-        id: row.id,
-        skuResolved: resolvedSku,
-        rawProductId: row.product_id,
-        rawVariantId: row.variant_id,
-        qty: Number(row.qty || 0),
-        reason,
-        canProcess: reason === "READY",
-        createdAt: row.created_at,
-      };
-    });
+return {
+  id: row.id,
+  skuResolved: resolvedSku,
+  rawProductId: row.product_id,
+  rawVariantId: row.variant_id,
+  qty: Number(row.qty || 0),
+
+  // 🔥 AGGIUNGI QUESTO
+  description: row.description,
+  price: Number(row.price || 0),
+
+  reason,
+  canProcess: reason === "READY",
+  createdAt: row.created_at,
+};    });
 
     // 📊 summary utile per UI
     const summary = enriched.reduce((acc: any, r: any) => {
