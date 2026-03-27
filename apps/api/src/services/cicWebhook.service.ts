@@ -197,7 +197,7 @@ export async function processCicWebhook(req: any, res: any) {
       0
     );
 
-    const hasUnresolved = items.some((it: any) => String(it.sku).includes("-"));
+   const hasUnresolved = items.some((it: any) => !it.sku);
 
     if (hasUnresolved && Date.now() - getLastEmergencySyncMs() > 60_000) {
       console.log("ℹ️ CIC: trovati ID non risolti, provo sync prodotti…");
