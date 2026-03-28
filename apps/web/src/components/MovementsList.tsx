@@ -165,40 +165,37 @@ const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
   const filteredMovements = useMemo(() => {
     const q = normalizeText(query);
 
-    return normalizedMovements.filter((m) => {
-      const type = getMovementType(m);
-      const dateValue = getMovementDate(m);
-      const sku = String(m.sku ?? "").toUpperCase();
-      const itemName = itemNameBySku.get(sku) || sku;
+return normalizedMovements.filter((m) => {
+  const type = getMovementType(m);
+  const dateValue = getMovementDate(m);
+  const sku = String(m.sku ?? "").toUpperCase();
+  const itemName = itemNameBySku.get(sku) || sku;
+  const inRange = isMovementInRange(dateValue, fromDate, toDate);
 
-      if (eventType !== "ALL" && type !== eventType) return false;
-     if (!inRange) return false;
-      if (!q) return true;
+  if (eventType !== "ALL" && type !== eventType) return false;
+  if (!inRange) return false;
 
-      const haystack = [
-        sku,
-        itemName,
-        m.reason,
-        m.note,
-        m.documento,
-        m.documentId,
-        m.docType,
-        m.source,
-        m.recipe_name,
-        m.recipe_sku,
-        getEventTypeLabel(type),
-      ]
-        .map(normalizeText)
-        .join(" ");
-      
-console.log("CHECK DATE", {
-  raw: dateValue,
-  fromDate,
-  toDate,
-  ok: isMovementInRange(dateValue, fromDate, toDate),
+  if (!q) return true;
+
+  const haystack = [
+    sku,
+    itemName,
+    m.reason,
+    m.note,
+    m.documento,
+    m.documentId,
+    m.docType,
+    m.source,
+    m.recipe_name,
+    m.recipe_sku,
+    getEventTypeLabel(type),
+  ]
+    .map(normalizeText)
+    .join(" ");
+
+  return haystack.includes(q);
 });
-      return haystack.includes(q);
-    });
+    
   }, [normalizedMovements, itemNameBySku, eventType, fromDate, toDate, query]);
 
   const events = useMemo<MovementEvent[]>(() => {
