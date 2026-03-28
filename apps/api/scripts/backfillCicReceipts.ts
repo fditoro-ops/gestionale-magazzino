@@ -1,11 +1,11 @@
-import { pool } from "../db.js";
-import { cicExtractItems } from "../services/cicMapping.service.js";
-import { saveSalesDocumentWithLines } from "../data/sales.store.js";
-import { applyRecipeStock } from "../services/recipeStock.service.js";
+import { pool } from "../src/db.js";
+import { cicExtractItems } from "../src/services/cicMapping.service.js";
+import { saveSalesDocumentWithLines } from "../src/data/sales.store.js";
+import { applyRecipeStock } from "../src/services/recipeStock.service.js";
 import {
   getActiveBom,
   getCicProductModesCache,
-} from "../server.js";
+} from "../src/server.js";
 
 const CIC_API_BASE_URL =
   process.env.CIC_API_BASE_URL || "https://api.cassanova.com";
