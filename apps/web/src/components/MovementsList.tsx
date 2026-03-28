@@ -117,12 +117,7 @@ function getEventTypeLabel(type: string) {
 function isMovementInRange(dateValue: string, from: string, to: string) {
   if (!dateValue) return true;
 
-  const dt = new Date(dateValue);
-  if (Number.isNaN(dt.getTime())) return true;
-
-  const movementDay = `${dt.getFullYear()}-${String(
-    dt.getMonth() + 1
-  ).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  const movementDay = String(dateValue).slice(0, 10);
 
   if (from && movementDay < from) return false;
   if (to && movementDay > to) return false;
@@ -177,8 +172,7 @@ const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
       const itemName = itemNameBySku.get(sku) || sku;
 
       if (eventType !== "ALL" && type !== eventType) return false;
-      if (!isMovementInRange(dateValue, fromDate, toDate)) return false;
-
+     if (!inRange) return false;
       if (!q) return true;
 
       const haystack = [
@@ -196,7 +190,13 @@ const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
       ]
         .map(normalizeText)
         .join(" ");
-
+      
+console.log("CHECK DATE", {
+  raw: dateValue,
+  fromDate,
+  toDate,
+  ok: isMovementInRange(dateValue, fromDate, toDate),
+});
       return haystack.includes(q);
     });
   }, [normalizedMovements, itemNameBySku, eventType, fromDate, toDate, query]);
