@@ -65,11 +65,11 @@ async function run() {
       [docId]
     );
 
-    if (existingMovements.rowCount > 0) {
-      skippedAlreadyPresent++;
-      console.log(`⏭ già presenti movimenti per ${docId}`);
-      continue;
-    }
+   if ((existingMovements.rowCount ?? 0) > 0) {
+  skippedAlreadyPresent++;
+  console.log(`⏭ già presenti movimenti per ${docId}`);
+  continue;
+}
 
     const linesRes = await pool.query(
       `
