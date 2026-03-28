@@ -1,11 +1,6 @@
-import { pool } from "../src/db.js";
+  import { pool } from "../src/db.js";
 import { cicExtractItems } from "../src/services/cicMapping.service.js";
 import { saveSalesDocumentWithLines } from "../src/data/sales.store.js";
-import { applyRecipeStock } from "../src/services/recipeStock.service.js";
-import {
-  getActiveBom,
-  getCicProductModesCache,
-} from "../src/server.js";
 
 const CIC_API_BASE_URL =
   process.env.CIC_API_BASE_URL || "https://api.cassanova.com";
@@ -56,23 +51,13 @@ async function run() {
   const from = "2026-03-27T21:39:00+01:00";
   const to = "2026-03-28T05:24:00+01:00";
 
-  console.log("🚀 BACKFILL START", { from, to });
+  console.log("🚀 BACKFILL SALES START", { from, to });
 
   const token = await getCicToken();
   const data = await fetchReceiptsByRange(token, from, to);
 
   const receipts = Array.isArray(data) ? data : data?.documents ?? [];
   console.log(`📦 Ricevuti ${receipts.length} scontrini da CIC`);
-
-  const bom = getActiveBom();
-  const cicProductModeCache = getCicProductModesCache();
-
-  const cicModesBySku = Object.fromEntries(
-    Object.entries(cicProductModeCache).map(([_, v]: [string, any]) => [
-      v.sku,
-      v.mode,
-    ])
-  ) as Record<string, "RECIPE" | "IGNORE">;
 
   for (const receipt of receipts) {
     const docId =
@@ -116,8 +101,8 @@ async function run() {
           Number(it.total ?? 0),
         productId: String(it._idProduct || ""),
         variantId: String(it._idProductVariant || ""),
-        mode: it.sku ? cicModesBySku[it.sku] || "" : "",
-        hasRecipe: true,
+        mode: "",
+        hasRecipe: false,
         resolvedOk: Boolean(it.sku),
         tenantId,
       };
@@ -136,44 +121,18 @@ async function run() {
         documentDate: new Date(
           receipt?.document?.date || Date.now()
         ),
-        totalAmount: Number(
-          receipt?.document?.amount ?? 0
-        ),
-        paymentsTotal: Number(
-          receipt?.document?.amount ?? 0
-        ),
+        totalAmount: Number(receipt?.document?.amount ?? 0),
+        paymentsTotal: Number(receipt?.document?.amount ?? 0),
         tenantId,
         rawPayload: receipt,
       },
       salesLinesToSave
     );
 
-    const soldItems = items
-      .filter((x) => x.sku)
-      .map((x) => ({
-        sku: String(x.sku),
-        qty: Number(x.qty || 0),
-      }));
-
-    await applyRecipeStock({
-      docId,
-      receiptNumber: String(
-        receipt?.document?.documentNumber ||
-          receipt?.document?.number ||
-          ""
-      ),
-      tenantId,
-      orderDate: new Date(receipt?.document?.date || Date.now()),
-      soldItems,
-      bom,
-      cicProductModes: cicModesBySku,
-      movementSign: -1,
-    });
-
-    console.log("✅ recuperato", docId);
+    console.log("✅ sales recuperato", docId);
   }
 
-  console.log("🎉 BACKFILL COMPLETATO");
+  console.log("🎉 BACKFILL SALES COMPLETATO");
 }
 
 run().catch(console.error);
