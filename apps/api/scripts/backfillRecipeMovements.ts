@@ -9,16 +9,12 @@ async function run() {
 
   console.log("🚀 BACKFILL MOVIMENTI START", { from, to });
 
-  const docsRes = await pool.query(
-    `
-    SELECT document_id, receipt_number, document_date
-    FROM sales_documents
-    WHERE source = 'CIC_BACKFILL'
-      AND document_date BETWEEN $1 AND $2
-    ORDER BY document_date ASC
-    `,
-    [from, to]
-  );
+  const docsRes = await pool.query(`
+  SELECT document_id, receipt_number, document_date
+  FROM sales_documents
+  WHERE source = 'CIC_BACKFILL'
+  ORDER BY document_date ASC
+`);
 
   console.log(`📦 Documenti trovati: ${docsRes.rows.length}`);
 
