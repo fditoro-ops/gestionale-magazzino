@@ -114,29 +114,7 @@ function getEventTypeLabel(type: string) {
   return type || "Movimento";
 }
 
-function isMovementInRange(dateValue: string, from: string, to: string) {
-  if (!dateValue) return true;
-
-  const dt = new Date(dateValue);
-  if (Number.isNaN(dt.getTime())) return true;
-
-  const movementLocal = new Date(
-    dt.getFullYear(),
-    dt.getMonth(),
-    dt.getDate()
-  ).getTime();
-
-  const fromTime = from
-    ? new Date(from + "T00:00:00").getTime()
-    : -Infinity;
-
-  const toTime = to
-    ? new Date(to + "T23:59:59").getTime()
-    : Infinity;
-
-  return movementLocal >= fromTime && movementLocal <= toTime;
-}
-
+function isMovementInRange(dateVa
 export default function MovementsList({ movements, items }: Props) {
   console.log("MOVEMENTS RAW", movements.length, movements);
 const [query, setQuery] = useState("");
