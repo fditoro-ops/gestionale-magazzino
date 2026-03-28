@@ -1,77 +1,9 @@
 import { pool } from "../src/db.js";
-import { saveSalesDocumentWithLines } from "../src/data/sales.store.js";
-
-function extractItemsFromReceipt(data: any) {
-  const rows = Array.isArray(data?.document?.rows)
-    ? data.document.rows
-    : [];
-
-  return rows
-    .map((r: any) => ({
-      sku: null,
-      qty: Number(r?.quantity ?? 0),
-      total:
-        (Number(r?.quantity ?? 0) || 0) *
-        (Number(r?.price ?? 0) || 0),
-      _idProduct: String(r?.idProduct ?? ""),
-      _idProductVariant: String(r?.idProductVariant ?? ""),
-    }))
-    .filter((x: any) => x.qty > 0);
-}
-
-const CIC_API_BASE_URL =
-  process.env.CIC_API_BASE_URL || "https://api.cassanova.com";
-const CIC_API_KEY = process.env.CIC_API_KEY || "";
-const CIC_X_VERSION = process.env.CIC_X_VERSION || "1.0";
-
-async function getCicToken() {
-  const res = await fetch(`${CIC_API_BASE_URL}/apikey/token`, {
-    method: "POST",
-    headers: {
-      apikey: CIC_API_KEY,
-      "X-Version": CIC_X_VERSION,
-    },
-  });
-
-  const json = await res.json();
-  console.log("🔑 TOKEN RESPONSE", json);
-
-  return (
-    json?.token ||
-    json?.accessToken ||
-    json?.data?.token ||
-    json?.data?.accessToken
-  );
-}
-
-async function fetchReceiptsByRange(
-  token: string,
-  fromIso: string,
-  toIso: string
-) {
-  const url =
-    `${CIC_API_BASE_URL}/documents/receipts` +
-    `?startDate=${encodeURIComponent(fromIso)}` +
-    `&endDate=${encodeURIComponent(toIso)}` +
-    `&limit=500`;
-
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      apikey: CIC_API_KEY,
-      "X-Version": CIC_X_VERSION,
-    },
-  });
-
-  const text = await res.text();
-
-  if (!res.ok) {
-    throw new Error(`CIC receipts fetch failed ${res.status}: ${text}`);
-  }
-
-  return JSON.parse(text);
-}
+import { applyRecipeStock } from "../src/services/recipeStock.service.js";
+import {
+  getActiveBom,
+  getCicProductModesCache,
+} from "../src/server.js";
 
 async function run() {
   const tenantId = process.env.TENANT_ID || "IMP001";
@@ -79,88 +11,151 @@ async function run() {
   const from = "2026-03-27T21:39:00+01:00";
   const to = "2026-03-28T05:24:00+01:00";
 
-  console.log("🚀 BACKFILL SALES START", { from, to });
+  console.log("🚀 BACKFILL MOVIMENTI START", { from, to });
 
-  const token = await getCicToken();
-  const data = await fetchReceiptsByRange(token, from, to);
+  const bom = getActiveBom();
+  const cicProductModeCache = getCicProductModesCache();
 
-  const receipts = Array.isArray(data) ? data : data?.documents ?? [];
-  console.log(`📦 Ricevuti ${receipts.length} scontrini da CIC`);
+  const cicModesBySku = Object.fromEntries(
+    Object.entries(cicProductModeCache).map(([_, v]: [string, any]) => [
+      String(v?.sku || "").trim(),
+      v?.mode,
+    ])
+  ) as Record<string, "RECIPE" | "IGNORE">;
 
-  for (const receipt of receipts) {
-    const docId =
-      "CIC-" + String(receipt?.document?.id || receipt?.id || "");
+  const docsRes = await pool.query(
+    `
+    SELECT
+      document_id,
+      receipt_number,
+      document_date,
+      source,
+      status
+    FROM sales_documents
+    WHERE source IN ('CIC', 'CIC_BACKFILL')
+      AND status = 'VALID'
+      AND document_date >= $1
+      AND document_date <= $2
+    ORDER BY document_date ASC
+    `,
+    [from, to]
+  );
 
-    const exists = await pool.query(
-      `SELECT 1 FROM sales_documents WHERE document_id = $1 LIMIT 1`,
+  const docs = docsRes.rows;
+  console.log(`📦 Documenti trovati: ${docs.length}`);
+
+  let createdDocs = 0;
+  let skippedAlreadyPresent = 0;
+  let skippedNoLines = 0;
+  let skippedNoRecipeItems = 0;
+
+  for (let i = 0; i < docs.length; i++) {
+    const doc = docs[i];
+    const docId = String(doc.document_id || "").trim();
+
+    console.log(`🔎 ${i + 1}/${docs.length} ${docId}`);
+
+    const existingMovements = await pool.query(
+      `
+      SELECT 1
+      FROM movements
+      WHERE documento = $1
+      LIMIT 1
+      `,
       [docId]
     );
 
-    if (exists.rowCount) {
-      console.log("⏭ già presente", docId);
+    if (existingMovements.rowCount > 0) {
+      skippedAlreadyPresent++;
+      console.log(`⏭ già presenti movimenti per ${docId}`);
       continue;
     }
 
-  const items = extractItemsFromReceipt(receipt);
-
-    const rawRows = Array.isArray(receipt?.document?.rows)
-      ? receipt.document.rows
-      : [];
-
-    const salesLinesToSave = items.map((it: any, idx: number) => {
-      const rawRow = rawRows.find((r: any) => {
-        return (
-          String(r?.idProductVariant || "").trim() ===
-            String(it._idProductVariant || "").trim() ||
-          String(r?.idProduct || "").trim() ===
-            String(it._idProduct || "").trim()
-        );
-      });
-
-      return {
-        lineNo: idx + 1,
-        sku: String(it.sku || "").trim(),
-        description: String(rawRow?.description || "").trim(),
-        qty: Number(it.qty || 0),
-        unitPrice: Number(rawRow?.price ?? 0),
-        lineTotal:
-          Number(rawRow?.calculatedAmount ?? 0) ||
-          Number(rawRow?.subtotal ?? 0) ||
-          Number(it.total ?? 0),
-        productId: String(it._idProduct || ""),
-        variantId: String(it._idProductVariant || ""),
-        mode: "",
-        hasRecipe: false,
-        resolvedOk: Boolean(it.sku),
-        tenantId,
-      };
-    });
-
-    await saveSalesDocumentWithLines(
-      {
-        documentId: docId,
-        receiptNumber: String(
-          receipt?.document?.documentNumber ||
-            receipt?.document?.number ||
-            ""
-        ),
-        source: "CIC_BACKFILL",
-        status: "VALID",
-        documentDate: new Date(
-          receipt?.document?.date || Date.now()
-        ),
-        totalAmount: Number(receipt?.document?.amount ?? 0),
-        paymentsTotal: Number(receipt?.document?.amount ?? 0),
-        tenantId,
-        rawPayload: receipt,
-      },
-      salesLinesToSave
+    const linesRes = await pool.query(
+      `
+      SELECT
+        sku,
+        qty,
+        mode,
+        has_recipe,
+        resolved_ok
+      FROM sales_lines
+      WHERE document_id = $1
+      ORDER BY line_no ASC
+      `,
+      [docId]
     );
 
-    console.log("✅ sales recuperato", docId);
+    const lines = linesRes.rows;
+
+    if (!lines.length) {
+      skippedNoLines++;
+      console.log(`⚠️ nessuna sales_line per ${docId}`);
+      continue;
+    }
+
+    const soldItems = lines
+      .map((line) => ({
+        sku: String(line.sku || "").trim(),
+        qty: Number(line.qty || 0),
+        mode: String(line.mode || "").trim(),
+        hasRecipe: Boolean(line.has_recipe),
+        resolvedOk: Boolean(line.resolved_ok),
+      }))
+      .filter((line) => {
+        if (!line.sku) return false;
+        if (line.qty <= 0) return false;
+
+        const mode = line.mode || cicModesBySku[line.sku] || "";
+        const hasRecipe =
+          line.hasRecipe ||
+          (Array.isArray((bom as any)[line.sku]) &&
+            (bom as any)[line.sku].length > 0);
+
+        if (mode !== "RECIPE") return false;
+        if (!hasRecipe) return false;
+
+        return true;
+      })
+      .map((line) => ({
+        sku: line.sku,
+        qty: line.qty,
+      }));
+
+    if (!soldItems.length) {
+      skippedNoRecipeItems++;
+      console.log(`⚠️ nessuna riga RECIPE valida per ${docId}`);
+      continue;
+    }
+
+    const inserted = await applyRecipeStock({
+      docId,
+      receiptNumber: String(doc.receipt_number || "").trim(),
+      tenantId,
+      orderDate: new Date(doc.document_date),
+      soldItems,
+      bom,
+      cicProductModes: cicModesBySku,
+      movementSign: -1,
+    });
+
+    createdDocs++;
+    console.log(`✅ movimenti creati ${docId}:`, inserted);
   }
 
-  console.log("🎉 BACKFILL SALES COMPLETATO");
+  console.log("🎉 BACKFILL MOVIMENTI COMPLETATO");
+  console.log({
+    totalDocs: docs.length,
+    createdDocs,
+    skippedAlreadyPresent,
+    skippedNoLines,
+    skippedNoRecipeItems,
+  });
+
+  process.exit(0);
 }
 
-run().catch(console.error);
+run().catch((err) => {
+  console.error("❌ BACKFILL MOVIMENTI ERROR:", err);
+  process.exit(1);
+});
