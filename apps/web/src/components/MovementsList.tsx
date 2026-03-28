@@ -117,15 +117,18 @@ function getEventTypeLabel(type: string) {
 function isMovementInRange(dateValue: string, from: string, to: string) {
   if (!dateValue) return true;
 
-  const dt = new Date(dateValue);
-  if (Number.isNaN(dt.getTime())) return true;
+  const time = new Date(dateValue).getTime();
+  if (Number.isNaN(time)) return true;
 
-  const movementDay = dt.toLocaleDateString("en-CA", {
-    timeZone: "Europe/Rome",
-  });
+  if (from) {
+    const fromTime = new Date(`${from}T00:00:00`).getTime();
+    if (time < fromTime) return false;
+  }
 
-  if (from && movementDay < from) return false;
-  if (to && movementDay > to) return false;
+  if (to) {
+    const toTime = new Date(`${to}T23:59:59`).getTime();
+    if (time > toTime) return false;
+  }
 
   return true;
 }
