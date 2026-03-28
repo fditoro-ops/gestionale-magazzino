@@ -117,29 +117,39 @@ function getEventTypeLabel(type: string) {
 function isMovementInRange(dateValue: string, from: string, to: string) {
   if (!dateValue) return true;
 
-  const time = new Date(dateValue).getTime();
-  if (Number.isNaN(time)) return true;
+  const dt = new Date(dateValue);
+  if (Number.isNaN(dt.getTime())) return true;
+
+  const localDate = new Date(
+    dt.getFullYear(),
+    dt.getMonth(),
+    dt.getDate()
+  );
 
   if (from) {
-    const fromTime = new Date(`${from}T00:00:00`).getTime();
-    if (time < fromTime) return false;
+    const fromDate = new Date(from);
+    if (localDate < fromDate) return false;
   }
 
   if (to) {
-    const toTime = new Date(`${to}T23:59:59`).getTime();
-    if (time > toTime) return false;
+    const toDate = new Date(to);
+    if (localDate > toDate) return false;
   }
 
   return true;
 }
 
 export default function MovementsList({ movements, items }: Props) {
-  const [query, setQuery] = useState("");
-  const [eventType, setEventType] = useState<EventTypeFilter>("ALL");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
+const [query, setQuery] = useState("");
+const [eventType, setEventType] = useState<EventTypeFilter>("ALL");
 
+const today = new Date().toISOString().split("T")[0];
+const [fromDate, setFromDate] = useState(today);
+const [toDate, setToDate] = useState(today);
+
+const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
+
+  
   const itemNameBySku = useMemo(() => {
     const map = new Map<string, string>();
 
@@ -205,7 +215,12 @@ export default function MovementsList({ movements, items }: Props) {
     for (const movement of filteredMovements) {
       const type = getMovementType(movement);
       const dt = getMovementDate(movement);
-      const isoMinute = dt ? new Date(dt).toISOString().slice(0, 16) : "no-date";
+     const isoMinute = dt
+  ? (() => {
+      const d = new Date(dt);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    })()
+  : "no-date";
 
       const documentKey =
         normalizeText(movement.documento) ||
@@ -310,11 +325,13 @@ export default function MovementsList({ movements, items }: Props) {
   };
 
   const clearFilters = () => {
-    setQuery("");
-    setEventType("ALL");
-    setFromDate("");
-    setToDate("");
-  };
+  const today = new Date().toISOString().split("T")[0];
+
+  setQuery("");
+  setEventType("ALL");
+  setFromDate(today);
+  setToDate(today);
+};
 
   async function handleExportCsv() {
     try {
