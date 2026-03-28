@@ -140,6 +140,7 @@ function isMovementInRange(dateValue: string, from: string, to: string) {
 }
 
 export default function MovementsList({ movements, items }: Props) {
+  console.log("MOVEMENTS RAW", movements.length, movements);
 const [query, setQuery] = useState("");
 const [eventType, setEventType] = useState<EventTypeFilter>("ALL");
 
