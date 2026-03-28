@@ -117,7 +117,10 @@ function getEventTypeLabel(type: string) {
 function isMovementInRange(dateValue: string, from: string, to: string) {
   if (!dateValue) return true;
 
-  const movementDay = String(dateValue).slice(0, 10);
+  const dt = new Date(dateValue);
+  if (Number.isNaN(dt.getTime())) return true;
+
+  const movementDay = dt.toLocaleDateString("en-CA");
 
   if (from && movementDay < from) return false;
   if (to && movementDay > to) return false;
