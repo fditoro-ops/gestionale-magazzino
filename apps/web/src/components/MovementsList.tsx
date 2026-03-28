@@ -120,12 +120,21 @@ function isMovementInRange(dateValue: string, from: string, to: string) {
   const dt = new Date(dateValue);
   if (Number.isNaN(dt.getTime())) return true;
 
-  const movementDay = dt.toLocaleDateString("en-CA");
+  const movementLocal = new Date(
+    dt.getFullYear(),
+    dt.getMonth(),
+    dt.getDate()
+  ).getTime();
 
-  if (from && movementDay < from) return false;
-  if (to && movementDay > to) return false;
+  const fromTime = from
+    ? new Date(from + "T00:00:00").getTime()
+    : -Infinity;
 
-  return true;
+  const toTime = to
+    ? new Date(to + "T23:59:59").getTime()
+    : Infinity;
+
+  return movementLocal >= fromTime && movementLocal <= toTime;
 }
 
 export default function MovementsList({ movements, items }: Props) {
