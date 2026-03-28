@@ -30,9 +30,14 @@ async function getCicToken() {
     headers: {
       apikey: CIC_API_KEY,
       "X-Version": CIC_X_VERSION,
-      "Content-Type": "application/json",
     },
   });
+
+  const json = await res.json();
+  console.log("🔑 TOKEN RESPONSE", json);
+
+  return json.token;
+}
 
   const json = await res.json();
   console.log("🔑 TOKEN RESPONSE", json);
@@ -62,7 +67,6 @@ async function fetchReceiptsByRange(
       Authorization: `Bearer ${token}`,
       apikey: CIC_API_KEY,
       "X-Version": CIC_X_VERSION,
-      "Content-Type": "application/json",
     },
   });
 
