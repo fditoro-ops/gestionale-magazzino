@@ -49,17 +49,22 @@ async function fetchReceiptsByRange(
     `&limit=500`;
 
   const res = await fetch(url, {
+    method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
+      apikey: CIC_API_KEY,
       "X-Version": CIC_X_VERSION,
+      "Content-Type": "application/json",
     },
   });
 
+  const text = await res.text();
+
   if (!res.ok) {
-    throw new Error(`CIC receipts fetch failed ${res.status}`);
+    throw new Error(`CIC receipts fetch failed ${res.status}: ${text}`);
   }
 
-  return res.json();
+  return JSON.parse(text);
 }
 
 async function run() {
