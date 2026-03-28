@@ -1,6 +1,6 @@
-  import { pool } from "../src/db.js";
-import { cicExtractItems } from "../src/services/cicMapping.service.js";
-import { saveSalesDocumentWithLines } from "../src/data/sales.store.js";
+import { pool } from "../src/db.ts";
+import { cicExtractItems } from "../src/services/cicMapping.service.ts";
+import { saveSalesDocumentWithLines } from "../src/data/sales.store.ts";
 
 const CIC_API_BASE_URL =
   process.env.CIC_API_BASE_URL || "https://api.cassanova.com";
