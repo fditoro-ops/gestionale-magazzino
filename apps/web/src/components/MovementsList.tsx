@@ -134,13 +134,12 @@ function isMovementInRange(dateValue: string, from: string, to: string) {
 }
 
 export default function MovementsList({ movements, items }: Props) {
-  console.log("MOVEMENTS RAW", movements.length, movements);
+
 const [query, setQuery] = useState("");
 const [eventType, setEventType] = useState<EventTypeFilter>("ALL");
 
-const today = new Date().toISOString().split("T")[0];
-const [fromDate, setFromDate] = useState(today);
-const [toDate, setToDate] = useState(today);
+const [fromDate, setFromDate] = useState("");
+const [toDate, setToDate] = useState("");
 
 const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
 
@@ -321,15 +320,13 @@ return normalizedMovements.filter((m) => {
     }));
   };
 
-  const clearFilters = () => {
-  const today = new Date().toISOString().split("T")[0];
-
+const clearFilters = () => {
   setQuery("");
   setEventType("ALL");
-  setFromDate(today);
-  setToDate(today);
+  setFromDate("");
+  setToDate("");
 };
-
+  
   async function handleExportCsv() {
     try {
       const params = new URLSearchParams();
