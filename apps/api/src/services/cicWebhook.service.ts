@@ -156,6 +156,11 @@ export async function processCicWebhook(req: any, res: any) {
 
     const data = JSON.parse(raw);
 
+    if (String(data?.document?.id || "").startsWith("TEST")) {
+  console.log("🧪 Test webhook ignorato");
+  return res.status(200).send("TEST_OK");
+}
+
     const debugDump = buildCicWebhookDebugDump(data, operation, {
       "x-cn-operation": req.header("x-cn-operation") || "",
       "x-cn-signature": req.header("x-cn-signature") || "",
@@ -199,8 +204,20 @@ await pool.query(
       ? data.document.payments
       : [];
 
-    const documentAmount =
-      Number(data?.document?.amount ?? data?.amount ?? 0) || 0;
+const calculatedRowsTotal = rawRows.reduce(
+  (sum: number, r: any) =>
+    sum +
+    ((Number(r?.quantity ?? 0) || 0) *
+      (Number(r?.price ?? 0) || 0)),
+  0
+);
+
+const documentAmount =
+  Number(
+    data?.document?.amount ??
+    data?.amount ??
+    calculatedRowsTotal
+  ) || 0;
 
     const paymentsTotal = payments.reduce(
       (sum: number, p: any) => sum + (Number(p?.amount ?? 0) || 0),
