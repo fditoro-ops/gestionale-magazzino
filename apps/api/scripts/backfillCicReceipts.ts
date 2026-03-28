@@ -30,11 +30,19 @@ async function getCicToken() {
     headers: {
       apikey: CIC_API_KEY,
       "X-Version": CIC_X_VERSION,
+      "Content-Type": "application/json",
     },
   });
 
   const json = await res.json();
-  return json.token;
+  console.log("🔑 TOKEN RESPONSE", json);
+
+  return (
+    json?.token ||
+    json?.accessToken ||
+    json?.data?.token ||
+    json?.data?.accessToken
+  );
 }
 
 async function fetchReceiptsByRange(
