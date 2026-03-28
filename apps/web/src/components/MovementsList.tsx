@@ -120,21 +120,12 @@ function isMovementInRange(dateValue: string, from: string, to: string) {
   const dt = new Date(dateValue);
   if (Number.isNaN(dt.getTime())) return true;
 
-  const localDate = new Date(
-    dt.getFullYear(),
-    dt.getMonth(),
-    dt.getDate()
-  );
+  const movementDay = `${dt.getFullYear()}-${String(
+    dt.getMonth() + 1
+  ).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 
-  if (from) {
-    const fromDate = new Date(from);
-    if (localDate < fromDate) return false;
-  }
-
-  if (to) {
-    const toDate = new Date(to);
-    if (localDate > toDate) return false;
-  }
+  if (from && movementDay < from) return false;
+  if (to && movementDay > to) return false;
 
   return true;
 }
