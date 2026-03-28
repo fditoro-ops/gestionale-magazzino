@@ -1,6 +1,23 @@
 import { pool } from "../src/db.js";
-import { cicExtractItems } from "../src/services/cicMapping.service.js";
 import { saveSalesDocumentWithLines } from "../src/data/sales.store.js";
+
+function extractItemsFromReceipt(data: any) {
+  const rows = Array.isArray(data?.document?.rows)
+    ? data.document.rows
+    : [];
+
+  return rows
+    .map((r: any) => ({
+      sku: null,
+      qty: Number(r?.quantity ?? 0),
+      total:
+        (Number(r?.quantity ?? 0) || 0) *
+        (Number(r?.price ?? 0) || 0),
+      _idProduct: String(r?.idProduct ?? ""),
+      _idProductVariant: String(r?.idProductVariant ?? ""),
+    }))
+    .filter((x: any) => x.qty > 0);
+}
 
 const CIC_API_BASE_URL =
   process.env.CIC_API_BASE_URL || "https://api.cassanova.com";
@@ -73,7 +90,7 @@ async function run() {
       continue;
     }
 
-    const items = cicExtractItems(receipt);
+  const items = extractItemsFromReceipt(receipt);
 
     const rawRows = Array.isArray(receipt?.document?.rows)
       ? receipt.document.rows
