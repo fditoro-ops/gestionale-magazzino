@@ -113,6 +113,7 @@ function getEventTypeLabel(type: string) {
   if (type === "INVENTORY") return "Inventario";
   return type || "Movimento";
 }
+
 function isMovementInRange(dateValue: string, from: string, to: string) {
   if (!dateValue) return true;
 
