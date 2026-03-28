@@ -113,8 +113,17 @@ function getEventTypeLabel(type: string) {
   if (type === "INVENTORY") return "Inventario";
   return type || "Movimento";
 }
+function isMovementInRange(dateValue: string, from: string, to: string) {
+  if (!dateValue) return true;
 
-function isMovementInRange(dateVa
+  const movementDay = String(dateValue).slice(0, 10);
+
+  if (from && movementDay < from) return false;
+  if (to && movementDay > to) return false;
+
+  return true;
+}
+
 export default function MovementsList({ movements, items }: Props) {
   console.log("MOVEMENTS RAW", movements.length, movements);
 const [query, setQuery] = useState("");
