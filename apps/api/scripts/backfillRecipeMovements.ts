@@ -1,6 +1,5 @@
 import { pool } from "../src/db.js";
 import { applyRecipeStock } from "../src/services/recipeStock.service.js";
-import { getActiveBom, getCicProductModesCache } from "../src/server.js";
 
 async function run() {
   const tenantId = process.env.TENANT_ID || "IMP001";
@@ -10,19 +9,9 @@ async function run() {
 
   console.log("🚀 BACKFILL MOVIMENTI START", { from, to });
 
-  const bom = getActiveBom();
-  const cicProductModeCache = getCicProductModesCache();
-
-  const cicModesBySku = Object.fromEntries(
-    Object.entries(cicProductModeCache).map(([_, v]: [string, any]) => [
-      v.sku,
-      v.mode,
-    ])
-  ) as Record<string, "RECIPE" | "IGNORE">;
-
   const docsRes = await pool.query(
     `
-    SELECT *
+    SELECT document_id, receipt_number, document_date
     FROM sales_documents
     WHERE source = 'CIC_BACKFILL'
       AND document_date BETWEEN $1 AND $2
@@ -55,10 +44,7 @@ async function run() {
       qty: Number(r.qty || 0),
     }));
 
-    if (!soldItems.length) {
-      console.log("⏭ nessuna riga con sku", doc.document_id);
-      continue;
-    }
+    if (!soldItems.length) continue;
 
     await applyRecipeStock({
       docId: doc.document_id,
@@ -66,8 +52,8 @@ async function run() {
       tenantId,
       orderDate: new Date(doc.document_date),
       soldItems,
-      bom,
-      cicProductModes: cicModesBySku,
+      bom: {},
+      cicProductModes: {},
       movementSign: -1,
     });
 
