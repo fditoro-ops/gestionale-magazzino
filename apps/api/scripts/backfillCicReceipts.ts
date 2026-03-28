@@ -36,12 +36,6 @@ async function getCicToken() {
   const json = await res.json();
   console.log("🔑 TOKEN RESPONSE", json);
 
-  return json.token;
-}
-
-  const json = await res.json();
-  console.log("🔑 TOKEN RESPONSE", json);
-
   return (
     json?.token ||
     json?.accessToken ||
