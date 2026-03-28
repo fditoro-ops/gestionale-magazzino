@@ -12,17 +12,19 @@ async function run() {
   const docsRes = await pool.query(`
   SELECT document_id, receipt_number, document_date
   FROM sales_documents
-  WHERE source = 'CIC_BACKFILL'
-  ORDER BY document_date ASC
+  ORDER BY document_date DESC
+  LIMIT 497
 `);
 
-  console.log(`📦 Documenti trovati: ${docsRes.rows.length}`);
+const docs = docsRes.rows.reverse();
 
-  let i = 0;
+console.log(`📦 Documenti trovati: ${docs.length}`);
 
-  for (const doc of docsRes.rows) {
-    i++;
-    console.log(`⏳ ${i}/${docsRes.rows.length} ${doc.document_id}`);
+let i = 0;
+
+for (const doc of docs) {
+  i++;
+  console.log(`⏳ ${i}/${docs.length} ${doc.document_id}`);
 
     const linesRes = await pool.query(
       `
