@@ -2,36 +2,16 @@
 import fs from "fs";
 import path from "path";
 
-
 const BASE_URL = process.env.CIC_API_BASE_URL || "https://api.cassanova.com";
-const CLIENT_ID = process.env.CIC_CLIENT_ID;
-const CLIENT_SECRET = process.env.CIC_CLIENT_SECRET;
+const API_KEY = process.env.CIC_API_KEY;
 const VERSION = process.env.CIC_X_VERSION || "1.0.0";
 
-if (!CLIENT_ID || !CLIENT_SECRET) {
-  console.error("❌ Mancano CIC_CLIENT_ID o CIC_CLIENT_SECRET");
+if (!API_KEY) {
+  console.error("❌ Mancante CIC_API_KEY");
   process.exit(1);
 }
 
-async function getToken() {
-  const res = await fetch(`${BASE_URL}/apikey/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      clientId: CLIENT_ID,
-      clientSecret: CLIENT_SECRET,
-    }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Auth failed: ${res.status}`);
-  }
-
-  const data = await res.json();
-  return data.access_token;
-}
-
-async function getAllProducts(token) {
+async function getAllProducts() {
   let all = [];
   let start = 0;
   const limit = 100;
@@ -41,7 +21,7 @@ async function getAllProducts(token) {
 
     const res = await fetch(url, {
       headers: {
-        Authorization: `Bearer ${token}`,
+        "X-Api-Key": API_KEY,
         "X-Version": VERSION,
       },
     });
@@ -91,10 +71,7 @@ function saveCSV(products) {
 async function main() {
   console.log("🚀 Download catalogo prodotti...");
 
-  const token = await getToken();
-  console.log("🔐 Token OK");
-
-  const products = await getAllProducts(token);
+  const products = await getAllProducts();
 
   console.log(`✅ Totale prodotti: ${products.length}`);
 
