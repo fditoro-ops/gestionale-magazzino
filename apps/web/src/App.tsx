@@ -22,6 +22,7 @@ import InventoryPage from "./components/InventoryPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import CashClosurePage from "./pages/CashClosurePage";
 import RecipesPage from "./components/RecipesPage";
+import CicIntegrationPage from "./pages/CicIntegrationPage";
 
 type WarehouseRow = {
   itemId: string;
