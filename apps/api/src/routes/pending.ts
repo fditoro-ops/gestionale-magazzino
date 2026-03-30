@@ -13,66 +13,124 @@ const router = Router();
  * GET /pending
  */
 router.get("/", async (_req, res) => {
-  const rows = await listPendingRows();
-  res.json({ ok: true, rows });
+  try {
+    const rows = await listPendingRows();
+    res.json({ ok: true, rows });
+  } catch (err) {
+    console.error("GET /pending error", err);
+    res.status(500).json({ ok: false });
+  }
 });
 
 /**
- * PATCH resolve
+ * PATCH /pending/:id/resolve
  */
 router.patch("/:id/resolve", async (req, res) => {
-  const { id } = req.params;
-  const { resolvedSku, type } = req.body;
+  try {
+    const { id } = req.params;
+    const { resolvedSku, type } = req.body;
 
-  const rows = await listPendingRows();
-  const row = rows.find((r) => r.id === id);
+    // 🔒 validazione base
+    if (!resolvedSku) {
+      return res.status(400).json({
+        ok: false,
+        error: "resolvedSku required",
+      });
+    }
 
-  if (!row) {
-    return res.status(404).json({ ok: false, error: "Not found" });
+    const rows = await listPendingRows();
+    const row = rows.find((r) => r.id === id);
+
+    if (!row) {
+      return res.status(404).json({
+        ok: false,
+        error: "Not found",
+      });
+    }
+
+    const updated = await upsertPendingRow({
+      ...row,
+      resolvedSku,
+      type,
+      status: "RESOLVED",
+    });
+
+    res.json({ ok: true, row: updated });
+  } catch (err) {
+    console.error("PATCH /pending/:id/resolve error", err);
+    res.status(500).json({ ok: false });
   }
-
-  const updated = await upsertPendingRow({
-    ...row,
-    resolvedSku,
-    type,
-    status: "RESOLVED",
-  });
-
-  res.json({ ok: true, row: updated });
 });
 
-
 /**
- * POST reprocess singolo
+ * POST /pending/:id/reprocess
  */
 router.post("/:id/reprocess", async (req, res) => {
-  const rows = await listPendingRows();
-  const row = rows.find((r) => r.id === req.params.id);
+  try {
+    const rows = await listPendingRows();
+    const row = rows.find((r) => r.id === req.params.id);
 
-  if (!row) return res.status(404).json({ ok: false });
+    if (!row) {
+      return res.status(404).json({ ok: false });
+    }
 
-  await processPendingRow(row);
-  await markPendingRowProcessed(row.id);
+    // 🔒 deve essere risolta
+    if (row.status !== "RESOLVED") {
+      return res.status(400).json({
+        ok: false,
+        error: "Resolve first",
+      });
+    }
 
-  res.json({ ok: true });
+    // 🔒 evita doppio processing
+    if (row.status === "PROCESSED") {
+      return res.status(400).json({
+        ok: false,
+        error: "Already processed",
+      });
+    }
+
+    console.log("Processing pending row:", row.id, row.resolvedSku);
+
+    await processPendingRow(row);
+    await markPendingRowProcessed(row.id);
+
+    res.json({ ok: true, processed: 1 });
+  } catch (err) {
+    console.error("POST /pending/:id/reprocess error", err);
+    res.status(500).json({ ok: false });
+  }
 });
 
 /**
- * POST reprocess all
+ * POST /pending/reprocess-all
  */
 router.post("/reprocess-all", async (_req, res) => {
-  const rows = await listPendingRows();
+  try {
+    const rows = (await listPendingRows()).filter(
+      (r) => r.status === "RESOLVED"
+    );
 
-  for (const row of rows) {
-    try {
-      await processPendingRow(row);
-      await markPendingRowProcessed(row.id);
-    } catch (err) {
-      console.error("fail row", row.id);
+    let processed = 0;
+
+    for (const row of rows) {
+      try {
+        console.log("Processing row:", row.id);
+
+        await processPendingRow(row);
+        await markPendingRowProcessed(row.id);
+
+        processed++;
+      } catch (err) {
+        console.error("fail row", row.id);
+      }
     }
-  }
 
-  res.json({ ok: true });
+    res.json({ ok: true, processed });
+  } catch (err) {
+    console.error("POST /pending/reprocess-all error", err);
+    res.status(500).json({ ok: false });
+  }
 });
 
 export default router;
