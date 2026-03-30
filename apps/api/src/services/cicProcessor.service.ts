@@ -1,13 +1,13 @@
+import crypto from "crypto";
 import { insertManyMovements } from "../data/movements.store.js";
 
-export async function processPendingRow(row) {
+export async function processPendingRow(row: any) {
   if (row.type === "IGNORE") return;
 
   if (!row.resolvedSku) {
     throw new Error("Missing SKU");
   }
 
-  // esempio base → personalizzeremo dopo
   const movement = {
     id: crypto.randomUUID(),
     sku: row.resolvedSku,
