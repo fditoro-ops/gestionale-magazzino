@@ -11,7 +11,8 @@ export type TabKey =
   | "suppliers"
   | "inventory"
   | "users"
-  | "cashClosure";
+  | "cashClosure"
+  | "cic";
 
 export default function AppLayout({
   tab,
@@ -72,6 +73,14 @@ export default function AppLayout({
             Ricettario
           </SideItem>
 
+          <SideItem
+  active={tab === "cic"}
+  onClick={() => onTabChange("cic")}
+>
+  Integrazione
+</SideItem>
+
+          
           <SideItem
             active={tab === "inventory"}
             onClick={() => onTabChange("inventory")}
