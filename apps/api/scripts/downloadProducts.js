@@ -1,8 +1,7 @@
 // apps/api/scripts/downloadProducts.js
 import fs from "fs";
 import path from "path";
-import fetch from "node-fetch"; // se Node < 18
-// se Node >= 18 puoi usare fetch nativo e rimuovere questa riga
+
 
 const BASE_URL = process.env.CIC_API_BASE_URL || "https://api.cassanova.com";
 const CLIENT_ID = process.env.CIC_CLIENT_ID;
