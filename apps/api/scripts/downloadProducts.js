@@ -1,3 +1,4 @@
+// apps/api/scripts/downloadProducts.js
 import fs from "fs";
 import path from "path";
 
@@ -10,85 +11,122 @@ if (!API_KEY) {
   process.exit(1);
 }
 
-const variants = [
-  {
-    name: "X-Api-Key",
+async function getToken() {
+  const res = await fetch(`${BASE_URL}/apikey/token`, {
+    method: "POST",
     headers: {
-      "X-Api-Key": API_KEY,
-      "X-Version": VERSION,
+      "Content-Type": "application/json",
+      "X-Requested-With": "*",
     },
-  },
-  {
-    name: "apikey",
-    headers: {
-      apikey: API_KEY,
-      "X-Version": VERSION,
-    },
-  },
-  {
-    name: "Authorization Bearer",
-    headers: {
-      Authorization: `Bearer ${API_KEY}`,
-      "X-Version": VERSION,
-    },
-  },
-  {
-    name: "Authorization ApiKey",
-    headers: {
-      Authorization: `ApiKey ${API_KEY}`,
-      "X-Version": VERSION,
-    },
-  },
-  {
-    name: "x-api-key lowercase",
-    headers: {
-      "x-api-key": API_KEY,
-      "X-Version": VERSION,
-    },
-  },
-];
+    body: JSON.stringify({
+      apiKey: API_KEY,
+    }),
+  });
 
-async function testVariant(variant) {
-  const url = `${BASE_URL}/products?start=0&limit=5`;
+  const text = await res.text();
 
+  if (!res.ok) {
+    throw new Error(`Auth failed: ${res.status} - ${text}`);
+  }
+
+  let data;
   try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Auth response non-JSON: ${text}`);
+  }
+
+  if (!data.access_token) {
+    throw new Error(`Token mancante nella risposta: ${text}`);
+  }
+
+  return data.access_token;
+}
+
+async function getAllProducts(token) {
+  let all = [];
+  let start = 0;
+  const limit = 100;
+
+  while (true) {
+    const url = `${BASE_URL}/products?start=${start}&limit=${limit}`;
+
     const res = await fetch(url, {
       method: "GET",
-      headers: variant.headers,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Version": VERSION,
+      },
     });
 
     const text = await res.text();
 
-    console.log(`\n==============================`);
-    console.log(`TEST: ${variant.name}`);
-    console.log(`STATUS: ${res.status}`);
-    console.log(`HEADERS:`, variant.headers);
-    console.log(`BODY: ${text.slice(0, 1000)}`);
+    if (!res.ok) {
+      throw new Error(`Products fetch failed: ${res.status} - ${text}`);
+    }
 
-    return { ok: res.ok, status: res.status, body: text };
-  } catch (err) {
-    console.log(`\n==============================`);
-    console.log(`TEST: ${variant.name}`);
-    console.log(`ERRORE FETCH: ${err.message}`);
-    return { ok: false, status: 0, body: err.message };
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(`Products response non-JSON: ${text}`);
+    }
+
+    const rows = data.data || [];
+
+    if (rows.length === 0) break;
+
+    all.push(...rows);
+    start += limit;
+
+    console.log(`📦 Scaricati: ${all.length}`);
   }
+
+  return all;
+}
+
+function saveJSON(products) {
+  const file = path.resolve("products.json");
+  fs.writeFileSync(file, JSON.stringify(products, null, 2));
+  console.log(`💾 Salvato JSON in ${file}`);
+}
+
+function saveCSV(products) {
+  const headers = ["id", "name", "barcode", "price"];
+  const rows = products.map((p) => [
+    p.id ?? "",
+    p.name ?? "",
+    p.barcode ?? "",
+    p.price ?? "",
+  ]);
+
+  const csv = [headers, ...rows]
+    .map((r) =>
+      r
+        .map((x) => `"${String(x).replace(/"/g, '""')}"`)
+        .join(",")
+    )
+    .join("\n");
+
+  const file = path.resolve("products.csv");
+  fs.writeFileSync(file, csv);
+  console.log(`📊 Salvato CSV in ${file}`);
 }
 
 async function main() {
-  console.log("🚀 Diagnostica CIC /products");
+  console.log("🚀 Download catalogo prodotti...");
 
-  for (const variant of variants) {
-    const result = await testVariant(variant);
+  const token = await getToken();
+  console.log("🔐 Token ottenuto");
 
-    if (result.ok) {
-      console.log(`\n✅ Variante funzionante: ${variant.name}`);
-      return;
-    }
-  }
+  const products = await getAllProducts(token);
+  console.log(`✅ Totale prodotti: ${products.length}`);
 
-  console.log("\n❌ Nessuna variante ha funzionato.");
+  saveJSON(products);
+  saveCSV(products);
 }
 
 main().catch((err) => {
-  console.error("💥 ERRORE FATALE:", err.message);
+  console.error("💥 ERRORE:", err.message);
+  process.exit(1);
 });
