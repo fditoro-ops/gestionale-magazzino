@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { insertManyMovements } from "../data/movements.store.js";
+import type { Movement } from "../types/movement.js";
 
 export async function processPendingRow(row: any) {
   if (row.type === "IGNORE") return;
@@ -8,7 +9,7 @@ export async function processPendingRow(row: any) {
     throw new Error("Missing SKU");
   }
 
-  const movement = {
+  const movement: Movement = {
     id: crypto.randomUUID(),
     sku: row.resolvedSku,
     quantity: -Math.abs(row.qty || 1),
