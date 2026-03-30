@@ -196,6 +196,8 @@ function CoreApp() {
 
           {tab === "recipes" && <RecipesPage />}
 
+          {tab === "cic" && <CicIntegrationPage />}
+
           {tab === "cashClosure" && <CashClosurePage />}
 
           {tab === "inventory" && <InventoryPage />}
