@@ -36,7 +36,7 @@ import {
 } from "./services/recipesDb.service.js";
 import { cicResolveSku, cicExtractItems } from "./services/cicMapping.service.js";
 import dashboardRouter from "./routes/dashboard.router.js";
-import pendingRouter from "./routes/pending";
+import pendingRouter from "./routes/pending.js";
 
 /* =========================
    BOM (Google Sheet) Reader
