@@ -20,10 +20,10 @@ async function getAllProducts() {
     const url = `${BASE_URL}/products?start=${start}&limit=${limit}`;
 
     const res = await fetch(url, {
-      headers: {
-        "X-Api-Key": API_KEY,
-        "X-Version": VERSION,
-      },
+headers: {
+  Authorization: `Bearer ${API_KEY}`,
+  "X-Version": VERSION,
+}
     });
 
     if (!res.ok) {
