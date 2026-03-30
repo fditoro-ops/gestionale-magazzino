@@ -37,6 +37,7 @@ import {
 import { cicResolveSku, cicExtractItems } from "./services/cicMapping.service.js";
 import dashboardRouter from "./routes/dashboard.router.js";
 import pendingRouter from "./routes/pending.routes.js";
+import pendingRouter from "./routes/pending.js";
 
 
 /* =========================
@@ -689,6 +690,7 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
 app.use("/webhooks/cic", webhooksCicRouter);
+app.use("/pending", pendingRouter);
 
 function buildCicWebhookDebugDump(
   data: any,
