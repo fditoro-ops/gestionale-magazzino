@@ -24,8 +24,15 @@ router.patch("/:id/resolve", async (req, res) => {
   const { id } = req.params;
   const { resolvedSku, type } = req.body;
 
+  const rows = await listPendingRows();
+  const row = rows.find((r) => r.id === id);
+
+  if (!row) {
+    return res.status(404).json({ ok: false, error: "Not found" });
+  }
+
   const updated = await upsertPendingRow({
-    id,
+    ...row,
     resolvedSku,
     type,
     status: "RESOLVED",
@@ -33,6 +40,7 @@ router.patch("/:id/resolve", async (req, res) => {
 
   res.json({ ok: true, row: updated });
 });
+
 
 /**
  * POST reprocess singolo
