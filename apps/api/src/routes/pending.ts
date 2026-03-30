@@ -1,9 +1,8 @@
 import { Router } from "express";
 import {
   listPendingRows,
-  updatePendingRow,
+  upsertPendingRow,
   markPendingRowProcessed,
-  getPendingRowById,
 } from "../data/cicPendingRows.store.js";
 
 import { processPendingRow } from "../services/cicProcessor.service.js";
@@ -12,84 +11,60 @@ const router = Router();
 
 /**
  * GET /pending
- * Lista tutte le righe pending
  */
 router.get("/", async (_req, res) => {
-  try {
-    const rows = await listPendingRows();
-    res.json({ ok: true, rows });
-  } catch (err) {
-    console.error("GET /pending error", err);
-    res.status(500).json({ ok: false });
-  }
+  const rows = await listPendingRows();
+  res.json({ ok: true, rows });
 });
 
 /**
- * PATCH /pending/:id/resolve
- * Risolve manualmente una riga
+ * PATCH resolve
  */
 router.patch("/:id/resolve", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { resolvedSku, type } = req.body;
+  const { id } = req.params;
+  const { resolvedSku, type } = req.body;
 
-    const updated = await updatePendingRow(id, {
-      resolvedSku,
-      type, // RECIPE | IGNORE
-      status: "RESOLVED",
-    });
+  const updated = await upsertPendingRow({
+    id,
+    resolvedSku,
+    type,
+    status: "RESOLVED",
+  });
 
-    res.json({ ok: true, row: updated });
-  } catch (err) {
-    console.error("PATCH resolve error", err);
-    res.status(500).json({ ok: false });
-  }
+  res.json({ ok: true, row: updated });
 });
 
 /**
- * POST /pending/:id/reprocess
+ * POST reprocess singolo
  */
 router.post("/:id/reprocess", async (req, res) => {
-  try {
-    const { id } = req.params;
+  const rows = await listPendingRows();
+  const row = rows.find((r) => r.id === req.params.id);
 
-    const row = await getPendingRowById(id);
-    if (!row) {
-      return res.status(404).json({ ok: false, error: "Not found" });
-    }
+  if (!row) return res.status(404).json({ ok: false });
 
-    await processPendingRow(row);
+  await processPendingRow(row);
+  await markPendingRowProcessed(row.id);
 
-    await markPendingRowProcessed(id);
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("reprocess error", err);
-    res.status(500).json({ ok: false });
-  }
+  res.json({ ok: true });
 });
 
 /**
- * POST /pending/reprocess-all
+ * POST reprocess all
  */
 router.post("/reprocess-all", async (_req, res) => {
-  try {
-    const rows = await listPendingRows();
+  const rows = await listPendingRows();
 
-    for (const row of rows) {
-      try {
-        await processPendingRow(row);
-        await markPendingRowProcessed(row.id);
-      } catch (err) {
-        console.error("row failed", row.id);
-      }
+  for (const row of rows) {
+    try {
+      await processPendingRow(row);
+      await markPendingRowProcessed(row.id);
+    } catch (err) {
+      console.error("fail row", row.id);
     }
-
-    res.json({ ok: true, processed: rows.length });
-  } catch (err) {
-    console.error("reprocess-all error", err);
-    res.status(500).json({ ok: false });
   }
+
+  res.json({ ok: true });
 });
 
 export default router;
