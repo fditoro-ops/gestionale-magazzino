@@ -1,4 +1,3 @@
-// apps/api/scripts/downloadProducts.js
 import fs from "fs";
 import path from "path";
 
@@ -11,74 +10,85 @@ if (!API_KEY) {
   process.exit(1);
 }
 
-async function getAllProducts() {
-  let all = [];
-  let start = 0;
-  const limit = 100;
+const variants = [
+  {
+    name: "X-Api-Key",
+    headers: {
+      "X-Api-Key": API_KEY,
+      "X-Version": VERSION,
+    },
+  },
+  {
+    name: "apikey",
+    headers: {
+      apikey: API_KEY,
+      "X-Version": VERSION,
+    },
+  },
+  {
+    name: "Authorization Bearer",
+    headers: {
+      Authorization: `Bearer ${API_KEY}`,
+      "X-Version": VERSION,
+    },
+  },
+  {
+    name: "Authorization ApiKey",
+    headers: {
+      Authorization: `ApiKey ${API_KEY}`,
+      "X-Version": VERSION,
+    },
+  },
+  {
+    name: "x-api-key lowercase",
+    headers: {
+      "x-api-key": API_KEY,
+      "X-Version": VERSION,
+    },
+  },
+];
 
-  while (true) {
-    const url = `${BASE_URL}/products?start=${start}&limit=${limit}`;
+async function testVariant(variant) {
+  const url = `${BASE_URL}/products?start=0&limit=5`;
 
+  try {
     const res = await fetch(url, {
-headers: {
-  Authorization: `Bearer ${API_KEY}`,
-  "X-Version": VERSION,
-}
+      method: "GET",
+      headers: variant.headers,
     });
 
-    if (!res.ok) {
-      throw new Error(`Products fetch failed: ${res.status}`);
-    }
+    const text = await res.text();
 
-    const data = await res.json();
-    const rows = data.data || [];
+    console.log(`\n==============================`);
+    console.log(`TEST: ${variant.name}`);
+    console.log(`STATUS: ${res.status}`);
+    console.log(`HEADERS:`, variant.headers);
+    console.log(`BODY: ${text.slice(0, 1000)}`);
 
-    if (rows.length === 0) break;
-
-    all.push(...rows);
-    start += limit;
-
-    console.log(`📦 Scaricati: ${all.length}`);
+    return { ok: res.ok, status: res.status, body: text };
+  } catch (err) {
+    console.log(`\n==============================`);
+    console.log(`TEST: ${variant.name}`);
+    console.log(`ERRORE FETCH: ${err.message}`);
+    return { ok: false, status: 0, body: err.message };
   }
-
-  return all;
-}
-
-function saveJSON(products) {
-  const file = path.resolve("products.json");
-  fs.writeFileSync(file, JSON.stringify(products, null, 2));
-  console.log(`💾 Salvato JSON in ${file}`);
-}
-
-function saveCSV(products) {
-  const headers = ["id", "name", "barcode", "price"];
-  const rows = products.map((p) => [
-    p.id,
-    p.name,
-    p.barcode || "",
-    p.price || "",
-  ]);
-
-  const csv = [headers, ...rows]
-    .map((r) => r.map((x) => `"${x}"`).join(","))
-    .join("\n");
-
-  const file = path.resolve("products.csv");
-  fs.writeFileSync(file, csv);
-  console.log(`📊 Salvato CSV in ${file}`);
 }
 
 async function main() {
-  console.log("🚀 Download catalogo prodotti...");
+  console.log("🚀 Diagnostica CIC /products");
 
-  const products = await getAllProducts();
+  for (const variant of variants) {
+    const result = await testVariant(variant);
 
-  console.log(`✅ Totale prodotti: ${products.length}`);
+    if (result.ok) {
+      console.log(`\n✅ Variante funzionante: ${variant.name}`);
+      return;
+    }
+  }
 
-  saveJSON(products);
-  saveCSV(products);
+  console.log("\n❌ Nessuna variante ha funzionato.");
 }
 
 main().catch((err) => {
-  console.error("💥 ERRORE:", err.message);
+  console.error("💥 ERRORE FATALE:", err.message);
 });
