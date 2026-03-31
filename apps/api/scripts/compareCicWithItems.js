@@ -1,38 +1,9 @@
-// apps/api/scripts/compareCicWithItems.js
 import fs from "fs";
 import path from "path";
 import { pool } from "../dist/src/db.js";
 
-function normalize(value) {
-  return String(value || "")
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, " ");
-}
-
-function normalizeSku(value) {
-  return String(value || "")
-    .trim()
-    .toUpperCase();
-}
-
-async function loadCoreItems() {
-  const sql = `
-    SELECT
-      id,
-      sku,
-      name,
-      "supplierId",
-      supplier,
-      category,
-      brand,
-      active
-    FROM "Item"
-    ORDER BY sku ASC
-  `;
-
-  const result = await pool.query(sql);
-  return result.rows;
+function norm(value) {
+  return String(value || "").trim().toUpperCase();
 }
 
 function loadCicProducts() {
@@ -45,76 +16,101 @@ function loadCicProducts() {
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
 
+async function loadCoreItems() {
+  const sql = `
+    SELECT
+      id,
+      sku,
+      name,
+      active
+    FROM "Item"
+    ORDER BY sku ASC
+  `;
+
+  const result = await pool.query(sql);
+  return result.rows;
+}
+
+function extractCicSku(product) {
+  return norm(product.externalId ?? product.externalid ?? "");
+}
+
+function extractCicName(product) {
+  return String(
+    product.description ??
+      product.name ??
+      product.label ??
+      product.value ??
+      ""
+  ).trim();
+}
+
+function extractCicPrice(product) {
+  return product.prices?.[0]?.value ?? "";
+}
+
 function buildReport(cicProducts, coreItems) {
   const coreBySku = new Map();
-  const coreByName = new Map();
 
   for (const item of coreItems) {
-    const skuKey = normalizeSku(item.sku);
-    const nameKey = normalize(item.name);
-
-    if (skuKey) coreBySku.set(skuKey, item);
-    if (nameKey && !coreByName.has(nameKey)) coreByName.set(nameKey, item);
+    const key = norm(item.sku);
+    if (key) coreBySku.set(key, item);
   }
 
-  const rows = [];
+  const reportRows = [];
+  const matchedCoreSkus = new Set();
 
-  for (const p of cicProducts) {
-    const cicId = p.id ?? "";
-    const cicExternalId = p.externalId ?? p.externalid ?? "";
-    const cicName =
-      p.description ??
-      p.name ??
-      p.value ??
-      p.label ??
-      "";
-    const cicPrice = p.prices?.[0]?.value ?? "";
+  for (const product of cicProducts) {
+    const cicId = product.id ?? "";
+    const cicSku = extractCicSku(product);
+    const cicName = extractCicName(product);
+    const cicPrice = extractCicPrice(product);
 
-    const extKey = normalizeSku(cicExternalId);
-    const nameKey = normalize(cicName);
+    const matchedItem = cicSku ? coreBySku.get(cicSku) : null;
 
-    let matchType = "NO_MATCH";
-    let matchedItem = null;
-
-    if (extKey && coreBySku.has(extKey)) {
-      matchType = "MATCH_BY_EXTERNAL_ID";
-      matchedItem = coreBySku.get(extKey);
-    } else if (nameKey && coreByName.has(nameKey)) {
-      matchType = "POSSIBLE_MATCH_BY_NAME";
-      matchedItem = coreByName.get(nameKey);
+    if (matchedItem) {
+      matchedCoreSkus.add(norm(matchedItem.sku));
+      reportRows.push({
+        cic_id: cicId,
+        cic_external_id: cicSku,
+        cic_name: cicName,
+        cic_price: cicPrice,
+        core_sku: matchedItem.sku ?? "",
+        core_name: matchedItem.name ?? "",
+        core_active: matchedItem.active,
+        match_type: "MATCH_BY_SKU",
+      });
+    } else {
+      reportRows.push({
+        cic_id: cicId,
+        cic_external_id: cicSku,
+        cic_name: cicName,
+        cic_price: cicPrice,
+        core_sku: "",
+        core_name: "",
+        core_active: "",
+        match_type: "NO_MATCH_IN_CORE",
+      });
     }
-
-    rows.push({
-      cic_id: cicId,
-      cic_external_id: cicExternalId,
-      cic_name: cicName,
-      cic_price: cicPrice,
-      core_sku: matchedItem?.sku ?? "",
-      core_name: matchedItem?.name ?? "",
-      match_type: matchType,
-    });
   }
 
-  const matchedCoreSkus = new Set(
-    rows.filter((r) => r.core_sku).map((r) => normalizeSku(r.core_sku))
-  );
-
   for (const item of coreItems) {
-    const skuKey = normalizeSku(item.sku);
+    const skuKey = norm(item.sku);
     if (!matchedCoreSkus.has(skuKey)) {
-      rows.push({
+      reportRows.push({
         cic_id: "",
         cic_external_id: "",
         cic_name: "",
         cic_price: "",
         core_sku: item.sku ?? "",
         core_name: item.name ?? "",
+        core_active: item.active,
         match_type: "CORE_ONLY",
       });
     }
   }
 
-  return rows;
+  return reportRows;
 }
 
 function saveCsv(rows) {
@@ -125,10 +121,11 @@ function saveCsv(rows) {
     "cic_price",
     "core_sku",
     "core_name",
+    "core_active",
     "match_type",
   ];
 
-  const csv = [headers, ...rows.map((r) => headers.map((h) => r[h] ?? ""))]
+  const csv = [headers, ...rows.map((row) => headers.map((h) => row[h] ?? ""))]
     .map((row) =>
       row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")
     )
@@ -139,8 +136,32 @@ function saveCsv(rows) {
   console.log(`📊 Report salvato in ${out}`);
 }
 
+function printSummary(rows) {
+  const summary = rows.reduce((acc, row) => {
+    acc[row.match_type] = (acc[row.match_type] || 0) + 1;
+    return acc;
+  }, {});
+
+  console.log("📈 Summary:", summary);
+}
+
+function printSamples(rows) {
+  const matched = rows.filter((r) => r.match_type === "MATCH_BY_SKU").slice(0, 10);
+  const missing = rows.filter((r) => r.match_type === "NO_MATCH_IN_CORE").slice(0, 10);
+
+  console.log("\n✅ Esempi MATCH_BY_SKU:");
+  for (const row of matched) {
+    console.log(`- CIC ${row.cic_external_id} -> CORE ${row.core_sku} | ${row.core_name}`);
+  }
+
+  console.log("\n❌ Esempi NO_MATCH_IN_CORE:");
+  for (const row of missing) {
+    console.log(`- CIC ${row.cic_external_id} | ${row.cic_name}`);
+  }
+}
+
 async function main() {
-  console.log("🚀 Confronto CIC vs Core...");
+  console.log("🚀 Confronto CIC vs Core per SKU...");
 
   const cicProducts = loadCicProducts();
   console.log(`📦 Prodotti CIC caricati: ${cicProducts.length}`);
@@ -148,16 +169,11 @@ async function main() {
   const coreItems = await loadCoreItems();
   console.log(`📚 Articoli Core caricati: ${coreItems.length}`);
 
-  const report = buildReport(cicProducts, coreItems);
+  const rows = buildReport(cicProducts, coreItems);
 
-  const summary = report.reduce((acc, row) => {
-    acc[row.match_type] = (acc[row.match_type] || 0) + 1;
-    return acc;
-  }, {});
-
-  console.log("📈 Summary:", summary);
-
-  saveCsv(report);
+  printSummary(rows);
+  printSamples(rows);
+  saveCsv(rows);
 
   await pool.end();
 }
