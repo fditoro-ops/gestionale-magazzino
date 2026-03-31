@@ -16,7 +16,7 @@ async function getToken() {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Requested-With": "*",
+      "X-Version": VERSION,
     },
     body: JSON.stringify({
       apiKey: API_KEY,
@@ -29,18 +29,13 @@ async function getToken() {
     throw new Error(`Auth failed: ${res.status} - ${text}`);
   }
 
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error(`Auth response non-JSON: ${text}`);
+  const data = JSON.parse(text);
+
+  if (!data.accessToken) {
+    throw new Error(`Token mancante: ${text}`);
   }
 
-  if (!data.access_token) {
-    throw new Error(`Token mancante nella risposta: ${text}`);
-  }
-
-  return data.access_token;
+  return data.accessToken; // 🔥 QUI È LA CHIAVE
 }
 
 async function getAllProducts(token) {
