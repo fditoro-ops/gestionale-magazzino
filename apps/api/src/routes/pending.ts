@@ -14,7 +14,13 @@ const router = Router();
  */
 router.get("/", async (_req, res) => {
   try {
-    const rows = await listPendingRows();
+    const rows = (await listPendingRows()).filter(
+      (r: any) =>
+        r.reason === "UNMAPPED_PRODUCT" ||
+        r.reason === "UNCLASSIFIED_SKU" ||
+        r.reason === "RECIPE_NOT_FOUND"
+    );
+
     res.json({ ok: true, rows });
   } catch (err) {
     console.error("GET /pending error", err);
