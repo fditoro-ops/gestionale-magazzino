@@ -202,7 +202,14 @@ router.post("/", async (req, res) => {
   try {
     const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
 
-    const { product_sku, name, selling_price } = req.body;
+   const {
+  product_sku,
+  name,
+  selling_price,
+  cic_product_id,
+  cic_variant_id,
+  cic_mode,
+} = req.body;
 
     if (!product_sku || !name) {
       return res.status(400).json({
@@ -211,16 +218,19 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const recipe = await createRecipe({
-      tenant_id: tenantId,
-      product_sku,
-      name,
-      selling_price:
-        selling_price != null && selling_price !== ""
-          ? Number(selling_price)
-          : null,
-    });
-
+const recipe = await createRecipe({
+  tenant_id: tenantId,
+  product_sku,
+  name,
+  selling_price:
+    selling_price != null && selling_price !== ""
+      ? Number(selling_price)
+      : null,
+  cic_product_id: cic_product_id || null,
+  cic_variant_id: cic_variant_id || null,
+  cic_mode: cic_mode || null,
+});
+    
     res.json({ ok: true, data: recipe });
   } catch (err: any) {
     console.error("POST /recipes error", err);
@@ -242,18 +252,31 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, product_sku, selling_price } = req.body;
+    const {
+  name,
+  product_sku,
+  selling_price,
+  cic_product_id,
+  cic_variant_id,
+  cic_mode,
+} = req.body;
 
-    const recipe = await updateRecipe(id, {
-      name,
-      product_sku,
-      selling_price:
-        selling_price != null && selling_price !== ""
-          ? Number(selling_price)
-          : selling_price === null
-          ? null
-          : undefined,
-    });
+const recipe = await updateRecipe(id, {
+  name,
+  product_sku,
+  selling_price:
+    selling_price != null && selling_price !== ""
+      ? Number(selling_price)
+      : selling_price === null
+      ? null
+      : undefined,
+  cic_product_id:
+    cic_product_id !== undefined ? cic_product_id || null : undefined,
+  cic_variant_id:
+    cic_variant_id !== undefined ? cic_variant_id || null : undefined,
+  cic_mode:
+    cic_mode !== undefined ? cic_mode || null : undefined,
+});
 
     if (!recipe) {
       return res.status(404).json({ ok: false, error: "Not found" });
