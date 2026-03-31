@@ -43,25 +43,35 @@ export function cicExtractItems(data: any): CicExtractedItem[] {
   const rows = data?.document?.rows ?? [];
   if (!Array.isArray(rows)) return [];
 
-return rows
-  .map((r: any) => {
-    const qty = Number(r?.quantity ?? 0);
-    const price = Number(r?.price ?? 0);
+  return rows
+    .map((r: any) => {
+      const qty = Number(r?.quantity ?? 0);
+      const price = Number(r?.price ?? 0);
 
-    const idVariant = String(r?.idProductVariant ?? "").trim();
-    const idProduct = String(r?.idProduct ?? "").trim();
+      const idVariant = String(r?.idProductVariant ?? "").trim();
+      const idProduct = String(r?.idProduct ?? "").trim();
+      const productName = String(r?.description ?? r?.productName ?? "").trim();
 
-    const resolvedSku =
-      cicResolveSku(idVariant) ||
-      cicResolveSku(idProduct);
+      const resolvedSku =
+        cicResolveSku(idVariant) ||
+        cicResolveSku(idProduct);
 
-    return {
-      sku: resolvedSku || null,
-      qty,
-      total: qty * price,
-      _idProduct: idProduct,
-      _idProductVariant: idVariant,
-    };
-  })
-  .filter((x) => x.qty > 0);
+      console.log("CIC DEBUG", {
+        productName,
+        idProduct,
+        idVariant,
+        qty,
+        price,
+        resolvedSku,
+      });
+
+      return {
+        sku: resolvedSku || null,
+        qty,
+        total: qty * price,
+        _idProduct: idProduct,
+        _idProductVariant: idVariant,
+      };
+    })
+    .filter((x) => x.qty > 0);
 }
