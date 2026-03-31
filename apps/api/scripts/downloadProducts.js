@@ -37,15 +37,6 @@ async function getToken() {
   return data.access_token;
 }
 
-function extractRows(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload.items)) return payload.items;
-  if (Array.isArray(payload.data)) return payload.data;
-  if (Array.isArray(payload.data?.items)) return payload.data.items;
-  if (Array.isArray(payload.content)) return payload.content;
-  return [];
-}
-
 async function getAllProducts(token) {
   let all = [];
   let start = 0;
@@ -69,18 +60,11 @@ async function getAllProducts(token) {
     }
 
     const data = JSON.parse(text);
-    const rows = extractRows(data);
+    const rows = data.products || [];
 
     console.log(
       `➡️ Pagina start=${start}, righe=${rows.length}, totale=${data.totalCount ?? "n/d"}`
     );
-
-    if (start === 0) {
-      console.log("DEBUG top-level keys:", Object.keys(data));
-      if (data.data && typeof data.data === "object" && !Array.isArray(data.data)) {
-        console.log("DEBUG data keys:", Object.keys(data.data));
-      }
-    }
 
     if (rows.length === 0) {
       break;
