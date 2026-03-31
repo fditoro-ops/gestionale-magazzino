@@ -1,7 +1,7 @@
 // apps/api/scripts/compareCicWithItems.js
 import fs from "fs";
 import path from "path";
-import { pool } from "../src/db.js";
+import { pool } from "../dist/src/db.js";
 
 function normalize(value) {
   return String(value || "")
