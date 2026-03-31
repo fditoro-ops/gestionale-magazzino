@@ -377,9 +377,18 @@ const documentAmount =
         continue;
       }
 
-      if (!mode) {
-        console.log("⚠️ SKU non classificato in PRODOTTI_CIC:", sku);
+if (!mode) {
+  console.log("CIC MODE DEBUG", {
+    sku,
+    mode,
+    productId: it._idProduct,
+    variantId: it._idProductVariant,
+    rawResolvedSku: it.sku,
+    cicModesBySkuValue: cicModesBySku[sku],
+    hasRecipe,
+  });
 
+  console.log("⚠️ SKU non classificato in PRODOTTI_CIC:", sku);
         await upsertPendingRow({
           docId,
           operation,
