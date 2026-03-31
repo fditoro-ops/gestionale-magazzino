@@ -1,4 +1,3 @@
-// apps/api/scripts/downloadProducts.js
 import fs from "fs";
 import path from "path";
 
@@ -31,11 +30,11 @@ async function getToken() {
 
   const data = JSON.parse(text);
 
- if (!data.access_token) {
+  if (!data.access_token) {
     throw new Error(`Token mancante nella risposta: ${text}`);
   }
 
-return data.access_token;
+  return data.access_token;
 }
 
 async function getAllProducts(token) {
@@ -61,7 +60,14 @@ async function getAllProducts(token) {
     }
 
     const data = JSON.parse(text);
-    const rows = data.data || [];
+
+    const rows = Array.isArray(data.data)
+      ? data.data
+      : data.data?.items || [];
+
+    console.log(
+      `➡️ Pagina start=${start}, righe=${rows.length}, totale=${data.totalCount ?? "n/d"}`
+    );
 
     if (rows.length === 0) {
       break;
@@ -83,13 +89,13 @@ function saveJSON(products) {
 }
 
 function saveCSV(products) {
-  const headers = ["id", "name", "barcode", "price"];
+  const headers = ["id", "externalId", "idSalesPoint", "price"];
 
   const rows = products.map((p) => [
     p.id ?? "",
-    p.name ?? "",
-    p.barcode ?? "",
-    p.price ?? "",
+    p.externalId ?? "",
+    p.idSalesPoint ?? "",
+    p.prices?.[0]?.value ?? "",
   ]);
 
   const csv = [headers, ...rows]
