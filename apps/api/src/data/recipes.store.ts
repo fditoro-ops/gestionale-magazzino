@@ -8,6 +8,9 @@ export type Recipe = {
   name: string;
   status: "DRAFT" | "ACTIVE" | "INACTIVE";
   selling_price: string | number | null;
+  cic_product_id?: string | null;
+  cic_variant_id?: string | null;
+  cic_mode?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -75,6 +78,9 @@ export async function createRecipe(input: {
   product_sku: string;
   name: string;
   selling_price?: number | null;
+  cic_product_id?: string | null;
+  cic_variant_id?: string | null;
+  cic_mode?: string | null;
 }) {
   const id = randomUUID();
 
@@ -85,9 +91,12 @@ export async function createRecipe(input: {
       tenant_id,
       product_sku,
       name,
-      selling_price
+      selling_price,
+      cic_product_id,
+      cic_variant_id,
+      cic_mode
     )
-    VALUES ($1, $2, $3, $4, $5)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     RETURNING *
     `,
     [
@@ -96,6 +105,9 @@ export async function createRecipe(input: {
       input.product_sku,
       input.name,
       input.selling_price ?? null,
+      input.cic_product_id ?? null,
+      input.cic_variant_id ?? null,
+      input.cic_mode ?? null,
     ]
   );
 
@@ -111,6 +123,9 @@ export async function updateRecipe(
     name?: string;
     product_sku?: string;
     selling_price?: number | null;
+    cic_product_id?: string | null;
+    cic_variant_id?: string | null;
+    cic_mode?: string | null;
   }
 ) {
   const fields: string[] = [];
@@ -130,6 +145,21 @@ export async function updateRecipe(
   if (input.selling_price !== undefined) {
     fields.push(`selling_price = $${i++}`);
     values.push(input.selling_price);
+  }
+
+  if (input.cic_product_id !== undefined) {
+    fields.push(`cic_product_id = $${i++}`);
+    values.push(input.cic_product_id);
+  }
+
+  if (input.cic_variant_id !== undefined) {
+    fields.push(`cic_variant_id = $${i++}`);
+    values.push(input.cic_variant_id);
+  }
+
+  if (input.cic_mode !== undefined) {
+    fields.push(`cic_mode = $${i++}`);
+    values.push(input.cic_mode);
   }
 
   if (fields.length === 0) return null;
