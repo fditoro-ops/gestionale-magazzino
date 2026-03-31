@@ -14,10 +14,10 @@ if (!API_KEY) {
 async function getToken() {
   const res = await fetch(`${BASE_URL}/apikey/token`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Version": VERSION,
-    },
+headers: {
+  Authorization: `Bearer ${token}`,
+  "X-Version": VERSION,
+}
     body: JSON.stringify({
       apiKey: API_KEY,
     }),
