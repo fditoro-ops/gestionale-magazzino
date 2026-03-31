@@ -14,10 +14,10 @@ if (!API_KEY) {
 async function getToken() {
   const res = await fetch(`${BASE_URL}/apikey/token`, {
     method: "POST",
-headers: {
-  Authorization: `Bearer ${token}`,
-  "X-Version": VERSION,
-}
+    headers: {
+      "Content-Type": "application/json",
+      "X-Version": VERSION,
+    },
     body: JSON.stringify({
       apiKey: API_KEY,
     }),
@@ -32,10 +32,10 @@ headers: {
   const data = JSON.parse(text);
 
   if (!data.accessToken) {
-    throw new Error(`Token mancante: ${text}`);
+    throw new Error(`Token mancante nella risposta: ${text}`);
   }
 
-  return data.accessToken; // 🔥 QUI È LA CHIAVE
+  return data.accessToken;
 }
 
 async function getAllProducts(token) {
@@ -60,16 +60,12 @@ async function getAllProducts(token) {
       throw new Error(`Products fetch failed: ${res.status} - ${text}`);
     }
 
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      throw new Error(`Products response non-JSON: ${text}`);
-    }
-
+    const data = JSON.parse(text);
     const rows = data.data || [];
 
-    if (rows.length === 0) break;
+    if (rows.length === 0) {
+      break;
+    }
 
     all.push(...rows);
     start += limit;
@@ -88,6 +84,7 @@ function saveJSON(products) {
 
 function saveCSV(products) {
   const headers = ["id", "name", "barcode", "price"];
+
   const rows = products.map((p) => [
     p.id ?? "",
     p.name ?? "",
@@ -96,10 +93,8 @@ function saveCSV(products) {
   ]);
 
   const csv = [headers, ...rows]
-    .map((r) =>
-      r
-        .map((x) => `"${String(x).replace(/"/g, '""')}"`)
-        .join(",")
+    .map((row) =>
+      row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")
     )
     .join("\n");
 
