@@ -405,10 +405,20 @@ const documentAmount =
         continue;
       }
 
-      if (mode === "IGNORE") {
-        console.log("⏭ SKU ignorato da PRODOTTI_CIC:", sku);
-        continue;
-      }
+if (mode === "IGNORE") {
+  console.log("CIC MODE DEBUG", {
+    sku,
+    mode,
+    productId: it._idProduct,
+    variantId: it._idProductVariant,
+    rawResolvedSku: it.sku,
+    cicModesBySkuValue: cicModesBySku[sku],
+    hasRecipe,
+  });
+
+  console.log("⏭ SKU ignorato da PRODOTTI_CIC:", sku);
+  continue;
+}
 
       if (mode === "RECIPE" && !hasRecipe) {
         console.log("⚠️ Ricetta non trovata per SKU RECIPE:", sku);
