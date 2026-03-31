@@ -36,7 +36,6 @@ router.patch("/:id/resolve", async (req, res) => {
     const { id } = req.params;
     const { resolvedSku, type } = req.body;
 
-    // 🔒 validazione base
     if (!resolvedSku) {
       return res.status(400).json({
         ok: false,
@@ -80,19 +79,17 @@ router.post("/:id/reprocess", async (req, res) => {
       return res.status(404).json({ ok: false });
     }
 
-    // 🔒 deve essere risolta
-    if (row.status !== "RESOLVED") {
-      return res.status(400).json({
-        ok: false,
-        error: "Resolve first",
-      });
-    }
-
-    // 🔒 evita doppio processing
     if (row.status === "PROCESSED") {
       return res.status(400).json({
         ok: false,
         error: "Already processed",
+      });
+    }
+
+    if (row.status !== "RESOLVED") {
+      return res.status(400).json({
+        ok: false,
+        error: "Resolve first",
       });
     }
 
