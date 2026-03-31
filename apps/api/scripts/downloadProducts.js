@@ -61,10 +61,8 @@ async function getAllProducts(token) {
 
     const data = JSON.parse(text);
 
-    const rows = Array.isArray(data.data)
-      ? data.data
-      : data.data?.items || [];
-
+const rows = data.data?.items || data.data || [];
+    
     console.log(
       `➡️ Pagina start=${start}, righe=${rows.length}, totale=${data.totalCount ?? "n/d"}`
     );
