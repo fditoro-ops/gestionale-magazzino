@@ -15,6 +15,10 @@ import {
   deleteRecipeIngredient,
 } from "../data/recipeIngredients.store.js";
 
+import {
+  updateRecipeValidationSnapshot,
+} from "../services/recipeValidation.service.js";
+
 const router = Router();
 
 // =========================
@@ -23,9 +27,7 @@ const router = Router();
 router.get("/", async (req, res) => {
   try {
     const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
-
     const recipes = await listRecipes(tenantId);
-
     res.json({ ok: true, data: recipes });
   } catch (err) {
     console.error("GET /recipes error", err);
@@ -46,10 +48,9 @@ router.get("/:id/ingredients", async (req, res) => {
     }
 
     const ingredients = await listRecipeIngredients(id);
-
     res.json({ ok: true, data: ingredients });
   } catch (err) {
-    console.error("GET /recipes/:id/ingredients error", err);
+    console.error("GET ingredients error", err);
     res.status(500).json({ ok: false, error: "Internal error" });
   }
 });
@@ -60,23 +61,14 @@ router.get("/:id/ingredients", async (req, res) => {
 router.post("/:id/ingredients", async (req, res) => {
   try {
     const { id } = req.params;
+    const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
 
     const recipe = await getRecipeById(id);
     if (!recipe) {
       return res.status(404).json({ ok: false, error: "Recipe not found" });
     }
 
-    const {
-      ingredient_sku,
-      ingredient_name_snapshot,
-      quantity,
-      um,
-      sort_order,
-      is_optional,
-      waste_pct,
-      notes,
-    } = req.body;
-
+    const { ingredient_sku, quantity, um } = req.body;
     const qty = Number(quantity);
 
     if (!ingredient_sku || !um || !Number.isFinite(qty) || qty <= 0) {
@@ -88,19 +80,16 @@ router.post("/:id/ingredients", async (req, res) => {
 
     const ingredient = await addRecipeIngredient({
       recipe_id: id,
-      ingredient_sku,
-      ingredient_name_snapshot,
+      ...req.body,
       quantity: qty,
-      um,
-      sort_order: sort_order != null ? Number(sort_order) : 0,
-      is_optional: is_optional != null ? Boolean(is_optional) : false,
-      waste_pct: waste_pct != null ? Number(waste_pct) : null,
-      notes,
     });
+
+    // ✅ VALIDAZIONE
+    await updateRecipeValidationSnapshot({ recipeId: id, tenantId });
 
     res.json({ ok: true, data: ingredient });
   } catch (err) {
-    console.error("POST /recipes/:id/ingredients error", err);
+    console.error("POST ingredient error", err);
     res.status(500).json({ ok: false, error: "Internal error" });
   }
 });
@@ -111,41 +100,22 @@ router.post("/:id/ingredients", async (req, res) => {
 router.put("/:id/ingredients/:ingredientId", async (req, res) => {
   try {
     const { id, ingredientId } = req.params;
-
-    const recipe = await getRecipeById(id);
-    if (!recipe) {
-      return res.status(404).json({ ok: false, error: "Recipe not found" });
-    }
-
-    const {
-      ingredient_sku,
-      ingredient_name_snapshot,
-      quantity,
-      um,
-      sort_order,
-      is_optional,
-      waste_pct,
-      notes,
-    } = req.body;
+    const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
 
     const ingredient = await updateRecipeIngredient(ingredientId, {
-      ingredient_sku,
-      ingredient_name_snapshot,
-      quantity: quantity != null ? Number(quantity) : undefined,
-      um,
-      sort_order: sort_order != null ? Number(sort_order) : undefined,
-      is_optional: is_optional != null ? Boolean(is_optional) : undefined,
-      waste_pct: waste_pct != null ? Number(waste_pct) : undefined,
-      notes,
+      ...req.body,
     });
 
     if (!ingredient) {
       return res.status(404).json({ ok: false, error: "Ingredient not found" });
     }
 
+    // ✅ VALIDAZIONE
+    await updateRecipeValidationSnapshot({ recipeId: id, tenantId });
+
     res.json({ ok: true, data: ingredient });
   } catch (err) {
-    console.error("PUT /recipes/:id/ingredients/:ingredientId error", err);
+    console.error("UPDATE ingredient error", err);
     res.status(500).json({ ok: false, error: "Internal error" });
   }
 });
@@ -156,11 +126,7 @@ router.put("/:id/ingredients/:ingredientId", async (req, res) => {
 router.delete("/:id/ingredients/:ingredientId", async (req, res) => {
   try {
     const { id, ingredientId } = req.params;
-
-    const recipe = await getRecipeById(id);
-    if (!recipe) {
-      return res.status(404).json({ ok: false, error: "Recipe not found" });
-    }
+    const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
 
     const deleted = await deleteRecipeIngredient(ingredientId);
 
@@ -168,9 +134,12 @@ router.delete("/:id/ingredients/:ingredientId", async (req, res) => {
       return res.status(404).json({ ok: false, error: "Ingredient not found" });
     }
 
+    // ✅ VALIDAZIONE
+    await updateRecipeValidationSnapshot({ recipeId: id, tenantId });
+
     res.json({ ok: true });
   } catch (err) {
-    console.error("DELETE /recipes/:id/ingredients/:ingredientId error", err);
+    console.error("DELETE ingredient error", err);
     res.status(500).json({ ok: false, error: "Internal error" });
   }
 });
@@ -181,7 +150,6 @@ router.delete("/:id/ingredients/:ingredientId", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-
     const recipe = await getRecipeById(id);
 
     if (!recipe) {
@@ -190,7 +158,7 @@ router.get("/:id", async (req, res) => {
 
     res.json({ ok: true, data: recipe });
   } catch (err) {
-    console.error("GET /recipes/:id error", err);
+    console.error("GET recipe error", err);
     res.status(500).json({ ok: false, error: "Internal error" });
   }
 });
@@ -202,43 +170,25 @@ router.post("/", async (req, res) => {
   try {
     const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
 
-   const {
-  product_sku,
-  name,
-  selling_price,
-  cic_product_id,
-  cic_variant_id,
-  cic_mode,
-} = req.body;
+    const recipe = await createRecipe({
+      tenant_id: tenantId,
+      ...req.body,
+    });
 
-    if (!product_sku || !name) {
-      return res.status(400).json({
-        ok: false,
-        error: "product_sku and name are required",
-      });
-    }
+    // ✅ VALIDAZIONE
+    await updateRecipeValidationSnapshot({
+      recipeId: recipe.id,
+      tenantId,
+    });
 
-const recipe = await createRecipe({
-  tenant_id: tenantId,
-  product_sku,
-  name,
-  selling_price:
-    selling_price != null && selling_price !== ""
-      ? Number(selling_price)
-      : null,
-  cic_product_id: cic_product_id || null,
-  cic_variant_id: cic_variant_id || null,
-  cic_mode: cic_mode || null,
-});
-    
     res.json({ ok: true, data: recipe });
   } catch (err: any) {
-    console.error("POST /recipes error", err);
+    console.error("POST recipe error", err);
 
     if (err.code === "23505") {
       return res.status(400).json({
         ok: false,
-        error: "Recipe already exists for this product_sku",
+        error: "Recipe already exists",
       });
     }
 
@@ -252,47 +202,20 @@ const recipe = await createRecipe({
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-  name,
-  product_sku,
-  selling_price,
-  cic_product_id,
-  cic_variant_id,
-  cic_mode,
-} = req.body;
+    const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
 
-const recipe = await updateRecipe(id, {
-  name,
-  product_sku,
-  selling_price:
-    selling_price != null && selling_price !== ""
-      ? Number(selling_price)
-      : selling_price === null
-      ? null
-      : undefined,
-  cic_product_id:
-    cic_product_id !== undefined ? cic_product_id || null : undefined,
-  cic_variant_id:
-    cic_variant_id !== undefined ? cic_variant_id || null : undefined,
-  cic_mode:
-    cic_mode !== undefined ? cic_mode || null : undefined,
-});
+    const recipe = await updateRecipe(id, req.body);
 
     if (!recipe) {
       return res.status(404).json({ ok: false, error: "Not found" });
     }
 
+    // ✅ VALIDAZIONE
+    await updateRecipeValidationSnapshot({ recipeId: id, tenantId });
+
     res.json({ ok: true, data: recipe });
-  } catch (err: any) {
-    console.error("PUT /recipes/:id error", err);
-
-    if (err.code === "23505") {
-      return res.status(400).json({
-        ok: false,
-        error: "Recipe already exists for this product_sku",
-      });
-    }
-
+  } catch (err) {
+    console.error("PUT recipe error", err);
     res.status(500).json({ ok: false, error: "Internal error" });
   }
 });
@@ -305,7 +228,7 @@ router.patch("/:id/status", async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    if (!["DRAFT", "ACTIVE", "INACTIVE"].includes(status)) {
+    if (!["ACTIVE", "INACTIVE"].includes(status)) {
       return res.status(400).json({
         ok: false,
         error: "Invalid status",
@@ -320,7 +243,7 @@ router.patch("/:id/status", async (req, res) => {
 
     res.json({ ok: true, data: recipe });
   } catch (err) {
-    console.error("PATCH /recipes/:id/status error", err);
+    console.error("PATCH status error", err);
     res.status(500).json({ ok: false, error: "Internal error" });
   }
 });
