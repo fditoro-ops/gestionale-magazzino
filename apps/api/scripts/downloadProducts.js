@@ -31,11 +31,11 @@ async function getToken() {
 
   const data = JSON.parse(text);
 
-  if (!data.accessToken) {
+ if (!data.access_token) {
     throw new Error(`Token mancante nella risposta: ${text}`);
   }
 
-  return data.accessToken;
+return data.access_token;
 }
 
 async function getAllProducts(token) {
