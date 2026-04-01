@@ -5,6 +5,7 @@ import { saveSalesDocumentWithLines } from "../data/sales.store.js";
 import { applyRecipeStock } from "./recipeStock.service.js";
 import { cicExtractItems } from "./cicMapping.service.js";
 import { pool } from "../db.js";
+import { findRecipeBySku } from "../data/recipes.store.js";
 
 import {
   syncCicProducts,
@@ -233,253 +234,195 @@ const documentAmount =
       items = cicExtractItems(data);
     }
 
-   const bom = getActiveBom();
-    const cicProductModeCache = getCicProductModesCache();
+// =========================
+// PREPARAZIONE DATI
+// =========================
+const bom = getActiveBom();
+const cicProductModeCache = getCicProductModesCache();
 
-    const cicModesBySku = Object.fromEntries(
-      Object.entries(cicProductModeCache).map(([_, v]: [string, any]) => [v.sku, v.mode])
-    ) as Record<string, "RECIPE" | "IGNORE">;
+const cicModesBySku = Object.fromEntries(
+  Object.entries(cicProductModeCache).map(([_, v]: [string, any]) => [
+    v.sku,
+    v.mode,
+  ])
+) as Record<string, "RECIPE" | "IGNORE">;
 
-    const salesLinesToSave = await Promise.all(
-      items.map(async (it: any, idx: number) => {
-        const sku = String(it.sku || "").trim();
 
-        const rawRow = rawRows.find((r: any) => {
-          const rowVariant = String(r?.idProductVariant ?? "").trim();
-          const rowProduct = String(r?.idProduct ?? "").trim();
+// =========================
+// 1️⃣ SALVATAGGIO SALES (SEMPRE)
+// =========================
+const salesLinesToSave = await Promise.all(
+  items.map(async (it: any, idx: number) => {
+    const sku = String(it.sku || "").trim();
 
-          return (
-            rowVariant === String(it._idProductVariant || "").trim() ||
-            rowProduct === String(it._idProduct || "").trim()
-          );
-        });
+    const rawRow = rawRows.find((r: any) => {
+      const rowVariant = String(r?.idProductVariant ?? "").trim();
+      const rowProduct = String(r?.idProduct ?? "").trim();
 
-        const resolvedOk = Boolean(sku) && !sku.includes("-");
-        const mode = resolvedOk ? cicModesBySku[sku] || "" : "";
-        const hasRecipe =
-          resolvedOk && Array.isArray((bom as any)[sku]) && (bom as any)[sku].length > 0;
-
-        let description = String(
-          rawRow?.description ||
-            rawRow?.descriptionReceipt ||
-            rawRow?.name ||
-            ""
-        ).trim();
-
-        if (!description && sku) {
-          description = await getItemNameBySku(sku);
-        }
-
-        const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
-        const unitPrice = Number(rawRow?.price ?? 0) || 0;
-
-        const rawCalculatedAmount = Number(rawRow?.calculatedAmount ?? NaN);
-        const rawSubtotal = Number(rawRow?.subtotal ?? NaN);
-        const extractedTotal = Number(it.total ?? NaN);
-        const fallbackTotal = qty * unitPrice;
-
-        const lineTotal =
-          Number.isFinite(rawCalculatedAmount) && rawCalculatedAmount > 0
-            ? rawCalculatedAmount
-            : Number.isFinite(rawSubtotal) && rawSubtotal > 0
-            ? rawSubtotal
-            : Number.isFinite(extractedTotal) && extractedTotal > 0
-            ? extractedTotal
-            : fallbackTotal;
-
-        return {
-          lineNo: idx + 1,
-          sku,
-          description,
-          qty,
-          unitPrice,
-          lineTotal,
-          productId: String(it._idProduct || "").trim(),
-          variantId: String(it._idProductVariant || "").trim(),
-          mode,
-          hasRecipe,
-          resolvedOk,
-          tenantId,
-        };
-      })
-    );
-
-    await saveSalesDocumentWithLines(
-      {
-        documentId: docId,
-        receiptNumber,
-        source: "CIC",
-        status: operation === "RECEIPT/DELETE" ? "VOID" : "VALID",
-        documentDate: orderDate,
-        totalAmount: documentAmount,
-        paymentsTotal,
-        tenantId,
-        rawPayload: data,
-      },
-      salesLinesToSave
-    );
-
-    const finalResolvedItems: Array<{ sku: string; qty: number }> = [];
-
-    for (const it of items) {
-      const sku = String(it.sku || "").trim();
-      const mode = cicModesBySku[sku];
-      const hasRecipe = Array.isArray((bom as any)[sku]) && (bom as any)[sku].length > 0;
-
-      const rawRow = rawRows.find((r: any) => {
-        const rowVariant = String(r?.idProductVariant ?? "").trim();
-        const rowProduct = String(r?.idProduct ?? "").trim();
-
-        return (
-          rowVariant === String(it._idProductVariant || "").trim() ||
-          rowProduct === String(it._idProduct || "").trim()
-        );
-      });
-
-      if (!sku) {
-        console.warn("❗CIC UNMAPPED PRODUCT:", {
-          productId: it._idProduct,
-          variantId: it._idProductVariant,
-          rawSku: sku,
-        });
-
-        await upsertPendingRow({
-          docId,
-          operation,
-          orderDate: orderDate.toISOString(),
-          tenantId,
-          productId: it._idProduct || undefined,
-          variantId: it._idProductVariant || undefined,
-          rawResolvedSku: sku,
-          qty: Number(it.qty || 0),
-          total: Number(it.total || 0),
-          price: Number(rawRow?.price ?? 0),
-          description:
-            String(
-              rawRow?.description ||
-                rawRow?.descriptionReceipt ||
-                rawRow?.name ||
-                ""
-            ).trim() || undefined,
-          reason: "UNMAPPED_PRODUCT",
-          rawRow: rawRow || null,
-        });
-
-        await upsertUnresolved({
-          productId: it._idProduct || undefined,
-          variantId: it._idProductVariant || undefined,
-          rawSku: String(sku),
-          docId,
-          operation,
-          total: it.total,
-        });
-
-        continue;
-      }
-
-if (!mode) {
-  console.log("CIC MODE DEBUG", {
-    sku,
-    mode,
-    productId: it._idProduct,
-    variantId: it._idProductVariant,
-    rawResolvedSku: it.sku,
-    cicModesBySkuValue: cicModesBySku[sku],
-    hasRecipe,
-  });
-
-  console.log("⚠️ SKU non classificato in PRODOTTI_CIC:", sku);
-        await upsertPendingRow({
-          docId,
-          operation,
-          orderDate: orderDate.toISOString(),
-          tenantId,
-          productId: it._idProduct || undefined,
-          variantId: it._idProductVariant || undefined,
-          rawResolvedSku: sku,
-          qty: Number(it.qty || 0),
-          total: Number(it.total || 0),
-          price: Number(rawRow?.price ?? 0),
-          description:
-            String(
-              rawRow?.description ||
-                rawRow?.descriptionReceipt ||
-                rawRow?.name ||
-                ""
-            ).trim() || undefined,
-          reason: "UNCLASSIFIED_SKU",
-          rawRow: rawRow || null,
-        });
-
-        continue;
-      }
-
-if (mode === "IGNORE") {
-  console.log("CIC MODE DEBUG", {
-    sku,
-    mode,
-    productId: it._idProduct,
-    variantId: it._idProductVariant,
-    rawResolvedSku: it.sku,
-    cicModesBySkuValue: cicModesBySku[sku],
-    hasRecipe,
-  });
-
-  console.log("⏭ SKU ignorato da PRODOTTI_CIC:", sku);
-  continue;
-}
-
-      if (mode === "RECIPE" && !hasRecipe) {
-        console.log("⚠️ Ricetta non trovata per SKU RECIPE:", sku);
-
-        await upsertPendingRow({
-          docId,
-          operation,
-          orderDate: orderDate.toISOString(),
-          tenantId,
-          productId: it._idProduct || undefined,
-          variantId: it._idProductVariant || undefined,
-          rawResolvedSku: sku,
-          qty: Number(it.qty || 0),
-          total: Number(it.total || 0),
-          price: Number(rawRow?.price ?? 0),
-          description:
-            String(
-              rawRow?.description ||
-                rawRow?.descriptionReceipt ||
-                rawRow?.name ||
-                ""
-            ).trim() || undefined,
-          reason: "RECIPE_NOT_FOUND",
-          rawRow: rawRow || null,
-        });
-
-        continue;
-      }
-
-      finalResolvedItems.push({
-        sku,
-        qty: Number(it.qty || 0),
-      });
-    }
-
-    const movementSign = operation === "RECEIPT/DELETE" ? 1 : -1;
-
-    const inserted = await applyRecipeStock({
-      docId,
-      receiptNumber,
-      tenantId,
-      orderDate,
-      soldItems: finalResolvedItems,
-      bom,
-      cicProductModes: cicModesBySku,
-      movementSign,
+      return (
+        rowVariant === String(it._idProductVariant || "").trim() ||
+        rowProduct === String(it._idProduct || "").trim()
+      );
     });
 
-    console.log("✅ SCARICHI GENERATI:", inserted);
-    return res.status(200).send("OK");
-  } catch (err) {
-    console.error("❌ CIC webhook error:", err);
-    return res.status(500).send("Webhook error");
+    let description = String(
+      rawRow?.description ||
+        rawRow?.descriptionReceipt ||
+        rawRow?.name ||
+        ""
+    ).trim();
+
+    if (!description && sku) {
+      description = await getItemNameBySku(sku);
+    }
+
+    const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
+    const unitPrice = Number(rawRow?.price ?? 0) || 0;
+
+    return {
+      lineNo: idx + 1,
+      sku,
+      description,
+      qty,
+      unitPrice,
+      lineTotal: qty * unitPrice,
+      productId: String(it._idProduct || "").trim(),
+      variantId: String(it._idProductVariant || "").trim(),
+      tenantId,
+    };
+  })
+);
+
+await saveSalesDocumentWithLines(
+  {
+    documentId: docId,
+    receiptNumber,
+    source: "CIC",
+    status: operation === "RECEIPT/DELETE" ? "VOID" : "VALID",
+    documentDate: orderDate,
+    totalAmount: documentAmount,
+    paymentsTotal,
+    tenantId,
+    rawPayload: data,
+  },
+  salesLinesToSave
+);
+
+
+// =========================
+// 2️⃣ LOGICA MOVIMENTI (INTELLIGENTE)
+// =========================
+const finalResolvedItems: Array<{ sku: string; qty: number }> = [];
+
+for (const it of items) {
+  const sku = String(it.sku || "").trim();
+
+  // ❌ SKU mancante
+  if (!sku) {
+    await upsertPendingRow({
+      docId,
+      operation,
+      orderDate: orderDate.toISOString(),
+      tenantId,
+      rawResolvedSku: "",
+      qty: Number(it.qty || 0),
+      reason: "UNMAPPED_PRODUCT",
+    });
+    continue;
   }
+
+  const mode = cicModesBySku[sku];
+  const hasRecipe =
+    Array.isArray((bom as any)[sku]) &&
+    (bom as any)[sku].length > 0;
+
+  // 🔥 VALIDAZIONE NUOVA
+  const recipe = await findRecipeBySku(sku, tenantId);
+
+  if (!recipe) {
+    await upsertPendingRow({
+      docId,
+      operation,
+      orderDate: orderDate.toISOString(),
+      tenantId,
+      rawResolvedSku: sku,
+      qty: Number(it.qty || 0),
+      reason: "UNCLASSIFIED_SKU",
+    });
+    continue;
+  }
+
+  if (!recipe.last_validation_ok) {
+    console.log("❌ Ricetta NON valida:", sku);
+
+    await upsertPendingRow({
+      docId,
+      operation,
+      orderDate: orderDate.toISOString(),
+      tenantId,
+      rawResolvedSku: sku,
+      qty: Number(it.qty || 0),
+      reason: "RECIPE_INVALID",
+    });
+    continue;
+  }
+
+  // ❌ NON CLASSIFICATO
+  if (!mode) {
+    await upsertPendingRow({
+      docId,
+      operation,
+      orderDate: orderDate.toISOString(),
+      tenantId,
+      rawResolvedSku: sku,
+      qty: Number(it.qty || 0),
+      reason: "UNCLASSIFIED_SKU",
+    });
+    continue;
+  }
+
+  // ⏭ IGNORE
+  if (mode === "IGNORE") {
+    continue;
+  }
+
+  // ❌ RECIPE MA SENZA BOM
+  if (mode === "RECIPE" && !hasRecipe) {
+    await upsertPendingRow({
+      docId,
+      operation,
+      orderDate: orderDate.toISOString(),
+      tenantId,
+      rawResolvedSku: sku,
+      qty: Number(it.qty || 0),
+      reason: "RECIPE_NOT_FOUND",
+    });
+    continue;
+  }
+
+  // ✅ OK → scarico
+  finalResolvedItems.push({
+    sku,
+    qty: Number(it.qty || 0),
+  });
 }
+
+
+// =========================
+// 3️⃣ SCARICO MAGAZZINO
+// =========================
+const movementSign = operation === "RECEIPT/DELETE" ? 1 : -1;
+
+const inserted = await applyRecipeStock({
+  docId,
+  receiptNumber,
+  tenantId,
+  orderDate,
+  soldItems: finalResolvedItems,
+  bom,
+  cicProductModes: cicModesBySku,
+  movementSign,
+});
+
+console.log("✅ SCARICHI GENERATI:", inserted);
+return res.status(200).send("OK");
