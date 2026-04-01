@@ -424,5 +424,11 @@ const inserted = await applyRecipeStock({
   movementSign,
 });
 
-console.log("✅ SCARICHI GENERATI:", inserted);
-return res.status(200).send("OK");
+    console.log("✅ SCARICHI GENERATI:", inserted);
+    return res.status(200).send("OK");
+
+  } catch (err) {
+    console.error("❌ CIC webhook error:", err);
+    return res.status(500).send("Webhook error");
+  }
+}
