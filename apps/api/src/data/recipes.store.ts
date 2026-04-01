@@ -180,6 +180,16 @@ export async function updateRecipe(
 }
 
 // =========================
+// FIND BY SKU (alias per webhook)
+// =========================
+export async function findRecipeBySku(
+  sku: string,
+  tenantId: string
+): Promise<Recipe | null> {
+  return getRecipeByProductSku(tenantId, sku);
+}
+
+// =========================
 // UPDATE STATUS
 // =========================
 export async function updateRecipeStatus(
