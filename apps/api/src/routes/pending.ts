@@ -4,7 +4,6 @@ import {
   upsertPendingRow,
   markPendingRowProcessed,
 } from "../data/cicPendingRows.store.js";
-
 import { processPendingRow } from "../services/cicProcessor.service.js";
 
 const router = Router();
@@ -12,29 +11,57 @@ const router = Router();
 /**
  * GET /pending
  */
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const rows = (await listPendingRows()).filter(
-      (r: any) =>
-        r.reason === "UNMAPPED_PRODUCT" ||
-        r.reason === "UNCLASSIFIED_SKU" ||
-        r.reason === "RECIPE_NOT_FOUND"
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const rows = await listPendingRows(
+      status === "PENDING" || status === "PROCESSED" ? status : undefined
     );
 
-    res.json({ ok: true, rows });
+    const filtered = rows
+      .filter((r: any) => {
+        const reason = req.query.reason ? String(req.query.reason) : "";
+        const q = req.query.q ? String(req.query.q).toLowerCase() : "";
+
+        if (
+          r.reason !== "UNMAPPED_PRODUCT" &&
+          r.reason !== "UNCLASSIFIED_SKU" &&
+          r.reason !== "RECIPE_NOT_FOUND"
+        ) {
+          return false;
+        }
+
+        if (reason && r.reason !== reason) return false;
+
+        if (q) {
+          const text = `${r.description || ""} ${r.productName || ""} ${r.rawResolvedSku || ""} ${r.resolvedSku || ""} ${r.productId || ""} ${r.variantId || ""} ${r.docId || ""}`.toLowerCase();
+          if (!text.includes(q)) return false;
+        }
+
+        return true;
+      });
+
+    const counts = {
+      total: filtered.length,
+      pending: filtered.filter((r: any) => r.status === "PENDING").length,
+      invalid: filtered.filter((r: any) => r.reason === "RECIPE_INVALID").length,
+    };
+
+    res.json({ ok: true, rows: filtered, counts });
   } catch (err) {
     console.error("GET /pending error", err);
-    res.status(500).json({ ok: false });
+    res.status(500).json({ ok: false, error: "Internal error" });
   }
 });
 
 /**
  * PATCH /pending/:id/resolve
+ * assegna uno SKU manuale e lascia la riga in PENDING
  */
 router.patch("/:id/resolve", async (req, res) => {
   try {
     const { id } = req.params;
-    const { resolvedSku, type } = req.body;
+    const { resolvedSku } = req.body;
 
     if (!resolvedSku) {
       return res.status(400).json({
@@ -44,7 +71,7 @@ router.patch("/:id/resolve", async (req, res) => {
     }
 
     const rows = await listPendingRows();
-    const row = rows.find((r) => r.id === id);
+    const row = rows.find((r: any) => r.id === id);
 
     if (!row) {
       return res.status(404).json({
@@ -54,16 +81,24 @@ router.patch("/:id/resolve", async (req, res) => {
     }
 
     const updated = await upsertPendingRow({
-      ...row,
-      resolvedSku,
-      type,
-      status: "RESOLVED",
+      docId: row.docId,
+      operation: row.operation,
+      orderDate: row.orderDate,
+      tenantId: row.tenantId,
+      productId: row.productId,
+      variantId: row.variantId,
+      rawResolvedSku: resolvedSku,
+      qty: row.qty,
+      total: row.total,
+      price: row.price,
+      description: row.description || row.productName || null,
+      reason: row.reason,
     });
 
     res.json({ ok: true, row: updated });
   } catch (err) {
     console.error("PATCH /pending/:id/resolve error", err);
-    res.status(500).json({ ok: false });
+    res.status(500).json({ ok: false, error: "Internal error" });
   }
 });
 
@@ -73,10 +108,10 @@ router.patch("/:id/resolve", async (req, res) => {
 router.post("/:id/reprocess", async (req, res) => {
   try {
     const rows = await listPendingRows();
-    const row = rows.find((r) => r.id === req.params.id);
+    const row = rows.find((r: any) => r.id === req.params.id);
 
     if (!row) {
-      return res.status(404).json({ ok: false });
+      return res.status(404).json({ ok: false, error: "Not found" });
     }
 
     if (row.status === "PROCESSED") {
@@ -86,22 +121,26 @@ router.post("/:id/reprocess", async (req, res) => {
       });
     }
 
-    if (row.status !== "RESOLVED") {
+    if (!row.rawResolvedSku) {
       return res.status(400).json({
         ok: false,
         error: "Resolve first",
       });
     }
 
-    console.log("Processing pending row:", row.id, row.resolvedSku);
+    console.log("Processing pending row:", row.id, row.rawResolvedSku);
 
-    await processPendingRow(row);
+    await processPendingRow({
+      ...row,
+      resolvedSku: row.rawResolvedSku,
+    });
+
     await markPendingRowProcessed(row.id);
 
     res.json({ ok: true, processed: 1 });
   } catch (err) {
     console.error("POST /pending/:id/reprocess error", err);
-    res.status(500).json({ ok: false });
+    res.status(500).json({ ok: false, error: "Internal error" });
   }
 });
 
@@ -111,28 +150,28 @@ router.post("/:id/reprocess", async (req, res) => {
 router.post("/reprocess-all", async (_req, res) => {
   try {
     const rows = (await listPendingRows()).filter(
-      (r) => r.status === "RESOLVED"
+      (r: any) => r.status === "PENDING" && !!r.rawResolvedSku
     );
 
     let processed = 0;
 
     for (const row of rows) {
       try {
-        console.log("Processing row:", row.id);
-
-        await processPendingRow(row);
+        await processPendingRow({
+          ...row,
+          resolvedSku: row.rawResolvedSku,
+        });
         await markPendingRowProcessed(row.id);
-
         processed++;
       } catch (err) {
-        console.error("fail row", row.id);
+        console.error("fail row", row.id, err);
       }
     }
 
     res.json({ ok: true, processed });
   } catch (err) {
     console.error("POST /pending/reprocess-all error", err);
-    res.status(500).json({ ok: false });
+    res.status(500).json({ ok: false, error: "Internal error" });
   }
 });
 
