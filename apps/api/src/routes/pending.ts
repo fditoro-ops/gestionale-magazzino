@@ -14,33 +14,23 @@ const router = Router();
  */
 router.get("/", async (req, res) => {
   try {
-    const status = req.query.status ? String(req.query.status) : undefined;
-    const rows = await listPendingRows(
-      status === "PENDING" || status === "PROCESSED" ? status : undefined
+    const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
+
+    const rows = (await listPendingRows()).filter(
+      (r: any) =>
+        r.reason === "UNMAPPED_PRODUCT" ||
+        r.reason === "UNCLASSIFIED_SKU" ||
+        r.reason === "RECIPE_NOT_FOUND"
     );
 
-    const filtered = rows
-      .filter((r: any) => {
-        const reason = req.query.reason ? String(req.query.reason) : "";
-        const q = req.query.q ? String(req.query.q).toLowerCase() : "";
+    const enriched = await enrichPendingRows(rows, tenantId);
 
-        if (
-          r.reason !== "UNMAPPED_PRODUCT" &&
-          r.reason !== "UNCLASSIFIED_SKU" &&
-          r.reason !== "RECIPE_NOT_FOUND"
-        ) {
-          return false;
-        }
-
-        if (reason && r.reason !== reason) return false;
-
-        if (q) {
-          const text = `${r.description || ""} ${r.productName || ""} ${r.rawResolvedSku || ""} ${r.resolvedSku || ""} ${r.productId || ""} ${r.variantId || ""} ${r.docId || ""}`.toLowerCase();
-          if (!text.includes(q)) return false;
-        }
-
-        return true;
-      });
+    res.json({ ok: true, rows: enriched });
+  } catch (err) {
+    console.error("GET /pending error", err);
+    res.status(500).json({ ok: false });
+  }
+});
 
     const counts = {
       total: filtered.length,
