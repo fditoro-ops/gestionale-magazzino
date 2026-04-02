@@ -7,7 +7,7 @@ type PendingReason =
   | "RECIPE_NOT_FOUND"
   | "RECIPE_INVALID";
 
-type PendingStatus = "PENDING" | "PROCESSED" | "ERROR";Apri apps/web/src/pages/PendingPanel.tsx
+type PendingStatus = "PENDING" | "PROCESSED" | "ERROR";
 
 
 
@@ -307,45 +307,52 @@ const filteredRows = useMemo(() => {
                 filteredRows.map((row) => {
                   const isSelected = row.id === selected?.id;
                   return (
-                    <button
-                      key={row.id}
-                      onClick={() => setSelectedId(row.id)}
-                      className={`grid w-full grid-cols-[1.5fr_0.7fr_1fr_0.9fr_0.7fr] gap-4 border-b border-slate-100 px-5 py-4 text-left last:border-b-0 ${
-                        isSelected ? "bg-slate-50" : "hover:bg-slate-50"
-                      }`}
-                    >
-<div>
-<div className="text-sm font-semibold">
-  {row.cicVariantName ||
-    row.cicProductName ||
-    row.recipeName ||
-    row.description ||
-    row.productName ||
-    row.productId ||
-    "Senza descrizione"}
-</div>
-  
-<div className="mt-1 text-xs text-slate-500">
-  {row.catalogSku
-    ? `SKU: ${row.catalogSku}`
-    : row.rawResolvedSku || row.resolvedSku || "SKU assente"}
-  {row.recipeSku ? ` · Ricetta: ${row.recipeSku}` : ""}
-  {row.productId ? ` · prod: ${row.productId}` : ""}
-  {row.variantId ? ` · var: ${row.variantId}` : ""}
-</div>
-                      
-                      <div className="text-sm">
-                        <div>{row.qty} pz</div>
-                        <div className="mt-1 text-xs text-slate-500">{formatMoney(row.total)}</div>
-                      </div>
-                      <div>
-                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${reasonStyle[row.reason]}`}>
-                          {reasonLabel[row.reason]}
-                        </span>
-                      </div>
-                      <div className="text-sm text-slate-600">{formatDate(row.createdAt || row.orderDate)}</div>
-                      <div className="text-right text-sm text-slate-500">Apri</div>
-                    </button>
+<button
+  key={row.id}
+  onClick={() => setSelectedId(row.id)}
+  className={`grid w-full grid-cols-[1.5fr_0.7fr_1fr_0.9fr_0.7fr] gap-4 border-b border-slate-100 px-5 py-4 text-left last:border-b-0 ${
+    isSelected ? "bg-slate-50" : "hover:bg-slate-50"
+  }`}
+>
+  <div>
+    <div className="text-sm font-semibold">
+      {row.cicVariantName ||
+        row.cicProductName ||
+        row.recipeName ||
+        row.description ||
+        row.productName ||
+        row.productId ||
+        "Senza descrizione"}
+    </div>
+
+    <div className="mt-1 text-xs text-slate-500">
+      {row.catalogSku
+        ? `SKU: ${row.catalogSku}`
+        : row.rawResolvedSku || row.resolvedSku || "SKU assente"}
+      {row.recipeSku ? ` · Ricetta: ${row.recipeSku}` : ""}
+      {row.productId ? ` · prod: ${row.productId}` : ""}
+      {row.variantId ? ` · var: ${row.variantId}` : ""}
+    </div>
+  </div>
+
+  <div className="text-sm">
+    <div>{row.qty} pz</div>
+    <div className="mt-1 text-xs text-slate-500">{formatMoney(row.total)}</div>
+  </div>
+
+  <div>
+    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${reasonStyle[row.reason]}`}>
+      {reasonLabel[row.reason]}
+    </span>
+  </div>
+
+  <div className="text-sm text-slate-600">
+    {formatDate(row.createdAt || row.orderDate)}
+  </div>
+
+  <div className="text-right text-sm text-slate-500">Apri</div>
+</button>
+                    
                   );
                 })
               )}
