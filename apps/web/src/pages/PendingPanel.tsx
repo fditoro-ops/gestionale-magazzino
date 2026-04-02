@@ -7,7 +7,9 @@ type PendingReason =
   | "RECIPE_NOT_FOUND"
   | "RECIPE_INVALID";
 
-type PendingStatus = "PENDING" | "PROCESSED" | "ERROR";
+type PendingStatus = "PENDING" | "PROCESSED" | "ERROR";Apri apps/web/src/pages/PendingPanel.tsx
+
+
 
 type PendingRow = {
   id: string;
@@ -26,6 +28,12 @@ type PendingRow = {
   receiptNumber?: string | null;
   docId?: string | null;
   rawRow?: any;
+
+  cicProductName?: string | null;
+  cicVariantName?: string | null;
+  catalogSku?: string | null;
+  recipeSku?: string | null;
+  recipeName?: string | null;
 };
 
 const reasonStyle: Record<PendingReason, string> = {
@@ -307,14 +315,23 @@ const filteredRows = useMemo(() => {
                       }`}
                     >
 <div>
-  <div className="text-sm font-semibold">
-    {row.description || row.productName || "Senza descrizione"}
-  </div>
-  <div className="mt-1 text-xs text-slate-500">
-    {row.rawResolvedSku || row.resolvedSku || "SKU assente"}
-    {row.productId ? ` · prod: ${row.productId}` : ""}
-    {row.variantId ? ` · var: ${row.variantId}` : ""}
-  </div>
+<div className="text-sm font-semibold">
+  {row.cicVariantName ||
+    row.cicProductName ||
+    row.recipeName ||
+    row.description ||
+    row.productName ||
+    row.productId ||
+    "Senza descrizione"}
+</div>
+  
+<div className="mt-1 text-xs text-slate-500">
+  {row.catalogSku
+    ? `SKU: ${row.catalogSku}`
+    : row.rawResolvedSku || row.resolvedSku || "SKU assente"}
+  {row.recipeSku ? ` · Ricetta: ${row.recipeSku}` : ""}
+  {row.productId ? ` · prod: ${row.productId}` : ""}
+  {row.variantId ? ` · var: ${row.variantId}` : ""}
 </div>
                       
                       <div className="text-sm">
@@ -344,11 +361,22 @@ const filteredRows = useMemo(() => {
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dettaglio pending</div>
 <h2 className="mt-1 text-xl font-semibold">
-  {selected.description || selected.productName || "Senza descrizione"}
+  {selected.cicVariantName ||
+    selected.cicProductName ||
+    selected.recipeName ||
+    selected.description ||
+    selected.productName ||
+    selected.productId ||
+    "Senza descrizione"}
 </h2>
+                    
 <div className="mt-1 text-sm text-slate-500">
-  {selected.rawResolvedSku || selected.resolvedSku || "SKU assente"}
+  {selected.catalogSku
+    ? `SKU: ${selected.catalogSku}`
+    : selected.rawResolvedSku || selected.resolvedSku || "SKU assente"}
+  {selected.recipeSku ? ` · Ricetta: ${selected.recipeSku}` : ""}
 </div>
+                    
 <div className="mt-2 text-xs text-slate-500">
   {selected.productId ? `Prodotto CIC: ${selected.productId}` : "Prodotto CIC: -"}
   {" · "}
