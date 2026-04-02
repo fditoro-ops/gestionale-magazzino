@@ -11,7 +11,8 @@ type PendingStatus = "PENDING" | "PROCESSED" | "ERROR";
 
 type PendingRow = {
   id: string;
-  rawResolvedSku: string | null;
+  rawResolvedSku?: string | null;
+  resolvedSku?: string | null;
   qty: number;
   total: number;
   reason: PendingReason;
@@ -19,6 +20,7 @@ type PendingRow = {
   createdAt?: string;
   orderDate?: string;
   description?: string | null;
+  productName?: string | null;
   productId?: string | null;
   variantId?: string | null;
   receiptNumber?: string | null;
@@ -115,7 +117,7 @@ async function loadPending() {
     if (!q) return rows;
     return rows.filter((row) => {
       const sku = String(row.rawResolvedSku || "").toLowerCase();
-      const name = String(row.description || "").toLowerCase();
+      const name = String(row.description || row.productName || "").toLowerCase();
       return sku.includes(q) || name.includes(q);
     });
   }, [rows, query]);
@@ -294,8 +296,13 @@ async function loadPending() {
                       }`}
                     >
                       <div>
-                        <div className="text-sm font-semibold">{row.description || "Senza descrizione"}</div>
-                        <div className="mt-1 text-xs text-slate-500">{row.rawResolvedSku || "SKU assente"}</div>
+<div className="text-sm font-semibold">
+  {row.description || row.productName || "Senza descrizione"}
+</div>
+<div className="mt-1 text-xs text-slate-500">
+  {row.rawResolvedSku || row.resolvedSku || "SKU assente"}
+</div>
+                        
                       </div>
                       <div className="text-sm">
                         <div>{row.qty} pz</div>
@@ -323,8 +330,12 @@ async function loadPending() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dettaglio pending</div>
-                    <h2 className="mt-1 text-xl font-semibold">{selected.description || "Senza descrizione"}</h2>
-                    <div className="mt-1 text-sm text-slate-500">{selected.rawResolvedSku || "SKU assente"}</div>
+<h2 className="mt-1 text-xl font-semibold">
+  {selected.description || selected.productName || "Senza descrizione"}
+</h2>
+<div className="mt-1 text-sm text-slate-500">
+  {selected.rawResolvedSku || selected.resolvedSku || "SKU assente"}
+</div>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-xs font-medium ${reasonStyle[selected.reason]}`}>
                     {reasonLabel[selected.reason]}
