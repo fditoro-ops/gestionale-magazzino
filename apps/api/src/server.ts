@@ -37,6 +37,7 @@ import {
 import { cicResolveSku, cicExtractItems } from "./services/cicMapping.service.js";
 import dashboardRouter from "./routes/dashboard.router.js";
 import pendingRouter from "./routes/pending.js";
+import { syncCicCatalogToDb } from "./services/cicCatalogSync.service.js";
 
 /* =========================
    BOM (Google Sheet) Reader
@@ -377,6 +378,45 @@ async function getCicBearerToken() {
   console.log("✅ CIC token OK (expiresIn s):", expiresIn);
   return cicBearerToken;
 }
+async function fetchAllCicProductsRaw(): Promise<any[]> {
+  if (!CIC_API_KEY) throw new Error("CIC_API_KEY mancante");
+
+  const token = await getCicBearerToken();
+  if (!token) throw new Error("Token CIC non disponibile");
+
+  const productsAll: any[] = [];
+  let start = 0;
+  let totalCount = Infinity;
+  const limit = Math.max(1, Math.min(CIC_PRODUCTS_LIMIT || 200, 500));
+
+  while (start < totalCount) {
+    const url = `${CIC_API_BASE_URL}${CIC_PRODUCTS_PATH}?start=${start}&limit=${limit}`;
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Version": CIC_X_VERSION,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`CIC GET /products failed ${res.status}: ${txt}`);
+    }
+
+    const json: any = await res.json();
+    const products: any[] = Array.isArray(json?.products) ? json.products : [];
+    totalCount = Number(json?.totalCount ?? products.length ?? 0);
+
+    productsAll.push(...products);
+
+    start += limit;
+    if (!products.length) break;
+  }
+
+  return productsAll;
+}
 
 async function fetchAllCicProducts(): Promise<CicCatalogRow[]> {
   if (!CIC_API_KEY) throw new Error("CIC_API_KEY mancante");
@@ -509,6 +549,117 @@ const variantPrice = Number(variantRawPrice ?? 0);
   return rows;
 }
 export async function syncCicProducts() {
+  try {
+    if (!CIC_API_KEY) {
+      console.log("⚠️ CIC_API_KEY mancante: sync prodotti disattivata");
+      return;
+    }
+
+    const products = await fetchAllCicProductsRaw();
+    const rows = await fetchAllCicProducts();
+
+    const map: Record<string, string> = {};
+
+    let printedSample = false;
+
+    if (DEBUG_CIC && !printedSample && products.length) {
+      printedSample = true;
+      console.log("CIC PRODUCT SAMPLE:", JSON.stringify(products[0], null, 2));
+    }
+
+    for (const p of products) {
+      const productId = String(p?.id || "").trim();
+      const productDesc = String(p?.description || "").trim();
+
+      if (
+        DEBUG_CIC &&
+        (
+          productId === "8a060ec2-5f36-4358-929a-f354e561819b" ||
+          productId === "0ccea60d-737c-4a9a-a6dc-534933b79032" ||
+          productDesc.toUpperCase().includes("KOZEL") ||
+          productDesc.toUpperCase().includes("ACQUA")
+        )
+      ) {
+        console.log("🔎 CIC TARGET PRODUCT:", JSON.stringify(p, null, 2));
+      }
+
+      const productSku =
+        String(p?.internalId || "").trim() ||
+        String(p?.externalId || "").trim() ||
+        "";
+
+      if (productId && productSku) map[productId] = productSku;
+
+      const pBarcodes: any[] =
+        (Array.isArray(p?.barcodes) && p.barcodes) ||
+        (Array.isArray(p?.salesBarcodes) && p.salesBarcodes) ||
+        [];
+
+      for (const b of pBarcodes) {
+        const code = String(
+          b?.barcode || b?.code || b?.value || b || ""
+        ).trim();
+        if (code && productSku) map[code] = productSku;
+      }
+
+      const variants: any[] = Array.isArray(p?.variants) ? p.variants : [];
+      for (const v of variants) {
+        const variantId = String(v?.id || "").trim();
+
+        if (
+          DEBUG_CIC &&
+          (
+            variantId === "2dbb6511-afe1-4599-a698-1673bb46ec3b" ||
+            variantId === "51667f52-9f38-469a-a056-60786b1d2d4d"
+          )
+        ) {
+          console.log("🔎 CIC TARGET VARIANT:", JSON.stringify(v, null, 2));
+        }
+
+        const variantSku =
+          String(v?.internalId || "").trim() ||
+          String(v?.externalId || "").trim() ||
+          productSku;
+
+        if (variantId && variantSku) map[variantId] = variantSku;
+
+        const vBarcodes: any[] =
+          (Array.isArray(v?.barcodes) && v.barcodes) ||
+          (Array.isArray(v?.salesBarcodes) && v.salesBarcodes) ||
+          [];
+
+        for (const b of vBarcodes) {
+          const code = String(
+            b?.barcode || b?.code || b?.value || b || ""
+          ).trim();
+          if (code && variantSku) map[code] = variantSku;
+        }
+      }
+    }
+
+    cicIdToSkuMap = map;
+    cicProductsLastSyncAt = new Date().toISOString();
+
+    await syncCicCatalogToDb({
+      tenantId: process.env.TENANT_ID || "IMP001",
+      products,
+    });
+
+    console.log(
+      "✅ CIC prodotti sincronizzati:",
+      Object.keys(cicIdToSkuMap).length,
+      "lastSync:",
+      cicProductsLastSyncAt
+    );
+
+    console.log("✅ CIC catalogo salvato su DB");
+    console.log("✅ CIC catalog rows flat:", rows.length);
+    console.log("✅ CIC catalog products raw:", products.length);
+  } catch (err) {
+    console.error("❌ Errore sync prodotti CIC:", err);
+  }
+}
+
   try {
     if (!CIC_API_KEY) {
       console.log("⚠️ CIC_API_KEY mancante: sync prodotti disattivata");
