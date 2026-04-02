@@ -7,13 +7,13 @@ import type { Movement } from "../types/movement.js";
 // =========================
 // PROCESS CIC ROW
 // =========================
-export async function processCicRow(row: any, tenantId: string) {
-  const sku = row.externalId || row.productId || row.barcode;
+export async function processCicRow(_row: any, _tenantId: string) {
+  return { status: "DISABLED" };
+}
 
-  if (!sku) {
-    return { status: "SKIP_NO_SKU" };
-  }
-
+export async function processPendingRow(_row: any) {
+  return;
+}
   const recipe = await getRecipeByProductSku(tenantId, sku);
 
   // ❌ NON TROVATO
