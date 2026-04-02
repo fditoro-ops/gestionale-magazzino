@@ -18,11 +18,14 @@ export type CicPendingRow = {
   productId?: string;
   variantId?: string;
   rawResolvedSku?: string;
+  resolvedSku?: string;
 
   qty: number;
   total: number;
   price?: number;
   description?: string;
+  productName?: string;
+  receiptNumber?: string;
 
   reason: CicPendingReason;
   status: CicPendingStatus;
@@ -74,13 +77,14 @@ export async function upsertPendingRow(
       description,
       reason,
       status,
+      raw_row,
       created_at,
       processed_at
     )
     VALUES (
       $1, $2, $3, $4, $5,
       $6, $7, $8, $9, $10,
-      $11, $12, $13, 'PENDING', NOW(), NULL
+      $11, $12, $13, 'PENDING', $14, NOW(), NULL
     )
     ON CONFLICT (id)
     DO UPDATE SET
@@ -95,6 +99,7 @@ export async function upsertPendingRow(
       price = EXCLUDED.price,
       description = EXCLUDED.description,
       reason = EXCLUDED.reason,
+      raw_row = EXCLUDED.raw_row,
       status = 'PENDING',
       processed_at = NULL
     `,
@@ -112,6 +117,7 @@ export async function upsertPendingRow(
       input.price ?? null,
       input.description ?? null,
       input.reason,
+      input.rawRow ? JSON.stringify(input.rawRow) : null,
     ]
   );
 
@@ -126,6 +132,13 @@ export async function upsertPendingRow(
   return {
     ...input,
     id,
+    resolvedSku: input.rawResolvedSku ?? null,
+    productName: input.description ?? null,
+    receiptNumber:
+      input.rawRow?.receiptNumber ||
+      input.rawRow?.documentNumber ||
+      input.rawRow?.number ||
+      null,
     status: "PENDING" as const,
     createdAt: new Date().toISOString(),
     processedAt: null,
@@ -148,10 +161,26 @@ export async function listPendingRows(status?: CicPendingStatus) {
         qty,
         total,
         price,
-        description,
-        description as "productName",
+        COALESCE(
+          description,
+          raw_row->>'description',
+          raw_row->>'descriptionReceipt',
+          raw_row->>'name'
+        ) as "description",
+        COALESCE(
+          description,
+          raw_row->>'description',
+          raw_row->>'descriptionReceipt',
+          raw_row->>'name'
+        ) as "productName",
+        COALESCE(
+          raw_row->>'receiptNumber',
+          raw_row->>'documentNumber',
+          raw_row->>'number'
+        ) as "receiptNumber",
         reason,
         status,
+        raw_row as "rawRow",
         created_at as "createdAt",
         processed_at as "processedAt"
       FROM cic_pending_rows
@@ -172,10 +201,26 @@ export async function listPendingRows(status?: CicPendingStatus) {
         qty,
         total,
         price,
-        description,
-        description as "productName",
+        COALESCE(
+          description,
+          raw_row->>'description',
+          raw_row->>'descriptionReceipt',
+          raw_row->>'name'
+        ) as "description",
+        COALESCE(
+          description,
+          raw_row->>'description',
+          raw_row->>'descriptionReceipt',
+          raw_row->>'name'
+        ) as "productName",
+        COALESCE(
+          raw_row->>'receiptNumber',
+          raw_row->>'documentNumber',
+          raw_row->>'number'
+        ) as "receiptNumber",
         reason,
         status,
+        raw_row as "rawRow",
         created_at as "createdAt",
         processed_at as "processedAt"
       FROM cic_pending_rows
@@ -188,7 +233,6 @@ export async function listPendingRows(status?: CicPendingStatus) {
 
   return res.rows;
 }
-
 export async function markPendingRowProcessed(id: string) {
   const res = await pool.query(
     `
