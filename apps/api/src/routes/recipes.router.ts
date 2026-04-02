@@ -15,9 +15,6 @@ import {
   deleteRecipeIngredient,
 } from "../data/recipeIngredients.store.js";
 
-import {
-  updateRecipeValidationSnapshot,
-} from "../services/recipeValidation.service.js";
 
 const router = Router();
 
@@ -85,7 +82,6 @@ router.post("/:id/ingredients", async (req, res) => {
     });
 
     // ✅ VALIDAZIONE
-    await updateRecipeValidationSnapshot({ recipeId: id, tenantId });
 
     res.json({ ok: true, data: ingredient });
   } catch (err) {
@@ -111,8 +107,7 @@ router.put("/:id/ingredients/:ingredientId", async (req, res) => {
     }
 
     // ✅ VALIDAZIONE
-    await updateRecipeValidationSnapshot({ recipeId: id, tenantId });
-
+   
     res.json({ ok: true, data: ingredient });
   } catch (err) {
     console.error("UPDATE ingredient error", err);
@@ -135,8 +130,7 @@ router.delete("/:id/ingredients/:ingredientId", async (req, res) => {
     }
 
     // ✅ VALIDAZIONE
-    await updateRecipeValidationSnapshot({ recipeId: id, tenantId });
-
+  
     res.json({ ok: true });
   } catch (err) {
     console.error("DELETE ingredient error", err);
@@ -176,7 +170,7 @@ router.post("/", async (req, res) => {
     });
 
     // ✅ VALIDAZIONE
-    await updateRecipeValidationSnapshot({
+
       recipeId: recipe.id,
       tenantId,
     });
@@ -211,7 +205,7 @@ router.put("/:id", async (req, res) => {
     }
 
     // ✅ VALIDAZIONE
-    await updateRecipeValidationSnapshot({ recipeId: id, tenantId });
+   
 
     res.json({ ok: true, data: recipe });
   } catch (err) {
