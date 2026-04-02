@@ -660,18 +660,6 @@ export async function syncCicProducts() {
   }
 }
 
-  try {
-    if (!CIC_API_KEY) {
-      console.log("⚠️ CIC_API_KEY mancante: sync prodotti disattivata");
-      return;
-    }
-
-    const token = await getCicBearerToken();
-    if (!token) {
-      console.log("⚠️ CIC token non disponibile: sync prodotti saltata");
-      return;
-    }
-
     const map: Record<string, string> = {};
     let start = 0;
     let totalCount = Infinity;
