@@ -32,19 +32,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-    const counts = {
-      total: filtered.length,
-      pending: filtered.filter((r: any) => r.status === "PENDING").length,
-      invalid: filtered.filter((r: any) => r.reason === "RECIPE_INVALID").length,
-    };
-
-    res.json({ ok: true, rows: filtered, counts });
-  } catch (err) {
-    console.error("GET /pending error", err);
-    res.status(500).json({ ok: false, error: "Internal error" });
-  }
-});
-
 /**
  * PATCH /pending/:id/resolve
  * assegna uno SKU manuale e lascia la riga in PENDING
