@@ -116,7 +116,7 @@ async function loadPending() {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((row) => {
-      const sku = String(row.rawResolvedSku || "").toLowerCase();
+      const sku = String(row.rawResolvedSku || row.resolvedSku || "").toLowerCase();
       const name = String(row.description || row.productName || "").toLowerCase();
       return sku.includes(q) || name.includes(q);
     });
