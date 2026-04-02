@@ -133,53 +133,58 @@ export async function upsertPendingRow(
 }
 
 export async function listPendingRows(status?: CicPendingStatus) {
+  const sql = status
+    ? `
+      SELECT
+        id,
+        doc_id as "docId",
+        operation,
+        order_date as "orderDate",
+        tenant_id as "tenantId",
+        product_id as "productId",
+        variant_id as "variantId",
+        raw_resolved_sku as "rawResolvedSku",
+        raw_resolved_sku as "resolvedSku",
+        qty,
+        total,
+        price,
+        description,
+        description as "productName",
+        reason,
+        status,
+        created_at as "createdAt",
+        processed_at as "processedAt"
+      FROM cic_pending_rows
+      WHERE status = $1
+      ORDER BY created_at ASC
+    `
+    : `
+      SELECT
+        id,
+        doc_id as "docId",
+        operation,
+        order_date as "orderDate",
+        tenant_id as "tenantId",
+        product_id as "productId",
+        variant_id as "variantId",
+        raw_resolved_sku as "rawResolvedSku",
+        raw_resolved_sku as "resolvedSku",
+        qty,
+        total,
+        price,
+        description,
+        description as "productName",
+        reason,
+        status,
+        created_at as "createdAt",
+        processed_at as "processedAt"
+      FROM cic_pending_rows
+      ORDER BY created_at ASC
+    `;
+
   const res = status
-    ? await pool.query(
-        `
-        SELECT
-          id,
-          doc_id as "docId",
-          operation,
-          order_date as "orderDate",
-          tenant_id as "tenantId",
-          product_id as "productId",
-          variant_id as "variantId",
-          raw_resolved_sku as "rawResolvedSku",
-          qty,
-          total,
-          price,
-          description,
-          reason,
-          status,
-          created_at as "createdAt",
-          processed_at as "processedAt"
-        FROM cic_pending_rows
-        WHERE status = $1
-        ORDER BY created_at ASC
-        `,
-        [status]
-      )
-    : await pool.query(`
-        SELECT
-          id,
-          doc_id as "docId",
-          operation,
-          order_date as "orderDate",
-          tenant_id as "tenantId",
-          product_id as "productId",
-          variant_id as "variantId",
-          raw_resolved_sku as "rawResolvedSku",
-          qty,
-          total,
-          price,
-          description,
-          reason,
-          status,
-          created_at as "createdAt",
-          processed_at as "processedAt"
-        FROM cic_pending_rows
-        ORDER BY created_at ASC
-      `);
+    ? await pool.query(sql, [status])
+    : await pool.query(sql);
 
   return res.rows;
 }
