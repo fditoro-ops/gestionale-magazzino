@@ -25,6 +25,7 @@ type PendingRow = {
   variantId?: string | null;
   receiptNumber?: string | null;
   docId?: string | null;
+  rawRow?: any;
 };
 
 const reasonStyle: Record<PendingReason, string> = {
@@ -112,16 +113,26 @@ async function loadPending() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reasonFilter, statusFilter]);
 
-  const filteredRows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) => {
-      const sku = String(row.rawResolvedSku || row.resolvedSku || "").toLowerCase();
-      const name = String(row.description || row.productName || "").toLowerCase();
-      return sku.includes(q) || name.includes(q);
-    });
-  }, [rows, query]);
+const filteredRows = useMemo(() => {
+  const q = query.trim().toLowerCase();
+  if (!q) return rows;
+  return rows.filter((row) => {
+    const sku = String(row.rawResolvedSku || row.resolvedSku || "").toLowerCase();
+    const name = String(row.description || row.productName || "").toLowerCase();
+    const productId = String(row.productId || "").toLowerCase();
+    const variantId = String(row.variantId || "").toLowerCase();
+    const docId = String(row.docId || "").toLowerCase();
 
+    return (
+      sku.includes(q) ||
+      name.includes(q) ||
+      productId.includes(q) ||
+      variantId.includes(q) ||
+      docId.includes(q)
+    );
+  });
+}, [rows, query]);
+  
   const selected = filteredRows.find((r) => r.id === selectedId) || filteredRows[0] || null;
 
   useEffect(() => {
@@ -295,15 +306,17 @@ async function loadPending() {
                         isSelected ? "bg-slate-50" : "hover:bg-slate-50"
                       }`}
                     >
-                      <div>
-<div className="text-sm font-semibold">
-  {row.description || row.productName || "Senza descrizione"}
+<div>
+  <div className="text-sm font-semibold">
+    {row.description || row.productName || "Senza descrizione"}
+  </div>
+  <div className="mt-1 text-xs text-slate-500">
+    {row.rawResolvedSku || row.resolvedSku || "SKU assente"}
+    {row.productId ? ` · prod: ${row.productId}` : ""}
+    {row.variantId ? ` · var: ${row.variantId}` : ""}
+  </div>
 </div>
-<div className="mt-1 text-xs text-slate-500">
-  {row.rawResolvedSku || row.resolvedSku || "SKU assente"}
-</div>
-                        
-                      </div>
+                      
                       <div className="text-sm">
                         <div>{row.qty} pz</div>
                         <div className="mt-1 text-xs text-slate-500">{formatMoney(row.total)}</div>
@@ -336,6 +349,22 @@ async function loadPending() {
 <div className="mt-1 text-sm text-slate-500">
   {selected.rawResolvedSku || selected.resolvedSku || "SKU assente"}
 </div>
+<div className="mt-2 text-xs text-slate-500">
+  {selected.productId ? `Prodotto CIC: ${selected.productId}` : "Prodotto CIC: -"}
+  {" · "}
+  {selected.variantId ? `Variante CIC: ${selected.variantId}` : "Variante CIC: -"}
+</div>
+                    {selected.rawRow && (
+  <div className="mt-4 rounded-2xl bg-slate-50 p-3">
+    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+      Raw CIC
+    </div>
+    <pre className="max-h-48 overflow-auto text-xs text-slate-600">
+      {JSON.stringify(selected.rawRow, null, 2)}
+    </pre>
+  </div>
+)}
+                    
                   </div>
                   <span className={`rounded-full px-3 py-1 text-xs font-medium ${reasonStyle[selected.reason]}`}>
                     {reasonLabel[selected.reason]}
