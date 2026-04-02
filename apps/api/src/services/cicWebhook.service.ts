@@ -220,119 +220,138 @@ export async function processCicWebhook(req: any, res: any) {
     const finalItems: Array<{ sku: string; qty: number }> = [];
 
     for (const it of items) {
-      const sku = String(it.sku || "").trim();
+  const sku = String(it.sku || "").trim();
 
-      if (!sku) {
-await upsertPendingRow({
-  docId,
-  operation,
-  orderDate: orderDate.toISOString(),
-  tenantId,
-  productId,
-  variantId,
-  rawResolvedSku: "",
-  qty,
-  total,
-  price,
-  description,
-  reason: "UNMAPPED_PRODUCT",
-  rawRow: rawRow || null,
-});
-        continue;
-      }
+  const rawRow = rawRows.find(
+    (r: any) =>
+      String(r?.idProductVariant || "") === String(it._idProductVariant || "") ||
+      String(r?.idProduct || "") === String(it._idProduct || "")
+  );
 
-      const mode = cicModesBySku[sku];
+  const description =
+    String(
+      rawRow?.description ||
+        rawRow?.descriptionReceipt ||
+        rawRow?.name ||
+        ""
+    ).trim() || undefined;
 
-      const recipe = await getRecipeByProductSku(tenantId, sku);
+  const productId = String(it._idProduct || "").trim() || undefined;
+  const variantId = String(it._idProductVariant || "").trim() || undefined;
+  const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
+  const total =
+    Number(it.total || 0) || qty * (Number(rawRow?.price ?? 0) || 0);
+  const price = Number(rawRow?.price ?? 0) || undefined;
 
-      if (!recipe) {
-await upsertPendingRow({
-  docId,
-  operation,
-  orderDate: orderDate.toISOString(),
-  tenantId,
-  productId,
-  variantId,
-  rawResolvedSku: sku,
-  qty,
-  total,
-  price,
-  description,
-  reason: "UNCLASSIFIED_SKU",
-  rawRow: rawRow || null,
-});
-       
-        continue;
-      }
+  if (!sku) {
+    await upsertPendingRow({
+      docId,
+      operation,
+      orderDate: orderDate.toISOString(),
+      tenantId,
+      productId,
+      variantId,
+      rawResolvedSku: "",
+      qty,
+      total,
+      price,
+      description,
+      reason: "UNMAPPED_PRODUCT",
+      rawRow: rawRow || null,
+    });
+    continue;
+  }
 
-      if (recipe.status !== "ACTIVE") {
-await upsertPendingRow({
-  docId,
-  operation,
-  orderDate: orderDate.toISOString(),
-  tenantId,
-  productId,
-  variantId,
-  rawResolvedSku: sku,
-  qty,
-  total,
-  price,
-  description,
-  reason: "UNCLASSIFIED_SKU",
-  rawRow: rawRow || null,
-});
-        continue;
-      }
+  const mode = cicModesBySku[sku];
+  const recipe = await getRecipeByProductSku(tenantId, sku);
 
-      if (!mode) {
-        await upsertPendingRow({
-  docId,
-  operation,
-  orderDate: orderDate.toISOString(),
-  tenantId,
-  productId,
-  variantId,
-  rawResolvedSku: sku,
-  qty,
-  total,
-  price,
-  description,
-  reason: "UNCLASSIFIED_SKU",
-  rawRow: rawRow || null,
-});
-        continue;
-      }
+  if (!recipe) {
+    await upsertPendingRow({
+      docId,
+      operation,
+      orderDate: orderDate.toISOString(),
+      tenantId,
+      productId,
+      variantId,
+      rawResolvedSku: sku,
+      qty,
+      total,
+      price,
+      description,
+      reason: "UNCLASSIFIED_SKU",
+      rawRow: rawRow || null,
+    });
+    continue;
+  }
 
-      if (mode === "IGNORE") continue;
+  if (recipe.status !== "ACTIVE") {
+    await upsertPendingRow({
+      docId,
+      operation,
+      orderDate: orderDate.toISOString(),
+      tenantId,
+      productId,
+      variantId,
+      rawResolvedSku: sku,
+      qty,
+      total,
+      price,
+      description,
+      reason: "UNCLASSIFIED_SKU",
+      rawRow: rawRow || null,
+    });
+    continue;
+  }
 
-      const hasRecipe =
-        Array.isArray((bom as any)[sku]) &&
-        (bom as any)[sku].length > 0;
+  if (!mode) {
+    await upsertPendingRow({
+      docId,
+      operation,
+      orderDate: orderDate.toISOString(),
+      tenantId,
+      productId,
+      variantId,
+      rawResolvedSku: sku,
+      qty,
+      total,
+      price,
+      description,
+      reason: "UNCLASSIFIED_SKU",
+      rawRow: rawRow || null,
+    });
+    continue;
+  }
 
-      if (mode === "RECIPE" && !hasRecipe) {
-        await upsertPendingRow({
-  docId,
-  operation,
-  orderDate: orderDate.toISOString(),
-  tenantId,
-  productId,
-  variantId,
-  rawResolvedSku: sku,
-  qty,
-  total,
-  price,
-  description,
-  reason: "RECIPE_NOT_FOUND",
-  rawRow: rawRow || null,
-});
-        continue;
-      }
+  if (mode === "IGNORE") continue;
 
-      finalItems.push({
-        sku,
-        qty: Number(it.qty || 0),
-      });
-    }
+  const hasRecipe =
+    Array.isArray((bom as any)[sku]) &&
+    (bom as any)[sku].length > 0;
+
+  if (mode === "RECIPE" && !hasRecipe) {
+    await upsertPendingRow({
+      docId,
+      operation,
+      orderDate: orderDate.toISOString(),
+      tenantId,
+      productId,
+      variantId,
+      rawResolvedSku: sku,
+      qty,
+      total,
+      price,
+      description,
+      reason: "RECIPE_NOT_FOUND",
+      rawRow: rawRow || null,
+    });
+    continue;
+  }
+
+  finalItems.push({
+    sku,
+    qty,
+  });
+}
 
     // =========================
     // 3️⃣ SCARICO
