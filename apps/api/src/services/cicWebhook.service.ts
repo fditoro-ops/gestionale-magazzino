@@ -159,60 +159,45 @@ export async function processCicWebhook(req: any, res: any) {
     // 1️⃣ SALVA SALES
     // =========================
     const salesLines = await Promise.all(
-      items.map(async (it: any, idx: number) => {
-        const sku = String(it.sku || "").trim();
+  items.map(async (it: any, idx: number) => {
+    const sku = String(it.sku || "").trim();
 
-        const rawRow = rawRows.find(
-  (r: any) =>
-    String(r?.idProductVariant || "") === String(it._idProductVariant || "") ||
-    String(r?.idProduct || "") === String(it._idProduct || "")
-);
-
-const description =
-  String(
-    rawRow?.description ||
-      rawRow?.descriptionReceipt ||
-      rawRow?.name ||
-      ""
-  ).trim() || undefined;
-
-const productId = String(it._idProduct || "").trim() || undefined;
-const variantId = String(it._idProductVariant || "").trim() || undefined;
-const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
-const total = Number(it.total || 0) || qty * (Number(rawRow?.price ?? 0) || 0);
-const price = Number(rawRow?.price ?? 0) || undefined;
-
-        const rawRow = rawRows.find(
-          (r: any) =>
-            String(r?.idProductVariant || "") === it._idProductVariant ||
-            String(r?.idProduct || "") === it._idProduct
-        );
-
-        let description =
-          rawRow?.description || rawRow?.name || sku || "";
-
-        if (!description && sku) {
-          description = await getItemNameBySku(sku);
-        }
-
-        const qty = Number(rawRow?.quantity ?? it.qty ?? 0);
-        const unitPrice = Number(rawRow?.price ?? 0);
-
-        return {
-          lineNo: idx + 1,
-          sku,
-          description,
-          qty,
-          unitPrice,
-          lineTotal: qty * unitPrice,
-          productId: it._idProduct || "",
-          variantId: it._idProductVariant || "",
-          tenantId,
-          hasRecipe: false,
-          resolvedOk: Boolean(sku),
-        };
-      })
+    const rawRow = rawRows.find(
+      (r: any) =>
+        String(r?.idProductVariant || "") === String(it._idProductVariant || "") ||
+        String(r?.idProduct || "") === String(it._idProduct || "")
     );
+
+    let description =
+      String(
+        rawRow?.description ||
+          rawRow?.descriptionReceipt ||
+          rawRow?.name ||
+          ""
+      ).trim() || "";
+
+    if (!description && sku) {
+      description = await getItemNameBySku(sku);
+    }
+
+    const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
+    const unitPrice = Number(rawRow?.price ?? 0) || 0;
+
+    return {
+      lineNo: idx + 1,
+      sku,
+      description,
+      qty,
+      unitPrice,
+      lineTotal: qty * unitPrice,
+      productId: String(it._idProduct || "").trim(),
+      variantId: String(it._idProductVariant || "").trim(),
+      tenantId,
+      hasRecipe: false,
+      resolvedOk: Boolean(sku),
+    };
+  })
+);
 
     await saveSalesDocumentWithLines(
       {
