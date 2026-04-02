@@ -76,33 +76,40 @@ export default function IntegrationPendingPanel() {
   const [statusFilter, setStatusFilter] = useState<PendingStatus | "ALL">("PENDING");
   const [manualSku, setManualSku] = useState("");
 
-  async function loadPending() {
-    try {
-      setLoading(true);
-      setError(null);
+async function loadPending() {
+  try {
+    setLoading(true);
+    setError(null);
 
-      const params = new URLSearchParams();
-      if (statusFilter !== "ALL") params.set("status", statusFilter);
-      if (reasonFilter !== "ALL") params.set("reason", reasonFilter);
-      if (query.trim()) params.set("q", query.trim());
+    const params = new URLSearchParams();
+    if (statusFilter !== "ALL") params.set("status", statusFilter);
+    if (reasonFilter !== "ALL") params.set("reason", reasonFilter);
+    if (query.trim()) params.set("q", query.trim());
 
-      const response = await authFetch(`/pending?${params.toString()}`);
-      const json = (await response.json()) as PendingListResponse;
+    const response = await authFetch(`/pending?${params.toString()}`);
+    const json = await response.json();
 
-      if (!json.ok) throw new Error("Errore nel caricamento pending");
+    const normalizedRows =
+      json?.data ||
+      json?.rows ||
+      [];
 
-      setRows(json.data || []);
-      if (!selectedId && json.data?.length) {
-        setSelectedId(json.data[0].id);
-      } else if (selectedId && !json.data.some((r) => r.id === selectedId)) {
-        setSelectedId(json.data[0]?.id ?? null);
-      }
-    } catch (err: any) {
-      setError(err?.message || "Errore imprevisto");
-    } finally {
-      setLoading(false);
+    setRows(normalizedRows);
+
+    if (!selectedId && normalizedRows.length) {
+      setSelectedId(normalizedRows[0].id);
+    } else if (
+      selectedId &&
+      !normalizedRows.some((r: PendingRow) => r.id === selectedId)
+    ) {
+      setSelectedId(normalizedRows[0]?.id ?? null);
     }
+  } catch (err: any) {
+    setError(err?.message || "Errore imprevisto");
+  } finally {
+    setLoading(false);
   }
+}
 
   useEffect(() => {
     loadPending();
