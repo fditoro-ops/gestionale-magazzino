@@ -25,12 +25,6 @@ type PendingRow = {
   docId?: string | null;
 };
 
-type PendingListResponse = {
-  ok: boolean;
-  data: PendingRow[];
-  counts?: Partial<Record<PendingReason, number>>;
-};
-
 const reasonStyle: Record<PendingReason, string> = {
   UNMAPPED_PRODUCT: "bg-slate-100 text-slate-700",
   UNCLASSIFIED_SKU: "bg-amber-100 text-amber-800",
