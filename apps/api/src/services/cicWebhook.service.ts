@@ -163,6 +163,26 @@ export async function processCicWebhook(req: any, res: any) {
         const sku = String(it.sku || "").trim();
 
         const rawRow = rawRows.find(
+  (r: any) =>
+    String(r?.idProductVariant || "") === String(it._idProductVariant || "") ||
+    String(r?.idProduct || "") === String(it._idProduct || "")
+);
+
+const description =
+  String(
+    rawRow?.description ||
+      rawRow?.descriptionReceipt ||
+      rawRow?.name ||
+      ""
+  ).trim() || undefined;
+
+const productId = String(it._idProduct || "").trim() || undefined;
+const variantId = String(it._idProductVariant || "").trim() || undefined;
+const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
+const total = Number(it.total || 0) || qty * (Number(rawRow?.price ?? 0) || 0);
+const price = Number(rawRow?.price ?? 0) || undefined;
+
+        const rawRow = rawRows.find(
           (r: any) =>
             String(r?.idProductVariant || "") === it._idProductVariant ||
             String(r?.idProduct || "") === it._idProduct
@@ -218,16 +238,21 @@ export async function processCicWebhook(req: any, res: any) {
       const sku = String(it.sku || "").trim();
 
       if (!sku) {
-        await upsertPendingRow({
-          docId,
-          operation,
-          orderDate: orderDate.toISOString(),
-          tenantId,
-          rawResolvedSku: "",
-          qty: Number(it.qty || 0),
-          total: Number(it.total || 0),
-          reason: "UNMAPPED_PRODUCT",
-        });
+await upsertPendingRow({
+  docId,
+  operation,
+  orderDate: orderDate.toISOString(),
+  tenantId,
+  productId,
+  variantId,
+  rawResolvedSku: "",
+  qty,
+  total,
+  price,
+  description,
+  reason: "UNMAPPED_PRODUCT",
+  rawRow: rawRow || null,
+});
         continue;
       }
 
@@ -236,44 +261,60 @@ export async function processCicWebhook(req: any, res: any) {
       const recipe = await getRecipeByProductSku(tenantId, sku);
 
       if (!recipe) {
-        await upsertPendingRow({
-          docId,
-          operation,
-          orderDate: orderDate.toISOString(),
-          tenantId,
-          rawResolvedSku: sku,
-          qty: Number(it.qty || 0),
-          total: Number(it.total || 0),
-          reason: "UNCLASSIFIED_SKU",
-        });
+await upsertPendingRow({
+  docId,
+  operation,
+  orderDate: orderDate.toISOString(),
+  tenantId,
+  productId,
+  variantId,
+  rawResolvedSku: sku,
+  qty,
+  total,
+  price,
+  description,
+  reason: "UNCLASSIFIED_SKU",
+  rawRow: rawRow || null,
+});
+       
         continue;
       }
 
       if (recipe.status !== "ACTIVE") {
-        await upsertPendingRow({
-          docId,
-          operation,
-          orderDate: orderDate.toISOString(),
-          tenantId,
-          rawResolvedSku: sku,
-          qty: Number(it.qty || 0),
-          total: Number(it.total || 0),
-          reason: "UNCLASSIFIED_SKU",
-        });
+await upsertPendingRow({
+  docId,
+  operation,
+  orderDate: orderDate.toISOString(),
+  tenantId,
+  productId,
+  variantId,
+  rawResolvedSku: sku,
+  qty,
+  total,
+  price,
+  description,
+  reason: "UNCLASSIFIED_SKU",
+  rawRow: rawRow || null,
+});
         continue;
       }
 
       if (!mode) {
         await upsertPendingRow({
-          docId,
-          operation,
-          orderDate: orderDate.toISOString(),
-          tenantId,
-          rawResolvedSku: sku,
-          qty: Number(it.qty || 0),
-          total: Number(it.total || 0),
-          reason: "UNCLASSIFIED_SKU",
-        });
+  docId,
+  operation,
+  orderDate: orderDate.toISOString(),
+  tenantId,
+  productId,
+  variantId,
+  rawResolvedSku: sku,
+  qty,
+  total,
+  price,
+  description,
+  reason: "UNCLASSIFIED_SKU",
+  rawRow: rawRow || null,
+});
         continue;
       }
 
@@ -285,15 +326,20 @@ export async function processCicWebhook(req: any, res: any) {
 
       if (mode === "RECIPE" && !hasRecipe) {
         await upsertPendingRow({
-          docId,
-          operation,
-          orderDate: orderDate.toISOString(),
-          tenantId,
-          rawResolvedSku: sku,
-          qty: Number(it.qty || 0),
-          total: Number(it.total || 0),
-          reason: "RECIPE_NOT_FOUND",
-        });
+  docId,
+  operation,
+  orderDate: orderDate.toISOString(),
+  tenantId,
+  productId,
+  variantId,
+  rawResolvedSku: sku,
+  qty,
+  total,
+  price,
+  description,
+  reason: "RECIPE_NOT_FOUND",
+  rawRow: rawRow || null,
+});
         continue;
       }
 
