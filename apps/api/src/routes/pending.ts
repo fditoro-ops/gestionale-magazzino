@@ -25,10 +25,24 @@ router.get("/", async (req, res) => {
 
     const enriched = await enrichPendingRows(rows, tenantId);
 
-    res.json({ ok: true, rows: enriched });
+    const visibleRows = enriched.filter((r: any) => {
+      const hasCatalogSku = Boolean(String(r.catalogSku || "").trim());
+      const hasRecipeSku = Boolean(String(r.recipeSku || "").trim());
+
+      // mostra solo i pending ancora davvero irrisolti
+      return !hasCatalogSku && !hasRecipeSku;
+    });
+
+    const counts = {
+      total: visibleRows.length,
+      pending: visibleRows.filter((r: any) => r.status === "PENDING").length,
+      invalid: visibleRows.filter((r: any) => r.reason === "RECIPE_INVALID").length,
+    };
+
+    res.json({ ok: true, rows: visibleRows, counts });
   } catch (err) {
     console.error("GET /pending error", err);
-    res.status(500).json({ ok: false });
+    res.status(500).json({ ok: false, error: "Internal error" });
   }
 });
 
