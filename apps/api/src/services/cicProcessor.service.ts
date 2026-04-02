@@ -1,13 +1,11 @@
 import crypto from "crypto";
 import { insertManyMovements } from "../data/movements.store.js";
-import { findRecipeBySku } from "../data/recipes.store.js";
+import { getRecipeByProductSku } from "../data/recipes.store.js";
 import { upsertPendingRow } from "../data/cicPendingRows.store.js";
-import { applyRecipeStock } from "./recipeStock.service.js";
 import type { Movement } from "../types/movement.js";
 
-
 // =========================
-// 🔥 NUOVO FLOW PRINCIPALE
+// PROCESS CIC ROW
 // =========================
 export async function processCicRow(row: any, tenantId: string) {
   const sku = row.externalId || row.productId || row.barcode;
@@ -16,68 +14,53 @@ export async function processCicRow(row: any, tenantId: string) {
     return { status: "SKIP_NO_SKU" };
   }
 
-  const recipe = await findRecipeBySku(sku, tenantId);
+  const recipe = await getRecipeByProductSku(tenantId, sku);
 
   // ❌ NON TROVATO
   if (!recipe) {
     await upsertPendingRow({
       tenantId,
-      sku,
+      rawResolvedSku: sku,
+      qty: Number(row.quantity || 1),
+      total: Number(row.total || 0),
       reason: "UNCLASSIFIED_SKU",
-      raw: row,
     });
 
     return { status: "PENDING_UNCLASSIFIED" };
-  }
-
-  // ⏭ IGNORE
-  if (recipe.tipo_scarico === "IGNORE") {
-    return { status: "IGNORED" };
   }
 
   // ❌ NON ATTIVO
   if (recipe.status !== "ACTIVE") {
     await upsertPendingRow({
       tenantId,
-      sku,
-      reason: "RECIPE_INACTIVE",
-      raw: row,
+      rawResolvedSku: sku,
+      qty: Number(row.quantity || 1),
+      total: Number(row.total || 0),
+      reason: "UNCLASSIFIED_SKU",
     });
 
     return { status: "PENDING_INACTIVE" };
   }
 
-  // ❌ NON VALIDO
-  if (!recipe.last_validation_ok) {
-    await upsertPendingRow({
-      tenantId,
-      sku,
-      reason: "RECIPE_INVALID",
-      raw: row,
-      recipeId: recipe.id,
-    });
+  // ✅ fallback semplice → movimento diretto
+  const movement: Movement = {
+    id: crypto.randomUUID(),
+    sku,
+    quantity: -Math.abs(row.quantity || 1),
+    type: "OUT",
+    reason: "SCARICO_RICETTA_CIC",
+    date: new Date().toISOString(),
+  };
 
-    return { status: "PENDING_INVALID" };
-  }
-
-  // ✅ SCARICO REALE (RICETTA)
-  await applyRecipeStock({
-    recipeId: recipe.id,
-    qty: row.quantity || 1,
-    tenantId,
-    reference: row.receiptNumber,
-  });
+  await insertManyMovements([movement]);
 
   return { status: "OK" };
 }
 
-
 // =========================
-// 🔁 VECCHIO FLOW (REPROCESS)
+// REPROCESS
 // =========================
 export async function processPendingRow(row: any) {
-  if (row.type === "IGNORE") return;
-
   if (!row.resolvedSku) {
     throw new Error("Missing SKU");
   }
