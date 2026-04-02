@@ -5,6 +5,7 @@ import {
   markPendingRowProcessed,
 } from "../data/cicPendingRows.store.js";
 import { processPendingRow } from "../services/cicProcessor.service.js";
+import { enrichPendingRows } from "../services/pendingEnricher.service.js";
 
 const router = Router();
 
