@@ -20,6 +20,7 @@ export default function CicIntegrationPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [errorFilter, setErrorFilter] = useState("ALL");
+  const [selected, setSelected] = useState<PendingRow | null>(null);
 
   async function load() {
     setLoading(true);
@@ -47,8 +48,7 @@ export default function CicIntegrationPage() {
       if (errorFilter !== "ALL" && r.reason !== errorFilter) return false;
 
       if (filter) {
-        const text = `${r.productName} ${r.receiptNumber}`
-          .toLowerCase();
+        const text = `${r.productName} ${r.receiptNumber}`.toLowerCase();
         return text.includes(filter.toLowerCase());
       }
 
@@ -105,6 +105,8 @@ export default function CicIntegrationPage() {
           <option value="ALL">Tutti</option>
           <option value="UNMAPPED_PRODUCT">Unmapped</option>
           <option value="UNCLASSIFIED_SKU">Unclassified</option>
+          <option value="RECIPE_NOT_FOUND">Recipe missing</option>
+          <option value="RECIPE_INVALID">Recipe invalid</option>
         </select>
 
         <button onClick={reprocessAll}>
@@ -115,76 +117,114 @@ export default function CicIntegrationPage() {
       {loading && <p>Loading...</p>}
 
       {!loading && (
-        <table style={{ width: "100%", fontSize: 13 }}>
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Scontrino</th>
-              <th>Prodotto</th>
-              <th>Qta</th>
-              <th>Importo</th>
-              <th>SKU</th>
-              <th>Errore</th>
-              <th>Azioni</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {filteredRows.map((r) => (
-              <tr key={r.id}>
-                <td>
-                  {r.orderDate
-                    ? new Date(r.orderDate).toLocaleString()
-                    : "-"}
-                </td>
-
-                <td>{r.receiptNumber || "-"}</td>
-
-                <td>{r.productName || "-"}</td>
-
-                <td>{r.qty || "-"}</td>
-
-                <td>{r.total || r.price || "-"}</td>
-
-                {/* SELECT SKU */}
-                <td>
-                  <select
-                    defaultValue={r.resolvedSku || ""}
-                    onChange={(e) =>
-                      resolve(r.id, e.target.value)
-                    }
-                  >
-                    <option value="">-- scegli SKU --</option>
-                    {items.map((it) => (
-                      <option key={it.sku} value={it.sku}>
-                        {it.sku} - {it.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-
-                {/* ERRORE COLORATO */}
-                <td
-                  style={{
-                    color:
-                      r.reason === "UNMAPPED_PRODUCT"
-                        ? "red"
-                        : "orange",
-                    fontWeight: 700,
-                  }}
-                >
-                  {r.reason}
-                </td>
-
-                <td>
-                  <button onClick={() => reprocess(r.id)}>
-                    🔁
-                  </button>
-                </td>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 350px", gap: 20 }}>
+          
+          {/* TABELLA */}
+          <table style={{ width: "100%", fontSize: 13 }}>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Scontrino</th>
+                <th>Prodotto</th>
+                <th>Qta</th>
+                <th>Importo</th>
+                <th>SKU</th>
+                <th>Errore</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+
+            <tbody>
+              {filteredRows.map((r) => (
+                <tr
+                  key={r.id}
+                  style={{
+                    background:
+                      selected?.id === r.id ? "#f3f4f6" : "transparent",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setSelected(r)}
+                >
+                  <td>
+                    {r.orderDate
+                      ? new Date(r.orderDate).toLocaleString()
+                      : "-"}
+                  </td>
+
+                  <td>{r.receiptNumber || "-"}</td>
+                  <td>{r.productName || "-"}</td>
+                  <td>{r.qty || "-"}</td>
+                  <td>{r.total || r.price || "-"}</td>
+
+                  <td>
+                    <select
+                      value={r.resolvedSku || ""}
+                      onChange={(e) =>
+                        resolve(r.id, e.target.value)
+                      }
+                    >
+                      <option value="">-- SKU --</option>
+                      {items.map((it) => (
+                        <option key={it.sku} value={it.sku}>
+                          {it.sku} - {it.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+
+                  <td
+                    style={{
+                      color:
+                        r.reason === "RECIPE_INVALID"
+                          ? "red"
+                          : r.reason === "RECIPE_NOT_FOUND"
+                          ? "orange"
+                          : "#555",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {r.reason}
+                  </td>
+
+                  <td>
+                    <button onClick={() => reprocess(r.id)}>
+                      🔁
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* DETTAGLIO */}
+          <div
+            style={{
+              border: "1px solid #eee",
+              padding: 15,
+              borderRadius: 10,
+            }}
+          >
+            {!selected && <p>Seleziona una riga</p>}
+
+            {selected && (
+              <>
+                <h3>{selected.productName}</h3>
+
+                <p><b>SKU:</b> {selected.resolvedSku || "-"}</p>
+                <p><b>Motivo:</b> {selected.reason}</p>
+                <p><b>Qta:</b> {selected.qty}</p>
+                <p><b>Totale:</b> {selected.total}</p>
+                <p><b>Scontrino:</b> {selected.receiptNumber}</p>
+
+                <div style={{ marginTop: 10 }}>
+                  <button onClick={() => reprocess(selected.id)}>
+                    🔁 Reprocess
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
