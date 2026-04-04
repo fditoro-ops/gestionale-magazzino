@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { upsertUnresolved } from "../data/cicUnresolved.store.js";
+import { upsertUnresolved } from "../data/cicUnresolved.store.js"; 
 import { upsertPendingRow } from "../data/cicPendingRows.store.js";
 import { saveSalesDocumentWithLines } from "../data/sales.store.js";
 import { applyRecipeStock } from "./recipeStock.service.js";
@@ -15,6 +15,7 @@ import {
   getLastEmergencySyncMs,
   setLastEmergencySyncMs,
 } from "../server.js";
+import { getCicCatalogMap } from "../server.js";
 
 const CIC_WEBHOOK_SECRET = process.env.CIC_WEBHOOK_SECRET || "";
 
@@ -120,6 +121,7 @@ export async function processCicWebhook(req: any, res: any) {
     const tenantId = process.env.TENANT_ID || "IMP001";
 
     let items = cicExtractItems(data);
+    const cicCatalogMap = getCicCatalogMap();
 
     const rawRows = Array.isArray(data?.document?.rows)
       ? data.document.rows
@@ -158,7 +160,7 @@ export async function processCicWebhook(req: any, res: any) {
     // =========================
     // 1️⃣ SALVA SALES
     // =========================
-    const salesLines = await Promise.all(
+const salesLines = await Promise.all(
   items.map(async (it: any, idx: number) => {
     const sku = String(it.sku || "").trim();
 
@@ -168,12 +170,20 @@ export async function processCicWebhook(req: any, res: any) {
         String(r?.idProduct || "") === String(it._idProduct || "")
     );
 
+    const productId = String(it._idProduct || "").trim();
+    const variantId = String(it._idProductVariant || "").trim();
+
+    const cicProduct =
+      cicCatalogMap[variantId] ||
+      cicCatalogMap[productId];
+
     let description =
       String(
         rawRow?.description ||
-          rawRow?.descriptionReceipt ||
-          rawRow?.name ||
-          ""
+        rawRow?.descriptionReceipt ||
+        rawRow?.name ||
+        cicProduct?.name ||
+        ""
       ).trim() || "";
 
     if (!description && sku) {
@@ -190,8 +200,8 @@ export async function processCicWebhook(req: any, res: any) {
       qty,
       unitPrice,
       lineTotal: qty * unitPrice,
-      productId: String(it._idProduct || "").trim(),
-      variantId: String(it._idProductVariant || "").trim(),
+      productId,
+      variantId,
       tenantId,
       hasRecipe: false,
       resolvedOk: Boolean(sku),
@@ -219,7 +229,8 @@ export async function processCicWebhook(req: any, res: any) {
     // =========================
     const finalItems: Array<{ sku: string; qty: number }> = [];
 
-    for (const it of items) {
+
+for (const it of items) {
   const sku = String(it.sku || "").trim();
 
   const rawRow = rawRows.find(
@@ -228,16 +239,22 @@ export async function processCicWebhook(req: any, res: any) {
       String(r?.idProduct || "") === String(it._idProduct || "")
   );
 
+  const productId = String(it._idProduct || "").trim() || undefined;
+  const variantId = String(it._idProductVariant || "").trim() || undefined;
+
+  const cicProduct =
+    cicCatalogMap[variantId || ""] ||
+    cicCatalogMap[productId || ""];
+
   const description =
     String(
       rawRow?.description ||
-        rawRow?.descriptionReceipt ||
-        rawRow?.name ||
-        ""
+      rawRow?.descriptionReceipt ||
+      rawRow?.name ||
+      cicProduct?.name ||
+      ""
     ).trim() || undefined;
 
-  const productId = String(it._idProduct || "").trim() || undefined;
-  const variantId = String(it._idProductVariant || "").trim() || undefined;
   const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
   const total =
     Number(it.total || 0) || qty * (Number(rawRow?.price ?? 0) || 0);
