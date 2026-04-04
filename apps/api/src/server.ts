@@ -339,6 +339,7 @@ const CIC_PRODUCTS_SYNC_HOURS = Number(
 );
 
 let cicIdToSkuMap: Record<string, string> = {};
+let cicCatalogMap: Record<string, { name: string }> = {};
 let cicProductsLastSyncAt: string | null = null;
 let lastEmergencySyncMs = 0;
 
@@ -680,6 +681,28 @@ export async function syncCicProducts() {
     console.error("❌ Errore sync prodotti CIC:", err);
   }
 }
+async function loadCicCatalogFromDb() {
+  const res = await pool.query(`
+    SELECT product_id, variant_id, name
+    FROM cic_products_catalog
+  `);
+
+  const map: Record<string, { name: string }> = {};
+
+  for (const row of res.rows) {
+    if (row.variant_id) {
+      map[row.variant_id] = { name: row.name };
+    }
+    if (row.product_id) {
+      map[row.product_id] = { name: row.name };
+    }
+  }
+
+  cicCatalogMap = map;
+
+  console.log("✅ CIC catalog loaded in memory:", Object.keys(map).length);
+}
+
 /* =========================
    CIC resolve helpers
    ========================= */
@@ -1716,6 +1739,7 @@ app.listen(PORT, "0.0.0.0", async () => {
   await initDb();
 
   await syncCicProducts();
+  await loadCicCatalogFromDb();
   await syncCicProductModes();
   await syncBom();
   await syncRecipesDbCache();
