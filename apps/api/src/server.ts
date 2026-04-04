@@ -114,6 +114,10 @@ export function getCicIdToSkuMap() {
   return cicIdToSkuMap;
 }
 
+export function getCicCatalogMap() {
+  return cicCatalogMap;
+}
+
 /* =========================
    BOM
    ========================= */
