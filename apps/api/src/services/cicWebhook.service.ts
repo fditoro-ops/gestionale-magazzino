@@ -179,16 +179,8 @@ export async function processCicWebhook(req: any, res: any) {
     // =========================
     // 1️⃣ SALVA SALES
     // =========================
-    const salesLines = await Promise.all(
-      items.map(async (it: any, idx: number) => {
-        const sku = String(it.sku || "").trim();
 
-        const rawRow = rawRows.find(
-          (r: any) =>
-            String(r?.idProductVariant || "") ===
-              String(it._idProductVariant || "") ||
-            String(r?.idProduct || "") === String(it._idProduct || "")
-        );
+    const rawRow = rawRows[idx];
 
         const productId = String(it._idProduct || "").trim();
         const variantId = String(it._idProductVariant || "").trim();
@@ -242,15 +234,12 @@ export async function processCicWebhook(req: any, res: any) {
     // =========================
     const finalItems: Array<{ sku: string; qty: number }> = [];
 
-    for (const it of items) {
+   for (let idx = 0; idx < items.length; idx++) {
+  const it = items[idx];
+     
       const sku = String(it.sku || "").trim();
 
-      const rawRow = rawRows.find(
-        (r: any) =>
-          String(r?.idProductVariant || "") ===
-            String(it._idProductVariant || "") ||
-          String(r?.idProduct || "") === String(it._idProduct || "")
-      );
+ const rawRow = rawRows[idx];
 
       const productId = String(it._idProduct || "").trim() || undefined;
       const variantId = String(it._idProductVariant || "").trim() || undefined;
