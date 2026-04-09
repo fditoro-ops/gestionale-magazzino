@@ -677,6 +677,7 @@ export async function syncCicProducts() {
       tenantId: process.env.TENANT_ID || "IMP001",
       products,
     });
+    
 await loadCicCatalogFromDb();
     
     console.log(
