@@ -179,8 +179,10 @@ export async function processCicWebhook(req: any, res: any) {
     // =========================
     // 1️⃣ SALVA SALES
     // =========================
-
-    const rawRow = rawRows[idx];
+    const salesLines = await Promise.all(
+      items.map(async (it: any, idx: number) => {
+        const sku = String(it.sku || "").trim();
+        const rawRow = rawRows[idx];
 
         const productId = String(it._idProduct || "").trim();
         const variantId = String(it._idProductVariant || "").trim();
@@ -213,22 +215,7 @@ export async function processCicWebhook(req: any, res: any) {
         };
       })
     );
-
-    await saveSalesDocumentWithLines(
-      {
-        documentId: docId,
-        receiptNumber,
-        source: "CIC",
-        status: operation === "RECEIPT/DELETE" ? "VOID" : "VALID",
-        documentDate: orderDate,
-        totalAmount: documentAmount,
-        paymentsTotal,
-        tenantId,
-        rawPayload: data,
-      },
-      salesLines
-    );
-
+    
     // =========================
     // 2️⃣ MOVIMENTI
     // =========================
