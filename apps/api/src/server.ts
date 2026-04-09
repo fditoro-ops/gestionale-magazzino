@@ -677,7 +677,8 @@ export async function syncCicProducts() {
       tenantId: process.env.TENANT_ID || "IMP001",
       products,
     });
-
+await loadCicCatalogFromDb();
+    
     console.log(
       `✅ CIC products sync completata: ${products.length} prodotti, ${rows.length} righe, ${Object.keys(map).length} chiavi mappate`
     );
