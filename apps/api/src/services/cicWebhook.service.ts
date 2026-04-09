@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { upsertUnresolved } from "../data/cicUnresolved.store.js"; 
+import { upsertUnresolved } from "../data/cicUnresolved.store.js";
 import { upsertPendingRow } from "../data/cicPendingRows.store.js";
 import { saveSalesDocumentWithLines } from "../data/sales.store.js";
 import { applyRecipeStock } from "./recipeStock.service.js";
@@ -39,6 +39,25 @@ function buildCicWebhookDebugDump(
     rows,
     payments,
   };
+}
+
+// =========================
+// DESCRIPTION HELPER
+// =========================
+function extractCicRowDescription(
+  rawRow: any,
+  cicProduct?: { name?: string } | null
+) {
+  return (
+    rawRow?.description ||
+    rawRow?.descriptionReceipt ||
+    rawRow?.name ||
+    rawRow?.raw?.description ||
+    rawRow?.raw?.descriptionReceipt ||
+    rawRow?.raw?.name ||
+    cicProduct?.name ||
+    null
+  );
 }
 
 // =========================
@@ -160,54 +179,48 @@ export async function processCicWebhook(req: any, res: any) {
     // =========================
     // 1️⃣ SALVA SALES
     // =========================
-const salesLines = await Promise.all(
-  items.map(async (it: any, idx: number) => {
-    const sku = String(it.sku || "").trim();
+    const salesLines = await Promise.all(
+      items.map(async (it: any, idx: number) => {
+        const sku = String(it.sku || "").trim();
 
-    const rawRow = rawRows.find(
-      (r: any) =>
-        String(r?.idProductVariant || "") === String(it._idProductVariant || "") ||
-        String(r?.idProduct || "") === String(it._idProduct || "")
+        const rawRow = rawRows.find(
+          (r: any) =>
+            String(r?.idProductVariant || "") ===
+              String(it._idProductVariant || "") ||
+            String(r?.idProduct || "") === String(it._idProduct || "")
+        );
+
+        const productId = String(it._idProduct || "").trim();
+        const variantId = String(it._idProductVariant || "").trim();
+
+        const cicProduct = cicCatalogMap[variantId] || cicCatalogMap[productId];
+
+        let description = String(
+          extractCicRowDescription(rawRow, cicProduct) || ""
+        ).trim();
+
+        if (!description && sku) {
+          description = await getItemNameBySku(sku);
+        }
+
+        const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
+        const unitPrice = Number(rawRow?.price ?? 0) || 0;
+
+        return {
+          lineNo: idx + 1,
+          sku,
+          description,
+          qty,
+          unitPrice,
+          lineTotal: qty * unitPrice,
+          productId,
+          variantId,
+          tenantId,
+          hasRecipe: false,
+          resolvedOk: Boolean(sku),
+        };
+      })
     );
-
-    const productId = String(it._idProduct || "").trim();
-    const variantId = String(it._idProductVariant || "").trim();
-
-    const cicProduct =
-      cicCatalogMap[variantId] ||
-      cicCatalogMap[productId];
-
-    let description =
-      String(
-        rawRow?.description ||
-        rawRow?.descriptionReceipt ||
-        rawRow?.name ||
-        cicProduct?.name ||
-        ""
-      ).trim() || "";
-
-    if (!description && sku) {
-      description = await getItemNameBySku(sku);
-    }
-
-    const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
-    const unitPrice = Number(rawRow?.price ?? 0) || 0;
-
-    return {
-      lineNo: idx + 1,
-      sku,
-      description,
-      qty,
-      unitPrice,
-      lineTotal: qty * unitPrice,
-      productId,
-      variantId,
-      tenantId,
-      hasRecipe: false,
-      resolvedOk: Boolean(sku),
-    };
-  })
-);
 
     await saveSalesDocumentWithLines(
       {
@@ -229,146 +242,154 @@ const salesLines = await Promise.all(
     // =========================
     const finalItems: Array<{ sku: string; qty: number }> = [];
 
+    for (const it of items) {
+      const sku = String(it.sku || "").trim();
 
-for (const it of items) {
-  const sku = String(it.sku || "").trim();
+      const rawRow = rawRows.find(
+        (r: any) =>
+          String(r?.idProductVariant || "") ===
+            String(it._idProductVariant || "") ||
+          String(r?.idProduct || "") === String(it._idProduct || "")
+      );
 
-  const rawRow = rawRows.find(
-    (r: any) =>
-      String(r?.idProductVariant || "") === String(it._idProductVariant || "") ||
-      String(r?.idProduct || "") === String(it._idProduct || "")
-  );
+      const productId = String(it._idProduct || "").trim() || undefined;
+      const variantId = String(it._idProductVariant || "").trim() || undefined;
 
-  const productId = String(it._idProduct || "").trim() || undefined;
-  const variantId = String(it._idProductVariant || "").trim() || undefined;
+      const cicProduct =
+        cicCatalogMap[variantId || ""] || cicCatalogMap[productId || ""];
 
-  const cicProduct =
-    cicCatalogMap[variantId || ""] ||
-    cicCatalogMap[productId || ""];
+      const description =
+        String(extractCicRowDescription(rawRow, cicProduct) || "").trim() ||
+        undefined;
 
-  const description =
-    String(
-      rawRow?.description ||
-      rawRow?.descriptionReceipt ||
-      rawRow?.name ||
-      cicProduct?.name ||
-      ""
-    ).trim() || undefined;
+      const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
+      const total =
+        Number(it.total || 0) || qty * (Number(rawRow?.price ?? 0) || 0);
+      const price = Number(rawRow?.price ?? 0) || undefined;
 
-  const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
-  const total =
-    Number(it.total || 0) || qty * (Number(rawRow?.price ?? 0) || 0);
-  const price = Number(rawRow?.price ?? 0) || undefined;
+      if (!description) {
+        console.log("CIC PENDING DEBUG", {
+          productId,
+          variantId,
+          rawDescription: rawRow?.description,
+          rawDescriptionReceipt: rawRow?.descriptionReceipt,
+          rawName: rawRow?.name,
+          rawNestedDescription: rawRow?.raw?.description,
+          rawNestedDescriptionReceipt: rawRow?.raw?.descriptionReceipt,
+          rawNestedName: rawRow?.raw?.name,
+          catalogName: cicProduct?.name,
+          finalDescription: description,
+        });
+      }
 
-  if (!sku) {
-    await upsertPendingRow({
-      docId,
-      operation,
-      orderDate: orderDate.toISOString(),
-      tenantId,
-      productId,
-      variantId,
-      rawResolvedSku: "",
-      qty,
-      total,
-      price,
-      description,
-      reason: "UNMAPPED_PRODUCT",
-      rawRow: rawRow || null,
-    });
-    continue;
-  }
+      if (!sku) {
+        await upsertPendingRow({
+          docId,
+          operation,
+          orderDate: orderDate.toISOString(),
+          tenantId,
+          productId,
+          variantId,
+          rawResolvedSku: "",
+          qty,
+          total,
+          price,
+          description,
+          reason: "UNMAPPED_PRODUCT",
+          rawRow: rawRow || null,
+        });
+        continue;
+      }
 
-  const mode = cicModesBySku[sku];
-  const recipe = await getRecipeByProductSku(tenantId, sku);
+      const mode = cicModesBySku[sku];
+      const recipe = await getRecipeByProductSku(tenantId, sku);
 
-  if (!recipe) {
-    await upsertPendingRow({
-      docId,
-      operation,
-      orderDate: orderDate.toISOString(),
-      tenantId,
-      productId,
-      variantId,
-      rawResolvedSku: sku,
-      qty,
-      total,
-      price,
-      description,
-      reason: "UNCLASSIFIED_SKU",
-      rawRow: rawRow || null,
-    });
-    continue;
-  }
+      if (!recipe) {
+        await upsertPendingRow({
+          docId,
+          operation,
+          orderDate: orderDate.toISOString(),
+          tenantId,
+          productId,
+          variantId,
+          rawResolvedSku: sku,
+          qty,
+          total,
+          price,
+          description,
+          reason: "UNCLASSIFIED_SKU",
+          rawRow: rawRow || null,
+        });
+        continue;
+      }
 
-  if (recipe.status !== "ACTIVE") {
-    await upsertPendingRow({
-      docId,
-      operation,
-      orderDate: orderDate.toISOString(),
-      tenantId,
-      productId,
-      variantId,
-      rawResolvedSku: sku,
-      qty,
-      total,
-      price,
-      description,
-      reason: "UNCLASSIFIED_SKU",
-      rawRow: rawRow || null,
-    });
-    continue;
-  }
+      if (recipe.status !== "ACTIVE") {
+        await upsertPendingRow({
+          docId,
+          operation,
+          orderDate: orderDate.toISOString(),
+          tenantId,
+          productId,
+          variantId,
+          rawResolvedSku: sku,
+          qty,
+          total,
+          price,
+          description,
+          reason: "UNCLASSIFIED_SKU",
+          rawRow: rawRow || null,
+        });
+        continue;
+      }
 
-  if (!mode) {
-    await upsertPendingRow({
-      docId,
-      operation,
-      orderDate: orderDate.toISOString(),
-      tenantId,
-      productId,
-      variantId,
-      rawResolvedSku: sku,
-      qty,
-      total,
-      price,
-      description,
-      reason: "UNCLASSIFIED_SKU",
-      rawRow: rawRow || null,
-    });
-    continue;
-  }
+      if (!mode) {
+        await upsertPendingRow({
+          docId,
+          operation,
+          orderDate: orderDate.toISOString(),
+          tenantId,
+          productId,
+          variantId,
+          rawResolvedSku: sku,
+          qty,
+          total,
+          price,
+          description,
+          reason: "UNCLASSIFIED_SKU",
+          rawRow: rawRow || null,
+        });
+        continue;
+      }
 
-  if (mode === "IGNORE") continue;
+      if (mode === "IGNORE") continue;
 
-  const hasRecipe =
-    Array.isArray((bom as any)[sku]) &&
-    (bom as any)[sku].length > 0;
+      const hasRecipe =
+        Array.isArray((bom as any)[sku]) && (bom as any)[sku].length > 0;
 
-  if (mode === "RECIPE" && !hasRecipe) {
-    await upsertPendingRow({
-      docId,
-      operation,
-      orderDate: orderDate.toISOString(),
-      tenantId,
-      productId,
-      variantId,
-      rawResolvedSku: sku,
-      qty,
-      total,
-      price,
-      description,
-      reason: "RECIPE_NOT_FOUND",
-      rawRow: rawRow || null,
-    });
-    continue;
-  }
+      if (mode === "RECIPE" && !hasRecipe) {
+        await upsertPendingRow({
+          docId,
+          operation,
+          orderDate: orderDate.toISOString(),
+          tenantId,
+          productId,
+          variantId,
+          rawResolvedSku: sku,
+          qty,
+          total,
+          price,
+          description,
+          reason: "RECIPE_NOT_FOUND",
+          rawRow: rawRow || null,
+        });
+        continue;
+      }
 
-  finalItems.push({
-    sku,
-    qty,
-  });
-}
+      finalItems.push({
+        sku,
+        qty,
+      });
+    }
 
     // =========================
     // 3️⃣ SCARICO
