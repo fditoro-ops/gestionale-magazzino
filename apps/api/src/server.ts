@@ -217,6 +217,8 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
   for (const r of rows) {
     const c = r?.c ?? [];
 
+    console.log("ROW RAW:", c.map((x: any) => x?.v ?? null));
+    
     const productId = c?.[0]?.v ? String(c[0].v).trim() : "";
     const variantId = c?.[1]?.v ? String(c[1].v).trim() : "";
     const sku = c?.[2]?.v ? String(c[2].v).trim() : "";
