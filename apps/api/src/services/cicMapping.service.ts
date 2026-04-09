@@ -12,11 +12,8 @@ function normalize(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-/**
- * Risolve uno SKU partendo da un singolo ID CIC
- */
 export function cicResolveSku(value: string): string | null {
-  const id = String(value || "").trim();
+  const id = normalize(value);
   if (!id) return null;
   if (id.startsWith("SKU")) return id;
 
@@ -25,10 +22,6 @@ export function cicResolveSku(value: string): string | null {
 
   return modes[id]?.sku?.trim() || map[id]?.trim() || null;
 }
-
-/**
- * Risolve SKU usando PRIMA variantId+productId, POI i fallback singoli
- */
 
 export function cicResolveSkuFromRow(input: {
   idProduct?: string;
@@ -42,38 +35,29 @@ export function cicResolveSkuFromRow(input: {
   );
 }
 
-  // fallback: variante prima del prodotto
-  return cicResolveSku(idVariant) || cicResolveSku(idProduct);
-}
-
-/**
- * Estrae gli articoli da uno scontrino CIC
- */
 export function cicExtractItems(data: any): CicExtractedItem[] {
-  const rows = data?.document?.rows ?? [];
-  if (!Array.isArray(rows)) return [];
+  const rows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
+  if (!rows.length) return [];
 
   return rows
     .map((r: any) => {
-      const qty = Number(r?.quantity ?? 0);
-      const price = Number(r?.price ?? 0);
+      const qty = Number(r?.quantity ?? 0) || 0;
+      const price = Number(r?.price ?? 0) || 0;
 
-      const idVariant = normalize(r?.idProductVariant);
       const idProduct = normalize(r?.idProduct);
-      const productName = normalize(r?.description ?? r?.productName);
+      const idProductVariant = normalize(r?.idProductVariant);
+
+      const internalId = normalize(
+        r?.internalId ||
+          r?.idInternal ||
+          r?.productInternalId ||
+          r?.variantInternalId
+      );
 
       const resolvedSku = cicResolveSkuFromRow({
         idProduct,
-        idProductVariant: idVariant,
-      });
-
-      console.log("CIC DEBUG", {
-        productName,
-        idProduct,
-        idVariant,
-        qty,
-        price,
-        resolvedSku,
+        idProductVariant,
+        internalId,
       });
 
       return {
@@ -81,8 +65,8 @@ export function cicExtractItems(data: any): CicExtractedItem[] {
         qty,
         total: qty * price,
         _idProduct: idProduct,
-        _idProductVariant: idVariant,
+        _idProductVariant: idProductVariant,
       };
     })
-    .filter((x) => x.qty > 0);
+    .filter((row) => row.qty > 0);
 }
