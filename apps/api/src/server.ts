@@ -226,9 +226,8 @@ async function loadCicProductModesFromSheet(): Promise<CicProductMap> {
     const tipoScaricoRaw = c?.[7]?.v ? String(c[7].v).trim() : "";
     const tipoScarico = tipoScaricoRaw.toUpperCase();
 
-    if (!sku) continue;
-    if (!productId && !variantId) continue;
-    if (tipoScarico !== "RECIPE" && tipoScarico !== "IGNORE") continue;
+if (!productId && !variantId) continue;
+if (tipoScarico !== "RECIPE" && tipoScarico !== "IGNORE") continue;
 
     const entry: CicProductMapEntry = {
       sku,
