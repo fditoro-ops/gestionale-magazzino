@@ -15,55 +15,32 @@ function normalize(value: unknown): string {
 /**
  * Risolve uno SKU partendo da un singolo ID CIC
  */
-export function cicResolveSku(id: string): string | null {
-  const cleanId = normalize(id);
-  if (!cleanId) return null;
+export function cicResolveSku(value: string): string | null {
+  const id = String(value || "").trim();
+  if (!id) return null;
+  if (id.startsWith("SKU")) return id;
 
-  // già SKU Core
-  if (cleanId.startsWith("SKU")) return cleanId;
+  const modes = getCicProductModesCache();
+  const map = getCicIdToSkuMap();
 
-  const cicProductModeCache = getCicProductModesCache();
-  const cicIdToSkuMap = getCicIdToSkuMap();
-
-  // 1. cache configurazione CIC
-  if (cicProductModeCache[cleanId]?.sku) {
-    return cicProductModeCache[cleanId].sku;
-  }
-
-  // 2. mappa diretta id -> sku
-  if (cicIdToSkuMap[cleanId]) {
-    return cicIdToSkuMap[cleanId];
-  }
-
-  return null;
+  return modes[id]?.sku?.trim() || map[id]?.trim() || null;
 }
 
 /**
  * Risolve SKU usando PRIMA variantId+productId, POI i fallback singoli
  */
+
 export function cicResolveSkuFromRow(input: {
   idProduct?: string;
   idProductVariant?: string;
+  internalId?: string;
 }): string | null {
-  const idProduct = normalize(input.idProduct);
-  const idVariant = normalize(input.idProductVariant);
-
-  const cicProductModeCache = getCicProductModesCache();
-  const cicIdToSkuMap = getCicIdToSkuMap();
-
-  const compositeKeys = [
-    `${idProduct}::${idVariant}`,
-    `${idVariant}::${idProduct}`,
-  ].filter((k) => k !== "::");
-
-  for (const key of compositeKeys) {
-    if (cicProductModeCache[key]?.sku) {
-      return cicProductModeCache[key].sku;
-    }
-    if (cicIdToSkuMap[key]) {
-      return cicIdToSkuMap[key];
-    }
-  }
+  return (
+    cicResolveSku(input.internalId || "") ||
+    cicResolveSku(input.idProductVariant || "") ||
+    cicResolveSku(input.idProduct || "")
+  );
+}
 
   // fallback: variante prima del prodotto
   return cicResolveSku(idVariant) || cicResolveSku(idProduct);
