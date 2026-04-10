@@ -11,16 +11,17 @@ const FILE = path.resolve(__dirname, "../../../data/items.json");
 
 console.log("ITEMS_STORE FILE =", FILE);
 
-export function saveItems(items: any[]) {
-  fs.writeFileSync(FILE, JSON.stringify(items, null, 2), "utf-8");
-}
-
 export function loadItems(defaultItems: any[] = []) {
   try {
     if (!fs.existsSync(FILE)) return defaultItems;
     const raw = fs.readFileSync(FILE, "utf-8");
     const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : defaultItems;
+
+    if (!Array.isArray(data)) return defaultItems;
+
+    // 🔥 FILTRO QUI
+    return data.filter((item) => item.is_raw_material === true);
+
   } catch {
     return defaultItems;
   }
