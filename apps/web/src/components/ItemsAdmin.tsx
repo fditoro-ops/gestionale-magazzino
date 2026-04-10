@@ -139,10 +139,10 @@ export default function ItemsAdmin() {
     }
   }
 
-  useEffect(() => {
-    reload();
-    loadSuppliers();
-  }, []);
+useEffect(() => {
+  reload();
+  loadSuppliers();
+}, []);
 
 const filtered = useMemo(() => {
   const qq = q.trim().toUpperCase();
@@ -165,19 +165,8 @@ const filtered = useMemo(() => {
     return sku.includes(qq) || name.includes(qq) || brand.includes(qq);
   });
 }, [items, q]);
-  
 
-  if (!qq) return rawOnly;
-
-  return rawOnly.filter((i: any) => {
-    const sku = String(i.sku ?? "").toUpperCase();
-    const name = String(i.name ?? "").toUpperCase();
-    const brand = String(i.brand ?? "").toUpperCase();
-    return sku.includes(qq) || name.includes(qq) || brand.includes(qq);
-  });
-}, [items, q]);
-
-  function resetCreateForm() {
+function resetCreateForm() {
     setNewSku("");
     setNewName("");
     setNewBrand("");
