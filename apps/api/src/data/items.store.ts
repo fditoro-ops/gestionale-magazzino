@@ -26,4 +26,7 @@ export function loadItems(defaultItems: any[] = []) {
     console.error("loadItems error:", err);
     return defaultItems;
   }
+export function getItemBySku(sku: string) {
+  const items = loadItems([]);
+  return items.find((i: any) => String(i.sku) === String(sku)) || null;
 }
