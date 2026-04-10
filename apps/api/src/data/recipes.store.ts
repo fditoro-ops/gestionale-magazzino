@@ -6,7 +6,7 @@ export type Recipe = {
   tenant_id: string;
   product_sku: string;
   name: string;
-  status: "DRAFT" | "ACTIVE" | "INACTIVE";
+  status: "ACTIVE" | "INACTIVE";
   selling_price: string | number | null;
   cic_product_id?: string | null;
   cic_variant_id?: string | null;
@@ -86,29 +86,31 @@ export async function createRecipe(input: {
 
   const res = await pool.query(
     `
-    INSERT INTO recipes (
-      id,
-      tenant_id,
-      product_sku,
-      name,
-      selling_price,
-      cic_product_id,
-      cic_variant_id,
-      cic_mode
-    )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO recipes (
+  id,
+  tenant_id,
+  product_sku,
+  name,
+  status,
+  selling_price,
+  cic_product_id,
+  cic_variant_id,
+  cic_mode
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     RETURNING *
     `,
     [
-      id,
-      input.tenant_id,
-      input.product_sku,
-      input.name,
-      input.selling_price ?? null,
-      input.cic_product_id ?? null,
-      input.cic_variant_id ?? null,
-      input.cic_mode ?? null,
-    ]
+  id,
+  input.tenant_id,
+  input.product_sku,
+  input.name,
+  "INACTIVE",
+  input.selling_price ?? null,
+  input.cic_product_id ?? null,
+  input.cic_variant_id ?? null,
+  input.cic_mode ?? null,
+]
   );
 
   return res.rows[0];
@@ -194,7 +196,7 @@ export async function findRecipeBySku(
 // =========================
 export async function updateRecipeStatus(
   id: string,
-  status: "DRAFT" | "ACTIVE" | "INACTIVE"
+  status: "ACTIVE" | "INACTIVE"
 ) {
   const res = await pool.query(
     `
