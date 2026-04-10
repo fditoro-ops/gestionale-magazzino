@@ -249,44 +249,32 @@ router.post("/", async (req, res) => {
       });
     }
 
-const recipe = await createRecipe({
-  tenant_id: tenantId,
-  product_sku: String(product_sku),
-  name: String(name),
-  selling_price:
-    selling_price != null && selling_price !== ""
-      ? Number(selling_price)
-      : null,
+    const recipe = await createRecipe({
+      tenant_id: tenantId,
+      product_sku: String(product_sku),
+      name: String(name),
+      selling_price:
+        selling_price != null && selling_price !== ""
+          ? Number(selling_price)
+          : null,
 
-  // 🔥 COMMENTA QUESTI
-  // cic_product_id: cic_product_id || null,
-  // cic_variant_id: cic_variant_id || null,
-  // cic_mode: cic_mode || null,
-});
+      // temporaneamente commentati
+      // cic_product_id: cic_product_id || null,
+      // cic_variant_id: cic_variant_id || null,
+      // cic_mode: cic_mode || null,
+    });
 
     res.json({ ok: true, data: recipe });
-catch (err: any) {
-  console.error("🔥 POST /recipes error FULL:", err);
 
-  if (err instanceof Error) {
-    console.error("🔥 MESSAGE:", err.message);
-    console.error("🔥 STACK:", err.stack);
-  }
-
-  console.error("🔥 BODY:", req.body);
-
-  res.status(500).json({
-    ok: false,
-    error: err.message || "Internal error",
-  });
-}
+  } catch (err: any) {
+    console.error("🔥 POST /recipes error FULL:", err);
     console.error("🔥 BODY:", req.body);
 
     if (err instanceof Error) {
-  console.error("🔥 MESSAGE:", err.message);
-  console.error("🔥 STACK:", err.stack);
-}
-    
+      console.error("🔥 MESSAGE:", err.message);
+      console.error("🔥 STACK:", err.stack);
+    }
+
     if (err.code === "23505") {
       return res.status(400).json({
         ok: false,
@@ -294,10 +282,12 @@ catch (err: any) {
       });
     }
 
-    res.status(500).json({ ok: false, error: "Internal error" });
+    res.status(500).json({
+      ok: false,
+      error: err.message || "Internal error",
+    });
   }
 });
-
 // =========================
 // UPDATE
 // =========================
