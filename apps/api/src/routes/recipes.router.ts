@@ -249,23 +249,31 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const recipe = await createRecipe({
-      tenant_id: tenantId,
-      product_sku: String(product_sku),
-      name: String(name),
-      selling_price:
-        selling_price != null && selling_price !== ""
-          ? Number(selling_price)
-          : null,
-      cic_product_id: cic_product_id || null,
-      cic_variant_id: cic_variant_id || null,
-      cic_mode: cic_mode || null,
-    });
+const recipe = await createRecipe({
+  tenant_id: tenantId,
+  product_sku: String(product_sku),
+  name: String(name),
+  selling_price:
+    selling_price != null && selling_price !== ""
+      ? Number(selling_price)
+      : null,
+
+  // 🔥 COMMENTA QUESTI
+  // cic_product_id: cic_product_id || null,
+  // cic_variant_id: cic_variant_id || null,
+  // cic_mode: cic_mode || null,
+});
 
     res.json({ ok: true, data: recipe });
   } catch (err: any) {
-    console.error("POST /recipes error", err);
+    console.error("🔥 POST /recipes error:", err);
+    console.error("🔥 BODY:", req.body);
 
+    if (err instanceof Error) {
+  console.error("🔥 MESSAGE:", err.message);
+  console.error("🔥 STACK:", err.stack);
+}
+    
     if (err.code === "23505") {
       return res.status(400).json({
         ok: false,
@@ -356,12 +364,4 @@ router.patch("/:id/status", async (req, res) => {
   }
 });
 
-catch (err: any) {
-  console.error("🔥 POST /recipes error:", err);
-
-  res.status(500).json({
-    ok: false,
-    error: err.message || "Internal error",
-  });
-}
 export default router;
