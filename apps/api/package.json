@@ -33,4 +33,9 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
+  {
+  "scripts": {
+    "clean:items": "tsx scripts/clean-items-json.ts"
+  }
+}
 }
