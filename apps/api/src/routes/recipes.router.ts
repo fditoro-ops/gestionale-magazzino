@@ -265,8 +265,21 @@ const recipe = await createRecipe({
 });
 
     res.json({ ok: true, data: recipe });
-  } catch (err: any) {
-    console.error("🔥 POST /recipes error:", err);
+catch (err: any) {
+  console.error("🔥 POST /recipes error FULL:", err);
+
+  if (err instanceof Error) {
+    console.error("🔥 MESSAGE:", err.message);
+    console.error("🔥 STACK:", err.stack);
+  }
+
+  console.error("🔥 BODY:", req.body);
+
+  res.status(500).json({
+    ok: false,
+    error: err.message || "Internal error",
+  });
+}
     console.error("🔥 BODY:", req.body);
 
     if (err instanceof Error) {
