@@ -15,6 +15,10 @@ export function getItemBySku(sku: string) {
   const items = loadItems([]);
   return items.find((i: any) => String(i.sku) === String(sku)) || null;
 }
+export function getItemBySku(sku: string) {
+  const items = loadItems([]);
+  return items.find((i: any) => String(i.sku) === String(sku)) || null;
+}
 export function loadItems(defaultItems: any[] = []) {
   try {
     if (!fs.existsSync(FILE)) return defaultItems;
