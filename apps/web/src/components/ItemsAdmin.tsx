@@ -147,9 +147,6 @@ export default function ItemsAdmin() {
 const filtered = useMemo(() => {
   const qq = q.trim().toUpperCase();
 
-const filtered = useMemo(() => {
-  const qq = q.trim().toUpperCase();
-
   const rawOnly = items.filter((i: any) => {
     const sku = String(i.sku ?? "").toUpperCase();
 
