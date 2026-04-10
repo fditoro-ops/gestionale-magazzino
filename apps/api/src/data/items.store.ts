@@ -14,19 +14,16 @@ console.log("ITEMS_STORE FILE =", FILE);
 export function loadItems(defaultItems: any[] = []) {
   try {
     if (!fs.existsSync(FILE)) return defaultItems;
+
     const raw = fs.readFileSync(FILE, "utf-8");
     const data = JSON.parse(raw);
 
     if (!Array.isArray(data)) return defaultItems;
 
-    // 🔥 FILTRO QUI
+    // 🔥 QUI DENTRO LA FUNZIONE
     return data.filter((item) => item.is_raw_material === true);
 
   } catch {
     return defaultItems;
   }
 }
-return data.filter((item) => {
-  // escludi UUID (hack veloce)
-  return !/^[0-9a-f-]{36}$/.test(item.sku);
-});
