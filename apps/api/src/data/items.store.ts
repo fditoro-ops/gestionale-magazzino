@@ -11,6 +11,10 @@ const FILE = path.resolve(__dirname, "../../../data/items.json");
 
 console.log("ITEMS_STORE FILE =", FILE);
 
+export function getItemBySku(sku: string) {
+  const items = loadItems([]);
+  return items.find((i: any) => String(i.sku) === String(sku)) || null;
+}
 export function loadItems(defaultItems: any[] = []) {
   try {
     if (!fs.existsSync(FILE)) return defaultItems;
@@ -26,7 +30,4 @@ export function loadItems(defaultItems: any[] = []) {
     console.error("loadItems error:", err);
     return defaultItems;
   }
-export function getItemBySku(sku: string) {
-  const items = loadItems([]);
-  return items.find((i: any) => String(i.sku) === String(sku)) || null;
 }
