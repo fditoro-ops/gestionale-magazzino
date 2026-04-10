@@ -26,3 +26,7 @@ export function loadItems(defaultItems: any[] = []) {
     return defaultItems;
   }
 }
+return data.filter((item) => {
+  // escludi UUID (hack veloce)
+  return !/^[0-9a-f-]{36}$/.test(item.sku);
+});
