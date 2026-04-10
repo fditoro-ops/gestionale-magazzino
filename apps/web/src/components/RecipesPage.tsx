@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { authFetch } from "../api/authFetch";
 
-type RecipeStatus = "DRAFT" | "ACTIVE" | "INACTIVE";
+type RecipeStatus = "ACTIVE" | "INACTIVE";
 
 type Recipe = {
   id: string;
@@ -163,27 +163,14 @@ function statusBadgeStyle(status: RecipeStatus): React.CSSProperties {
     };
   }
 
-  if (status === "INACTIVE") {
-    return {
-      padding: "4px 10px",
-      borderRadius: 999,
-      background: colors.inactiveSoft,
-      color: colors.inactiveText,
-      fontSize: 12,
-      fontWeight: 700,
-      border: "1px solid rgba(107,114,128,0.18)",
-      display: "inline-block",
-    };
-  }
-
   return {
     padding: "4px 10px",
     borderRadius: 999,
-    background: colors.warningSoft,
-    color: colors.warningText,
+    background: colors.inactiveSoft,
+    color: colors.inactiveText,
     fontSize: 12,
     fontWeight: 700,
-    border: "1px solid rgba(245,158,11,0.20)",
+    border: "1px solid rgba(107,114,128,0.18)",
     display: "inline-block",
   };
 }
@@ -286,6 +273,7 @@ export default function RecipesPage() {
 
   const [productQuery, setProductQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<Item | null>(null);
+  const [manualProductSku, setManualProductSku] = useState("");
   const [newRecipeName, setNewRecipeName] = useState("");
   const [newRecipeSellingPrice, setNewRecipeSellingPrice] = useState("");
   const [creatingRecipe, setCreatingRecipe] = useState(false);
@@ -422,70 +410,74 @@ export default function RecipesPage() {
     }
   }, [selectedRecipe]);
 
-  function handlePickProduct(item: Item) {
-    setSelectedProduct(item);
-    setProductQuery(`${item.name} · ${item.sku}`);
-    setNewRecipeName(item.name || "");
-  }
+function handlePickProduct(item: Item) {
+  setSelectedProduct(item);
+  setManualProductSku("");
+  setProductQuery(`${item.name} · ${item.sku}`);
+  setNewRecipeName(item.name || "");
+}
 
   function handlePickIngredient(item: Item) {
     setSelectedIngredientItem(item);
     setIngredientQuery(`${item.name} · ${item.sku}`);
   }
 
-  async function handleCreateRecipe() {
-    if (!selectedProduct) {
-      alert("Seleziona un prodotto dall'anagrafica.");
-      return;
-    }
+async function handleCreateRecipe() {
+  const finalSku = manualProductSku.trim() || selectedProduct?.sku || "";
+  const finalName = newRecipeName.trim() || selectedProduct?.name || "";
 
-    const name = newRecipeName.trim() || selectedProduct.name;
-    const price =
-      newRecipeSellingPrice.trim() === ""
-        ? null
-        : Number(newRecipeSellingPrice.replace(",", "."));
-
-    if (!name) {
-      alert("Inserisci il nome ricetta.");
-      return;
-    }
-
-    if (price != null && (!Number.isFinite(price) || price < 0)) {
-      alert("Prezzo vendita non valido.");
-      return;
-    }
-
-    setCreatingRecipe(true);
-
-    try {
-      const res = await authFetch("/recipes", {
-        method: "POST",
-        body: JSON.stringify({
-          product_sku: selectedProduct.sku,
-          name,
-          selling_price: price,
-        }),
-      });
-
-      const json: ApiResponse<Recipe> = await res.json();
-
-      if (!res.ok || json.ok === false || !json.data) {
-        throw new Error(json.error || "Errore creazione ricetta");
-      }
-
-      setSelectedProduct(null);
-      setProductQuery("");
-      setNewRecipeName("");
-      setNewRecipeSellingPrice("");
-
-      await loadRecipes();
-      setSelectedRecipeId(json.data.id);
-    } catch (err: any) {
-      alert(String(err?.message || err));
-    } finally {
-      setCreatingRecipe(false);
-    }
+  if (!finalSku) {
+    alert("Inserisci uno SKU manuale oppure seleziona un prodotto.");
+    return;
   }
+
+  if (!finalName) {
+    alert("Inserisci il nome ricetta.");
+    return;
+  }
+
+  const price =
+    newRecipeSellingPrice.trim() === ""
+      ? null
+      : Number(newRecipeSellingPrice.replace(",", "."));
+
+  if (price != null && (!Number.isFinite(price) || price < 0)) {
+    alert("Prezzo vendita non valido.");
+    return;
+  }
+
+  setCreatingRecipe(true);
+
+  try {
+    const res = await authFetch("/recipes", {
+      method: "POST",
+      body: JSON.stringify({
+        product_sku: finalSku,
+        name: finalName,
+        selling_price: price,
+      }),
+    });
+
+    const json: ApiResponse<Recipe> = await res.json();
+
+    if (!res.ok || json.ok === false || !json.data) {
+      throw new Error(json.error || "Errore creazione ricetta");
+    }
+
+    setSelectedProduct(null);
+    setProductQuery("");
+    setManualProductSku("");
+    setNewRecipeName("");
+    setNewRecipeSellingPrice("");
+
+    await loadRecipes();
+    setSelectedRecipeId(json.data.id);
+  } catch (err: any) {
+    alert(String(err?.message || err));
+  } finally {
+    setCreatingRecipe(false);
+  }
+}
 
   async function handleSaveRecipe() {
     if (!selectedRecipe) return;
@@ -716,7 +708,7 @@ export default function RecipesPage() {
         <div>
           <div style={{ fontSize: 28, fontWeight: 800 }}>Ricettario</div>
           <div style={{ color: colors.textSoft, marginTop: 4 }}>
-            Ricette collegate ad anagrafica articoli, con prezzo base e ingredienti guidati.
+           Ricette di vendita con ingredienti collegati all'anagrafica articoli.
           </div>
         </div>
       </div>
@@ -736,47 +728,70 @@ export default function RecipesPage() {
             </div>
 
             <div style={{ display: "grid", gap: 10 }}>
+
               <SearchPicker
-                label="Prodotto"
-                placeholder={
-                  loadingItems
-                    ? "Caricamento articoli..."
-                    : "Cerca prodotto per nome o SKU"
-                }
-                query={productQuery}
-                onQueryChange={setProductQuery}
-                items={activeItems}
-                onPick={handlePickProduct}
-              />
+  label="Prodotto da anagrafica (opzionale)"
+  placeholder={
+    loadingItems
+      ? "Caricamento articoli..."
+      : "Cerca prodotto per nome o SKU"
+  }
+  query={productQuery}
+  onQueryChange={setProductQuery}
+  items={activeItems}
+  onPick={handlePickProduct}
+/>
 
-              <div>
-                <div style={labelStyle}>SKU selezionato</div>
-                <input
-                  style={readonlyStyle}
-                  value={selectedProduct?.sku || ""}
-                  readOnly
-                  placeholder="Seleziona un prodotto"
-                />
-              </div>
+<div>
+  <div style={labelStyle}>SKU selezionato da anagrafica</div>
+  <input
+    style={readonlyStyle}
+    value={selectedProduct?.sku || ""}
+    readOnly
+    placeholder="Seleziona un prodotto"
+  />
+</div>
 
-              <div>
-                <div style={labelStyle}>Nome ricetta</div>
-                <input
-                  style={inputStyle}
-                  value={newRecipeName}
-                  onChange={(e) => setNewRecipeName(e.target.value)}
-                  placeholder="Nome ricetta"
-                />
-              </div>
+<div>
+  <div style={labelStyle}>Oppure SKU manuale</div>
+<input
+  style={inputStyle}
+  value={manualProductSku}
+  onChange={(e) => {
+    const value = e.target.value.toUpperCase();
+    setManualProductSku(value);
 
-              <div>
-                <div style={labelStyle}>UM prodotto</div>
-                <input
-                  style={readonlyStyle}
-                  value={normalizeUm(selectedProduct?.um)}
-                  readOnly
-                />
-              </div>
+    if (value.trim()) {
+      setSelectedProduct(null);
+      setProductQuery("");
+    }
+  }}
+  placeholder="Es. SPRITZ"
+/>
+</div>
+
+              <div style={{ fontSize: 12, color: colors.textMuted, marginTop: -4 }}>
+  Se compili lo SKU manuale, verrà usato quello al posto del prodotto selezionato.
+</div>
+              
+<div>
+  <div style={labelStyle}>Nome ricetta</div>
+  <input
+    style={inputStyle}
+    value={newRecipeName}
+    onChange={(e) => setNewRecipeName(e.target.value)}
+    placeholder="Nome prodotto venduto"
+  />
+</div>
+
+<div>
+  <div style={labelStyle}>UM prodotto</div>
+  <input
+    style={readonlyStyle}
+    value={selectedProduct ? normalizeUm(selectedProduct.um) : "—"}
+    readOnly
+  />
+</div>
 
               <div>
                 <div style={labelStyle}>Prezzo vendita base</div>
@@ -941,29 +956,22 @@ export default function RecipesPage() {
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button
-                      style={secondaryButtonStyle}
-                      disabled={updatingStatus || selectedRecipe.status === "DRAFT"}
-                      onClick={() => handleChangeStatus("DRAFT")}
-                    >
-                      DRAFT
-                    </button>
-                    <button
-                      style={secondaryButtonStyle}
-                      disabled={updatingStatus || selectedRecipe.status === "ACTIVE"}
-                      onClick={() => handleChangeStatus("ACTIVE")}
-                    >
-                      ACTIVE
-                    </button>
-                    <button
-                      style={secondaryButtonStyle}
-                      disabled={updatingStatus || selectedRecipe.status === "INACTIVE"}
-                      onClick={() => handleChangeStatus("INACTIVE")}
-                    >
-                      INACTIVE
-                    </button>
-                  </div>
+<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+  <button
+    style={secondaryButtonStyle}
+    disabled={updatingStatus || selectedRecipe.status === "ACTIVE"}
+    onClick={() => handleChangeStatus("ACTIVE")}
+  >
+    ACTIVE
+  </button>
+  <button
+    style={secondaryButtonStyle}
+    disabled={updatingStatus || selectedRecipe.status === "INACTIVE"}
+    onClick={() => handleChangeStatus("INACTIVE")}
+  >
+    INACTIVE
+  </button>
+</div>
                 </div>
 
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
