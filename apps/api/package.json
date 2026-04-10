@@ -6,7 +6,8 @@
     "build": "tsc",
     "dev": "npm run build && node dist/src/server.js",
     "start": "node dist/src/server.js",
-    "create:user": "tsx src/scripts/create-user.ts"
+    "create:user": "tsx src/scripts/create-user.ts",
+    "clean:items": "tsx scripts/clean-items-json.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -32,9 +33,5 @@
     "prisma": "^5.22.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
-  }
-  {
-  "scripts": {
-    "clean:items": "tsx scripts/clean-items-json.ts"
   }
 }
