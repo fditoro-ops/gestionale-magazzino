@@ -149,8 +149,7 @@ const filtered = useMemo(() => {
 
   const rawOnly = items.filter((i: any) => {
     const sku = String(i.sku ?? "");
-    const category = String(i.categoryId ?? i.category ?? "").toLowerCase();
-
+   
     // 1. se il flag esiste, usalo
     if (i.is_raw_material === true) return true;
     if (i.is_raw_material === false) return false;
