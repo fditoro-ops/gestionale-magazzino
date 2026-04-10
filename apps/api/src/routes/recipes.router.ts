@@ -15,6 +15,8 @@ import {
   deleteRecipeIngredient,
 } from "../data/recipeIngredients.store.js";
 
+import { getItemBySku } from "../data/items.store.js";
+
 const router = Router();
 
 // =========================
@@ -83,9 +85,24 @@ router.post("/:id/ingredients", async (req, res) => {
       });
     }
 
+    const item = await getItemBySku(String(ingredient_sku));
+    if (!item) {
+      return res.status(400).json({
+        ok: false,
+        error: "Ingredient SKU not found in Items",
+      });
+    }
+
+    if (item.active === false) {
+      return res.status(400).json({
+        ok: false,
+        error: "Ingredient SKU is inactive",
+      });
+    }
+
     const ingredient = await addRecipeIngredient({
       recipe_id: id,
-      ingredient_sku,
+      ingredient_sku: String(ingredient_sku),
       ingredient_name_snapshot,
       quantity: qty,
       um,
@@ -125,8 +142,25 @@ router.put("/:id/ingredients/:ingredientId", async (req, res) => {
       notes,
     } = req.body;
 
+    if (ingredient_sku != null) {
+      const item = await getItemBySku(String(ingredient_sku));
+      if (!item) {
+        return res.status(400).json({
+          ok: false,
+          error: "Ingredient SKU not found in Items",
+        });
+      }
+
+      if (item.active === false) {
+        return res.status(400).json({
+          ok: false,
+          error: "Ingredient SKU is inactive",
+        });
+      }
+    }
+
     const ingredient = await updateRecipeIngredient(ingredientId, {
-      ingredient_sku,
+      ingredient_sku: ingredient_sku != null ? String(ingredient_sku) : undefined,
       ingredient_name_snapshot,
       quantity: quantity != null ? Number(quantity) : undefined,
       um,
@@ -217,8 +251,8 @@ router.post("/", async (req, res) => {
 
     const recipe = await createRecipe({
       tenant_id: tenantId,
-      product_sku,
-      name,
+      product_sku: String(product_sku),
+      name: String(name),
       selling_price:
         selling_price != null && selling_price !== ""
           ? Number(selling_price)
@@ -302,7 +336,7 @@ router.patch("/:id/status", async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    if (!["ACTIVE", "INACTIVE", "DRAFT"].includes(status)) {
+    if (!["ACTIVE", "INACTIVE"].includes(status)) {
       return res.status(400).json({
         ok: false,
         error: "Invalid status",
