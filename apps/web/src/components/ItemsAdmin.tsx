@@ -144,20 +144,35 @@ export default function ItemsAdmin() {
     loadSuppliers();
   }, []);
 
-  const filtered = useMemo(() => {
-    const qq = q.trim().toUpperCase();
-    if (!qq) {
-  return items.filter((i: any) => i.is_raw_material === true);
-}
-    return items
-  .filter((i: any) => i.is_raw_material === true)
-  .filter((i: any) => {
-      const sku = String(i.sku ?? "").toUpperCase();
-      const name = String(i.name ?? "").toUpperCase();
-      const brand = String(i.brand ?? "").toUpperCase();
-      return sku.includes(qq) || name.includes(qq) || brand.includes(qq);
-    });
-  }, [items, q]);
+const filtered = useMemo(() => {
+  const qq = q.trim().toUpperCase();
+
+  const rawOnly = items.filter((i: any) => {
+    const sku = String(i.sku ?? "");
+    const category = String(i.categoryId ?? i.category ?? "").toLowerCase();
+
+    // 1. se il flag esiste, usalo
+    if (i.is_raw_material === true) return true;
+    if (i.is_raw_material === false) return false;
+
+    // 2. fallback temporaneo: escludi UUID puri CIC
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sku)) {
+      return false;
+    }
+
+    // 3. fallback prudente: tieni il resto
+    return true;
+  });
+
+  if (!qq) return rawOnly;
+
+  return rawOnly.filter((i: any) => {
+    const sku = String(i.sku ?? "").toUpperCase();
+    const name = String(i.name ?? "").toUpperCase();
+    const brand = String(i.brand ?? "").toUpperCase();
+    return sku.includes(qq) || name.includes(qq) || brand.includes(qq);
+  });
+}, [items, q]);
 
   function resetCreateForm() {
     setNewSku("");
