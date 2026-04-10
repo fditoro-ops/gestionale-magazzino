@@ -20,10 +20,22 @@ export function loadItems(defaultItems: any[] = []) {
 
     if (!Array.isArray(data)) return defaultItems;
 
-    // 🔥 QUI DENTRO LA FUNZIONE
-    return data.filter((item) => item.is_raw_material === true);
+    return data.filter((item) => {
+      // ✅ tieni SOLO materie prime se campo esiste
+      if (item.is_raw_material === true) return true;
 
-  } catch {
+      // ❌ elimina UUID (prodotti CIC)
+      if (/^[0-9a-f-]{36}$/.test(item.sku)) return false;
+
+      // ❌ elimina record senza nome valido
+      if (!item.name || item.name.length < 3) return false;
+
+      // fallback: tienilo
+      return true;
+    });
+
+  } catch (err) {
+    console.error("❌ loadItems error:", err);
     return defaultItems;
   }
 }
