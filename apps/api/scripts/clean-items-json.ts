@@ -5,13 +5,9 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// se lo script sta in apps/api/scripts
 const ITEMS_FILE = path.resolve(__dirname, "../data/items.json");
 const BACKUP_DIR = path.resolve(__dirname, "../data/backups");
 const LOG_DIR = path.resolve(__dirname, "../data/logs");
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type AnyItem = {
   sku?: string;
@@ -32,24 +28,20 @@ function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-function isDirtyItem(item: AnyItem): boolean {
-  const sku = String(item?.sku ?? "").trim();
-  const name = String(item?.name ?? "").trim();
-
-  if (!sku) return true;
-  if (UUID_RE.test(sku)) return true;
-  if (!name || name.length < 3) return true;
-
-  return false;
+function isUUID(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    value
+  );
 }
 
 function classifyDirtyReason(item: AnyItem): string[] {
   const reasons: string[] = [];
-  const sku = String(item?.sku ?? "").trim();
+  const sku = String(item?.sku ?? "").trim().toUpperCase();
   const name = String(item?.name ?? "").trim();
 
   if (!sku) reasons.push("MISSING_SKU");
-  if (UUID_RE.test(sku)) reasons.push("UUID_SKU");
+  if (isUUID(sku)) reasons.push("UUID_SKU");
+  if (sku.startsWith("SKU000")) reasons.push("CIC_PRODUCT_SKU");
   if (!name || name.length < 3) reasons.push("INVALID_NAME");
 
   return reasons;
@@ -77,9 +69,8 @@ function main() {
   const items = parsed as AnyItem[];
 
   const cleanItems: AnyItem[] = [];
-  const dirtyItems: Array<
-    AnyItem & { __index: number; __reasons: string[] }
-  > = [];
+  const dirtyItems: Array<AnyItem & { __index: number; __reasons: string[] }> =
+    [];
 
   items.forEach((item, index) => {
     const reasons = classifyDirtyReason(item);
@@ -110,7 +101,7 @@ function main() {
       });
       return acc;
     }, {}),
-    sampleDirty: dirtyItems.slice(0, 30).map((item) => ({
+    sampleDirty: dirtyItems.slice(0, 50).map((item) => ({
       index: item.__index,
       sku: item.sku ?? null,
       name: item.name ?? null,
