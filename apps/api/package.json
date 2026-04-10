@@ -38,4 +38,3 @@
     "clean:items": "tsx scripts/clean-items-json.ts"
   }
 }
-}
