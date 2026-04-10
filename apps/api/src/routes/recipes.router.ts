@@ -356,4 +356,12 @@ router.patch("/:id/status", async (req, res) => {
   }
 });
 
+catch (err: any) {
+  console.error("🔥 POST /recipes error:", err);
+
+  res.status(500).json({
+    ok: false,
+    error: err.message || "Internal error",
+  });
+}
 export default router;
