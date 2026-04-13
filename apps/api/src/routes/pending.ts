@@ -137,6 +137,40 @@ router.post("/:id/reprocess", async (req, res) => {
 });
 
 /**
+ * POST /pending/:id/ignore
+ */
+router.post("/:id/ignore", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const rows = await listPendingRows();
+    const row = rows.find((r: any) => r.id === id);
+
+    if (!row) {
+      return res.status(404).json({
+        ok: false,
+        error: "Not found",
+      });
+    }
+
+    await pool.query(
+      `
+      UPDATE cic_pending_rows
+      SET status = 'PROCESSED'
+      WHERE id = $1
+      `,
+      [id]
+    );
+
+    res.json({ ok: true });
+
+  } catch (err) {
+    console.error("POST /pending/:id/ignore error", err);
+    res.status(500).json({ ok: false, error: "Internal error" });
+  }
+});
+
+/**
  * POST /pending/reprocess-all
  */
 router.post("/reprocess-all", async (_req, res) => {
