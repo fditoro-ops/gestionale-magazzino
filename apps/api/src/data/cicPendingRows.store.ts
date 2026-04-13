@@ -50,6 +50,9 @@ function buildPendingRowId(row: {
   ].join("::");
 }
 
+// =========================
+// UPSERT
+// =========================
 export async function upsertPendingRow(
   input: Omit<CicPendingRow, "id" | "createdAt" | "status" | "processedAt">
 ) {
@@ -71,6 +74,7 @@ export async function upsertPendingRow(
       product_id,
       variant_id,
       raw_resolved_sku,
+      resolved_sku, -- ✅ NUOVO
       qty,
       total,
       price,
@@ -83,8 +87,9 @@ export async function upsertPendingRow(
     )
     VALUES (
       $1, $2, $3, $4, $5,
-      $6, $7, $8, $9, $10,
-      $11, $12, $13, 'PENDING', $14, NOW(), NULL
+      $6, $7, $8, $9,
+      $10, $11, $12, $13,
+      $14, 'PENDING', $15, NOW(), NULL
     )
     ON CONFLICT (id)
     DO UPDATE SET
@@ -112,6 +117,7 @@ export async function upsertPendingRow(
       input.productId || null,
       input.variantId || null,
       input.rawResolvedSku || null,
+      null, // ✅ resolved_sku iniziale
       input.qty,
       input.total,
       input.price ?? null,
@@ -121,13 +127,7 @@ export async function upsertPendingRow(
     ]
   );
 
-  console.log("🅿️ Pending row salvata su DB:", {
-    id,
-    docId: input.docId,
-    productId: input.productId,
-    variantId: input.variantId,
-    reason: input.reason,
-  });
+  console.log("🅿️ Pending row salvata:", id);
 
   return {
     ...input,
@@ -145,87 +145,50 @@ export async function upsertPendingRow(
   };
 }
 
+// =========================
+// LIST
+// =========================
 export async function listPendingRows(status?: CicPendingStatus) {
-  const sql = status
-    ? `
-      SELECT
-        id,
-        doc_id as "docId",
-        operation,
-        order_date as "orderDate",
-        tenant_id as "tenantId",
-        product_id as "productId",
-        variant_id as "variantId",
-        raw_resolved_sku as "rawResolvedSku",
-        raw_resolved_sku as "resolvedSku",
-        qty,
-        total,
-        price,
-        COALESCE(
-          description,
-          raw_row->>'description',
-          raw_row->>'descriptionReceipt',
-          raw_row->>'name'
-        ) as "description",
-        COALESCE(
-          description,
-          raw_row->>'description',
-          raw_row->>'descriptionReceipt',
-          raw_row->>'name'
-        ) as "productName",
-        COALESCE(
-          raw_row->>'receiptNumber',
-          raw_row->>'documentNumber',
-          raw_row->>'number'
-        ) as "receiptNumber",
-        reason,
-        status,
-        raw_row as "rawRow",
-        created_at as "createdAt",
-        processed_at as "processedAt"
-      FROM cic_pending_rows
-      WHERE status = $1
-      ORDER BY created_at ASC
-    `
-    : `
-      SELECT
-        id,
-        doc_id as "docId",
-        operation,
-        order_date as "orderDate",
-        tenant_id as "tenantId",
-        product_id as "productId",
-        variant_id as "variantId",
-        raw_resolved_sku as "rawResolvedSku",
-        raw_resolved_sku as "resolvedSku",
-        qty,
-        total,
-        price,
-        COALESCE(
-          description,
-          raw_row->>'description',
-          raw_row->>'descriptionReceipt',
-          raw_row->>'name'
-        ) as "description",
-        COALESCE(
-          description,
-          raw_row->>'description',
-          raw_row->>'descriptionReceipt',
-          raw_row->>'name'
-        ) as "productName",
-        COALESCE(
-          raw_row->>'receiptNumber',
-          raw_row->>'documentNumber',
-          raw_row->>'number'
-        ) as "receiptNumber",
-        reason,
-        status,
-        raw_row as "rawRow",
-        created_at as "createdAt",
-        processed_at as "processedAt"
-      FROM cic_pending_rows
-      ORDER BY created_at ASC
-    `;
+  const sql = `
+    SELECT
+      id,
+      doc_id as "docId",
+      operation,
+      order_date as "orderDate",
+      tenant_id as "tenantId",
+      product_id as "productId",
+      variant_id as "variantId",
+      raw_resolved_sku as "rawResolvedSku",
+      COALESCE(resolved_sku, raw_resolved_sku) as "resolvedSku", -- 🔥 FIX
+      qty,
+      total,
+      price,
+      COALESCE(
+        description,
+        raw_row->>'description',
+        raw_row->>'descriptionReceipt',
+        raw_row->>'name'
+      ) as "description",
+      COALESCE(
+        description,
+        raw_row->>'description',
+        raw_row->>'descriptionReceipt',
+        raw_row->>'name'
+      ) as "productName",
+      COALESCE(
+        raw_row->>'receiptNumber',
+        raw_row->>'documentNumber',
+        raw_row->>'number'
+      ) as "receiptNumber",
+      reason,
+      status,
+      raw_row as "rawRow",
+      created_at as "createdAt",
+      processed_at as "processedAt"
+    FROM cic_pending_rows
+    ${status ? "WHERE status = $1" : ""}
+    ORDER BY created_at ASC
+  `;
 
   const res = status
     ? await pool.query(sql, [status])
@@ -233,6 +196,10 @@ export async function listPendingRows(status?: CicPendingStatus) {
 
   return res.rows;
 }
+
+// =========================
+// MARK PROCESSED
+// =========================
 export async function markPendingRowProcessed(id: string) {
   const res = await pool.query(
     `
@@ -245,4 +212,18 @@ export async function markPendingRowProcessed(id: string) {
   );
 
   return (res.rowCount ?? 0) > 0;
+}
+
+// =========================
+// SET MANUAL SKU 🔥
+// =========================
+export async function setResolvedSku(id: string, sku: string) {
+  await pool.query(
+    `
+    UPDATE cic_pending_rows
+    SET resolved_sku = $1
+    WHERE id = $2
+    `,
+    [sku, id]
+  );
 }
