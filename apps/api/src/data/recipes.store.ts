@@ -8,9 +8,6 @@ export type Recipe = {
   name: string;
   status: "ACTIVE" | "INACTIVE";
   selling_price: string | number | null;
-  cic_product_id?: string | null;
-  cic_variant_id?: string | null;
-  cic_mode?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -78,39 +75,30 @@ export async function createRecipe(input: {
   product_sku: string;
   name: string;
   selling_price?: number | null;
-  cic_product_id?: string | null;
-  cic_variant_id?: string | null;
-  cic_mode?: string | null;
 }) {
   const id = randomUUID();
 
   const res = await pool.query(
     `
-INSERT INTO recipes (
-  id,
-  tenant_id,
-  product_sku,
-  name,
-  status,
-  selling_price,
-  cic_product_id,
-  cic_variant_id,
-  cic_mode
-)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    INSERT INTO recipes (
+      id,
+      tenant_id,
+      product_sku,
+      name,
+      status,
+      selling_price
+    )
+    VALUES ($1, $2, $3, $4, $5, $6)
     RETURNING *
     `,
     [
-  id,
-  input.tenant_id,
-  input.product_sku,
-  input.name,
-  "INACTIVE",
-  input.selling_price ?? null,
-  input.cic_product_id ?? null,
-  input.cic_variant_id ?? null,
-  input.cic_mode ?? null,
-]
+      id,
+      input.tenant_id,
+      input.product_sku,
+      input.name,
+      "INACTIVE",
+      input.selling_price ?? null,
+    ]
   );
 
   return res.rows[0];
@@ -125,9 +113,6 @@ export async function updateRecipe(
     name?: string;
     product_sku?: string;
     selling_price?: number | null;
-    cic_product_id?: string | null;
-    cic_variant_id?: string | null;
-    cic_mode?: string | null;
   }
 ) {
   const fields: string[] = [];
@@ -149,21 +134,6 @@ export async function updateRecipe(
     values.push(input.selling_price);
   }
 
-  if (input.cic_product_id !== undefined) {
-    fields.push(`cic_product_id = $${i++}`);
-    values.push(input.cic_product_id);
-  }
-
-  if (input.cic_variant_id !== undefined) {
-    fields.push(`cic_variant_id = $${i++}`);
-    values.push(input.cic_variant_id);
-  }
-
-  if (input.cic_mode !== undefined) {
-    fields.push(`cic_mode = $${i++}`);
-    values.push(input.cic_mode);
-  }
-
   if (fields.length === 0) return null;
 
   values.push(id);
@@ -182,7 +152,7 @@ export async function updateRecipe(
 }
 
 // =========================
-// FIND BY SKU (alias per webhook)
+// FIND BY SKU (alias)
 // =========================
 export async function findRecipeBySku(
   sku: string,
