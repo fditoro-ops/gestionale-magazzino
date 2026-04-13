@@ -247,9 +247,9 @@ async function handleAssignSku() {
     setError(null);
 
     const response = await authFetch(
-      `/pending/${selected.id}/assign-sku`,
+      `/pending/${selected.id}/resolve
       {
-        method: "POST",
+        method: "PATCH"
         body: JSON.stringify({
           resolvedSku: sku, // ✅ FIX PRINCIPALE
         }),
