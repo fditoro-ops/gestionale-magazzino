@@ -303,22 +303,16 @@ router.put("/:id", async (req, res) => {
       cic_mode,
     } = req.body;
 
-    const recipe = await updateRecipe(id, {
-      name,
-      product_sku,
-      selling_price:
-        selling_price != null && selling_price !== ""
-          ? Number(selling_price)
-          : selling_price === null
-          ? null
-          : undefined,
-      cic_product_id:
-        cic_product_id !== undefined ? cic_product_id || null : undefined,
-      cic_variant_id:
-        cic_variant_id !== undefined ? cic_variant_id || null : undefined,
-      cic_mode:
-        cic_mode !== undefined ? cic_mode || null : undefined,
-    });
+const recipe = await updateRecipe(id, {
+  name,
+  product_sku,
+  selling_price:
+    selling_price != null && selling_price !== ""
+      ? Number(selling_price)
+      : selling_price === null
+      ? null
+      : undefined,
+});
 
     if (!recipe) {
       return res.status(404).json({ ok: false, error: "Not found" });
