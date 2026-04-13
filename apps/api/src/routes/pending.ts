@@ -72,20 +72,16 @@ router.patch("/:id/resolve", async (req, res) => {
       });
     }
 
-    const updated = await upsertPendingRow({
-      docId: row.docId,
-      operation: row.operation,
-      orderDate: row.orderDate,
-      tenantId: row.tenantId,
-      productId: row.productId,
-      variantId: row.variantId,
-      rawResolvedSku: resolvedSku,
-      qty: row.qty,
-      total: row.total,
-      price: row.price,
-      description: row.description || row.productName || null,
-      reason: row.reason,
-    });
+import { pool } from "../db.js";
+
+await pool.query(
+  `
+  UPDATE cic_pending_rows
+  SET raw_resolved_sku = $1
+  WHERE id = $2
+  `,
+  [resolvedSku, id]
+);
 
     res.json({ ok: true, row: updated });
   } catch (err) {
