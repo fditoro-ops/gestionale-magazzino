@@ -6,6 +6,7 @@ import {
 } from "../data/cicPendingRows.store.js";
 import { processPendingRow } from "../services/cicProcessor.service.js";
 import { enrichPendingRows } from "../services/pendingEnricher.service.js";
+import { pool } from "../db.js";
 
 const router = Router();
 
@@ -71,8 +72,6 @@ router.patch("/:id/resolve", async (req, res) => {
         error: "Not found",
       });
     }
-
-import { pool } from "../db.js";
 
 await pool.query(
   `
