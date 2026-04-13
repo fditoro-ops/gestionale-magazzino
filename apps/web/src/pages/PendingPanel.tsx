@@ -404,14 +404,15 @@ try {
         "Senza descrizione"}
     </div>
 
-    <div className="mt-1 text-xs text-slate-500">
-      {row.catalogSku
-        ? `SKU: ${row.catalogSku}`
-        : row.rawResolvedSku || row.resolvedSku || "SKU assente"}
-      {row.recipeSku ? ` · Ricetta: ${row.recipeSku}` : ""}
-      {row.productId ? ` · prod: ${row.productId}` : ""}
-      {row.variantId ? ` · var: ${row.variantId}` : ""}
-    </div>
+<div className="mt-1 text-xs text-slate-500">
+  {row.catalogSku
+    ? `SKU: ${row.catalogSku}`
+    : row.rawResolvedSku || row.resolvedSku || "SKU assente"}
+
+  {row.recipeSku && ` · Ricetta: ${row.recipeSku}`}
+  {row.productId && ` · prod: ${row.productId}`}
+  {row.variantId && ` · var: ${row.variantId}`}
+</div>
   </div>
 
   <div className="text-sm">
