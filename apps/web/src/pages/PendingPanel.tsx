@@ -198,7 +198,13 @@ try {
   console.error("❌ RESPONSE NON JSON:", raw);
   throw new Error("Errore server (non JSON)");
 }
-      await loadPending();
+
+// 🔥 QUESTA È LA RIGA CHE TI MANCA
+if (!response.ok || json?.ok === false) {
+  throw new Error(json?.error || "Operazione non riuscita");
+}
+
+await loadPending();
       setManualSku("");
     } catch (err: any) {
       setError(err?.message || "Operazione non riuscita");
