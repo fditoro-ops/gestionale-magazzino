@@ -204,9 +204,9 @@ const filteredRows = useMemo(() => {
 
   async function handleAssignSku() {
     if (!selected || !manualSku.trim()) return;
-    await postAction(`/pending/${selected.id}/assign-sku`, {
-      sku: manualSku.trim(),
-    });
+await postAction(`/pending/${selected.id}/assign-sku`, {
+  resolvedSku: manualSku.trim(),
+});
   }
 
   return (
