@@ -92,7 +92,15 @@ async function loadPending() {
     if (query.trim()) params.set("q", query.trim());
 
     const response = await authFetch(`/pending?${params.toString()}`);
-    const json = await response.json();
+    let json;
+
+try {
+  json = await response.json();
+} catch (e) {
+  const text = await response.text();
+  console.error("❌ RESPONSE NON JSON:", text);
+  throw new Error("Errore server (non JSON)");
+}
 
     const normalizedRows =
       json?.data ||
@@ -202,12 +210,55 @@ const filteredRows = useMemo(() => {
     await postAction(`/pending/${selected.id}/create-recipe`);
   }
 
-  async function handleAssignSku() {
-    if (!selected || !manualSku.trim()) return;
-await postAction(`/pending/${selected.id}/assign-sku`, {
-  resolvedSku: manualSku.trim(),
-});
+async function handleAssignSku() {
+  if (!selected) return;
+
+  const sku = manualSku.trim().toUpperCase();
+
+  if (!sku) {
+    setError("Inserisci uno SKU valido");
+    return;
   }
+
+  try {
+    setSaving(true);
+    setError(null);
+
+    const response = await authFetch(
+      `/pending/${selected.id}/assign-sku`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          resolvedSku: sku, // ✅ FIX PRINCIPALE
+        }),
+      }
+    );
+
+    let json;
+    try {
+      json = await response.json();
+    } catch (e) {
+      const text = await response.text();
+      console.error("❌ RESPONSE NON JSON:", text);
+      throw new Error("Errore server (risposta non valida)");
+    }
+
+    if (!response.ok || json?.ok === false) {
+      throw new Error(json?.error || "Errore assegnazione SKU");
+    }
+
+    // ✅ refresh lista
+    await loadPending();
+
+    // ✅ reset input
+    setManualSku("");
+
+  } catch (err: any) {
+    setError(err?.message || "Errore imprevisto");
+  } finally {
+    setSaving(false);
+  }
+}
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 text-slate-900 md:p-6">
