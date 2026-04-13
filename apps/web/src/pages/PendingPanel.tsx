@@ -91,14 +91,20 @@ async function loadPending() {
     if (reasonFilter !== "ALL") params.set("reason", reasonFilter);
     if (query.trim()) params.set("q", query.trim());
 
-    const response = await authFetch(`/pending?${params.toString()}`);
-    let json;
+const response = await authFetch(`/pending?${params.toString()}`);
 
+let raw;
 try {
-  json = await response.json();
-} catch (e) {
-  const text = await response.text();
-  console.error("❌ RESPONSE NON JSON:", text);
+  raw = await response.text();
+} catch {
+  throw new Error("Errore lettura risposta server");
+}
+
+let json;
+try {
+  json = raw ? JSON.parse(raw) : {};
+} catch {
+  console.error("❌ RESPONSE NON JSON:", raw);
   throw new Error("Errore server (non JSON)");
 }
 
@@ -178,10 +184,20 @@ const filteredRows = useMemo(() => {
         method: "POST",
         body: JSON.stringify(body || {}),
       });
-      const json = await response.json();
-      if (!response.ok || json?.ok === false) {
-        throw new Error(json?.error || "Operazione non riuscita");
-      }
+let raw;
+try {
+  raw = await response.text();
+} catch {
+  throw new Error("Errore lettura risposta server");
+}
+
+let json;
+try {
+  json = raw ? JSON.parse(raw) : {};
+} catch {
+  console.error("❌ RESPONSE NON JSON:", raw);
+  throw new Error("Errore server (non JSON)");
+}
       await loadPending();
       setManualSku("");
     } catch (err: any) {
@@ -234,14 +250,20 @@ async function handleAssignSku() {
       }
     );
 
-    let json;
-    try {
-      json = await response.json();
-    } catch (e) {
-      const text = await response.text();
-      console.error("❌ RESPONSE NON JSON:", text);
-      throw new Error("Errore server (risposta non valida)");
-    }
+let raw;
+try {
+  raw = await response.text();
+} catch {
+  throw new Error("Errore lettura risposta server");
+}
+
+let json;
+try {
+  json = raw ? JSON.parse(raw) : {};
+} catch {
+  console.error("❌ RESPONSE NON JSON:", raw);
+  throw new Error("Errore server (risposta non valida)");
+}
 
     if (!response.ok || json?.ok === false) {
       throw new Error(json?.error || "Errore assegnazione SKU");
