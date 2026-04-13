@@ -25,11 +25,16 @@ router.get("/", async (req, res) => {
 
     const enriched = await enrichPendingRows(rows, tenantId);
 
-    const visibleRows = enriched.filter((r: any) => {
-      const hasCatalogSku = Boolean(String(r.catalogSku || "").trim());
-      const hasRecipeSku = Boolean(String(r.recipeSku || "").trim());
-      return !hasCatalogSku && !hasRecipeSku;
-    });
+const visibleRows = enriched.filter((r: any) => {
+  const hasCatalogSku = Boolean(String(r.catalogSku || "").trim());
+  const hasRecipeSku = Boolean(String(r.recipeSku || "").trim());
+
+  return (
+    r.status === "PENDING" &&   // ✅ QUESTO È IL FIX
+    !hasCatalogSku &&
+    !hasRecipeSku
+  );
+});
 
     const counts = {
       total: visibleRows.length,
