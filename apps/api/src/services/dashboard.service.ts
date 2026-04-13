@@ -10,6 +10,13 @@ export async function getDashboardSummary(params: {
   const values: any[] = [tenantId];
   let where = `WHERE tenant_id = $1`;
 
+  if (!from && !to) {
+  where += `
+    AND document_date >= date_trunc('day', NOW() AT TIME ZONE 'Europe/Rome')
+    AND document_date < date_trunc('day', NOW() AT TIME ZONE 'Europe/Rome') + interval '1 day'
+  `;
+}
+
   if (from) {
     values.push(from);
     where += ` AND document_date >= $${values.length}`;
@@ -38,7 +45,7 @@ export async function getDashboardSummary(params: {
     SELECT
       COUNT(*)::int AS lines_count
     FROM sales_lines
-    ${where.replace("document_date", "created_at")}
+    ${where.replaceAll("document_date", "created_at")}
     `,
     values
   );
