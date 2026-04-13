@@ -1,7 +1,6 @@
 import { Router } from "express";
 import {
   listPendingRows,
-  upsertPendingRow,
   markPendingRowProcessed,
 } from "../data/cicPendingRows.store.js";
 import { processPendingRow } from "../services/cicProcessor.service.js";
@@ -29,8 +28,6 @@ router.get("/", async (req, res) => {
     const visibleRows = enriched.filter((r: any) => {
       const hasCatalogSku = Boolean(String(r.catalogSku || "").trim());
       const hasRecipeSku = Boolean(String(r.recipeSku || "").trim());
-
-      // mostra solo i pending ancora davvero irrisolti
       return !hasCatalogSku && !hasRecipeSku;
     });
 
@@ -49,7 +46,7 @@ router.get("/", async (req, res) => {
 
 /**
  * PATCH /pending/:id/resolve
- * assegna uno SKU manuale e lascia la riga in PENDING
+ * assegna SKU manuale
  */
 router.patch("/:id/resolve", async (req, res) => {
   try {
@@ -73,16 +70,18 @@ router.patch("/:id/resolve", async (req, res) => {
       });
     }
 
-await pool.query(
-  `
-  UPDATE cic_pending_rows
-  SET raw_resolved_sku = $1
-  WHERE id = $2
-  `,
-  [resolvedSku, id]
-);
+    await pool.query(
+      `
+      UPDATE cic_pending_rows
+      SET raw_resolved_sku = $1
+      WHERE id = $2
+      `,
+      [resolvedSku, id]
+    );
 
-    res.json({ ok: true, row: updated });
+    // 👇 FIX: niente "updated" inesistente
+    res.json({ ok: true, row: { ...row, rawResolvedSku: resolvedSku } });
+
   } catch (err) {
     console.error("PATCH /pending/:id/resolve error", err);
     res.status(500).json({ ok: false, error: "Internal error" });
@@ -125,6 +124,7 @@ router.post("/:id/reprocess", async (req, res) => {
     await markPendingRowProcessed(row.id);
 
     res.json({ ok: true, processed: 1 });
+
   } catch (err) {
     console.error("POST /pending/:id/reprocess error", err);
     res.status(500).json({ ok: false, error: "Internal error" });
@@ -148,6 +148,7 @@ router.post("/reprocess-all", async (_req, res) => {
           ...row,
           resolvedSku: row.rawResolvedSku,
         });
+
         await markPendingRowProcessed(row.id);
         processed++;
       } catch (err) {
@@ -156,6 +157,7 @@ router.post("/reprocess-all", async (_req, res) => {
     }
 
     res.json({ ok: true, processed });
+
   } catch (err) {
     console.error("POST /pending/reprocess-all error", err);
     res.status(500).json({ ok: false, error: "Internal error" });
