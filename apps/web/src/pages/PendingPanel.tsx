@@ -91,22 +91,18 @@ async function loadPending() {
     if (reasonFilter !== "ALL") params.set("reason", reasonFilter);
     if (query.trim()) params.set("q", query.trim());
 
-const response = await authFetch(`/pending?${params.toString()}`);
-
-let raw;
-try {
-  raw = await response.text();
-} catch {
-  throw new Error("Errore lettura risposta server");
-}
-
-let json;
-try {
-  json = raw ? JSON.parse(raw) : {};
-} catch {
-  console.error("❌ RESPONSE NON JSON:", raw);
-  throw new Error("Errore server (non JSON)");
-}
+const response = await authFetch(
+  `/pending/${selected.id}/resolve`,
+  {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      resolvedSku: sku,
+    }),
+  }
+);
 
     const normalizedRows =
       json?.data ||
@@ -180,10 +176,13 @@ const filteredRows = useMemo(() => {
     try {
       setSaving(true);
       setError(null);
-      const response = await authFetch(path, {
-        method: "POST",
-        body: JSON.stringify(body || {}),
-      });
+const response = await authFetch(path, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify(body || {}),
+});
 let raw;
 try {
   raw = await response.text();
