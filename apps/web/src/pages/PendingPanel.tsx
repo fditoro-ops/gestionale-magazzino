@@ -185,14 +185,14 @@ async function postAction(path: string, body?: Record<string, unknown>) {
       body: JSON.stringify(body || {}),
     });
 
-    let raw;
+    let raw: string;
     try {
       raw = await response.text();
     } catch {
       throw new Error("Errore lettura risposta server");
     }
 
-    let json;
+    let json: any;
     try {
       json = raw ? JSON.parse(raw) : {};
     } catch {
@@ -246,27 +246,24 @@ async function handleAssignSku() {
     setSaving(true);
     setError(null);
 
-    const response = await authFetch(
-      `/pending/${selected.id}/resolve`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          resolvedSku: sku,
-        }),
-      }
-    );
+    const response = await authFetch(`/pending/${selected.id}/resolve`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        resolvedSku: sku,
+      }),
+    });
 
-    let raw;
+    let raw: string;
     try {
       raw = await response.text();
     } catch {
       throw new Error("Errore lettura risposta server");
     }
 
-    let json;
+    let json: any;
     try {
       json = raw ? JSON.parse(raw) : {};
     } catch {
