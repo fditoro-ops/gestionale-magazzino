@@ -216,7 +216,71 @@ export async function markPendingRowProcessed(id: string) {
 
   return (res.rowCount ?? 0) > 0;
 }
+export async function bulkResolvePendingRowsByProductVariant(params: {
+  tenantId: string;
+  productId?: string | null;
+  variantId?: string | null;
+  resolvedSku?: string | null;
+}) {
+  const tenantId = String(params.tenantId || "").trim();
+  const productId = String(params.productId || "").trim() || null;
+  const variantId = String(params.variantId || "").trim() || null;
+  const resolvedSku = String(params.resolvedSku || "").trim().toUpperCase() || null;
 
+  if (!tenantId) throw new Error("tenantId required");
+  if (!productId && !variantId) {
+    throw new Error("productId or variantId required");
+  }
+  if (!resolvedSku) throw new Error("resolvedSku required");
+
+  const res = await pool.query(
+    `
+    UPDATE cic_pending_rows
+    SET resolved_sku = $1
+    WHERE tenant_id = $2
+      AND status = 'PENDING'
+      AND (
+        ($3::text IS NOT NULL AND product_id = $3)
+        OR ($4::text IS NOT NULL AND variant_id = $4)
+      )
+    `,
+    [resolvedSku, tenantId, productId, variantId]
+  );
+
+  return res.rowCount ?? 0;
+}
+
+export async function bulkMarkPendingRowsIgnoredByProductVariant(params: {
+  tenantId: string;
+  productId?: string | null;
+  variantId?: string | null;
+}) {
+  const tenantId = String(params.tenantId || "").trim();
+  const productId = String(params.productId || "").trim() || null;
+  const variantId = String(params.variantId || "").trim() || null;
+
+  if (!tenantId) throw new Error("tenantId required");
+  if (!productId && !variantId) {
+    throw new Error("productId or variantId required");
+  }
+
+  const res = await pool.query(
+    `
+    UPDATE cic_pending_rows
+    SET status = 'PROCESSED',
+        processed_at = NOW()
+    WHERE tenant_id = $1
+      AND status = 'PENDING'
+      AND (
+        ($2::text IS NOT NULL AND product_id = $2)
+        OR ($3::text IS NOT NULL AND variant_id = $3)
+      )
+    `,
+    [tenantId, productId, variantId]
+  );
+
+  return res.rowCount ?? 0;
+}
 // =========================
 // SET MANUAL SKU
 // =========================
