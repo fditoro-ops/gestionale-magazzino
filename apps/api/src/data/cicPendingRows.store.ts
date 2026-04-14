@@ -3,7 +3,8 @@ import { pool } from "../db.js";
 export type CicPendingReason =
   | "UNMAPPED_PRODUCT"
   | "UNCLASSIFIED_SKU"
-  | "RECIPE_NOT_FOUND";
+  | "RECIPE_NOT_FOUND"
+  | "RECIPE_INVALID";
 
 export type CicPendingStatus = "PENDING" | "PROCESSED";
 
@@ -216,6 +217,13 @@ export async function markPendingRowProcessed(id: string) {
 
   return (res.rowCount ?? 0) > 0;
 }
+
+// =========================
+// BULK RESOLVE
+// Regola:
+// - se c'è variantId, aggiorna per tenant + variantId
+// - altrimenti aggiorna per tenant + productId con variant vuota/null
+// =========================
 export async function bulkResolvePendingRowsByProductVariant(params: {
   tenantId: string;
   productId?: string | null;
@@ -233,23 +241,42 @@ export async function bulkResolvePendingRowsByProductVariant(params: {
   }
   if (!resolvedSku) throw new Error("resolvedSku required");
 
-  const res = await pool.query(
-    `
-    UPDATE cic_pending_rows
-    SET resolved_sku = $1
-    WHERE tenant_id = $2
-      AND status = 'PENDING'
-      AND (
-        ($3::text IS NOT NULL AND product_id = $3)
-        OR ($4::text IS NOT NULL AND variant_id = $4)
-      )
-    `,
-    [resolvedSku, tenantId, productId, variantId]
-  );
+  let res;
+
+  if (variantId) {
+    res = await pool.query(
+      `
+      UPDATE cic_pending_rows
+      SET resolved_sku = $1
+      WHERE tenant_id = $2
+        AND status = 'PENDING'
+        AND variant_id = $3
+      `,
+      [resolvedSku, tenantId, variantId]
+    );
+  } else {
+    res = await pool.query(
+      `
+      UPDATE cic_pending_rows
+      SET resolved_sku = $1
+      WHERE tenant_id = $2
+        AND status = 'PENDING'
+        AND product_id = $3
+        AND (variant_id IS NULL OR BTRIM(variant_id) = '')
+      `,
+      [resolvedSku, tenantId, productId]
+    );
+  }
 
   return res.rowCount ?? 0;
 }
 
+// =========================
+// BULK IGNORE
+// Regola:
+// - se c'è variantId, chiudi per tenant + variantId
+// - altrimenti chiudi per tenant + productId con variant vuota/null
+// =========================
 export async function bulkMarkPendingRowsIgnoredByProductVariant(params: {
   tenantId: string;
   productId?: string | null;
@@ -264,23 +291,38 @@ export async function bulkMarkPendingRowsIgnoredByProductVariant(params: {
     throw new Error("productId or variantId required");
   }
 
-  const res = await pool.query(
-    `
-    UPDATE cic_pending_rows
-    SET status = 'PROCESSED',
-        processed_at = NOW()
-    WHERE tenant_id = $1
-      AND status = 'PENDING'
-      AND (
-        ($2::text IS NOT NULL AND product_id = $2)
-        OR ($3::text IS NOT NULL AND variant_id = $3)
-      )
-    `,
-    [tenantId, productId, variantId]
-  );
+  let res;
+
+  if (variantId) {
+    res = await pool.query(
+      `
+      UPDATE cic_pending_rows
+      SET status = 'PROCESSED',
+          processed_at = NOW()
+      WHERE tenant_id = $1
+        AND status = 'PENDING'
+        AND variant_id = $2
+      `,
+      [tenantId, variantId]
+    );
+  } else {
+    res = await pool.query(
+      `
+      UPDATE cic_pending_rows
+      SET status = 'PROCESSED',
+          processed_at = NOW()
+      WHERE tenant_id = $1
+        AND status = 'PENDING'
+        AND product_id = $2
+        AND (variant_id IS NULL OR BTRIM(variant_id) = '')
+      `,
+      [tenantId, productId]
+    );
+  }
 
   return res.rowCount ?? 0;
 }
+
 // =========================
 // SET MANUAL SKU
 // =========================
