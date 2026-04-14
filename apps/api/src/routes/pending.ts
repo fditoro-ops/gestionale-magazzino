@@ -58,7 +58,12 @@ router.patch("/:id/resolve", async (req, res) => {
     const { id } = req.params;
     const { resolvedSku } = req.body;
 
+    console.log("=== PATCH /pending/:id/resolve ===");
+    console.log("param id:", id);
+    console.log("body:", req.body);
+
     if (!resolvedSku) {
+      console.log("missing resolvedSku");
       return res.status(400).json({
         ok: false,
         error: "resolvedSku required",
@@ -66,30 +71,45 @@ router.patch("/:id/resolve", async (req, res) => {
     }
 
     const rows = await listPendingRows();
+    console.log("rows loaded:", rows.length);
+
     const row = rows.find((r: any) => r.id === id);
+    console.log("row found:", !!row);
+    console.log("matched row:", row || null);
 
     if (!row) {
       return res.status(404).json({
         ok: false,
-        error: "Not found",
+        error: `Pending row not found for id ${id}`,
       });
     }
 
-    await pool.query(
+    const result = await pool.query(
       `
       UPDATE cic_pending_rows
       SET raw_resolved_sku = $1
       WHERE id = $2
+      RETURNING id, raw_resolved_sku
       `,
       [resolvedSku, id]
     );
 
-    // 👇 FIX: niente "updated" inesistente
-    res.json({ ok: true, row: { ...row, rawResolvedSku: resolvedSku } });
+    console.log("update rowCount:", result.rowCount);
+    console.log("update rows:", result.rows);
 
+    res.json({
+      ok: true,
+      row: {
+        ...row,
+        rawResolvedSku: resolvedSku,
+      },
+    });
   } catch (err) {
     console.error("PATCH /pending/:id/resolve error", err);
-    res.status(500).json({ ok: false, error: "Internal error" });
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : "Internal error",
+    });
   }
 });
 
