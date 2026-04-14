@@ -3,9 +3,12 @@ import {
   listPendingRows,
   markPendingRowProcessed,
   setResolvedSku,
+  bulkResolvePendingRowsByProductVariant,
+  bulkMarkPendingRowsIgnoredByProductVariant,
 } from "../data/cicPendingRows.store.js";
 import { processPendingRow } from "../services/cicProcessor.service.js";
 import { enrichPendingRows } from "../services/pendingEnricher.service.js";
+import { upsertCicProductMapping } from "../data/cicProductMappings.store.js";
 
 const router = Router();
 
@@ -77,11 +80,7 @@ router.get("/", async (req, res) => {
       invalid: visibleRows.filter((r: any) => r.reason === "RECIPE_INVALID").length,
     };
 
-    res.json({
-      ok: true,
-      rows: visibleRows,
-      counts,
-    });
+    res.json({ ok: true, rows: visibleRows, counts });
   } catch (err) {
     console.error("GET /pending error", err);
     res.status(500).json({
@@ -93,20 +92,15 @@ router.get("/", async (req, res) => {
 
 /**
  * PATCH /pending/:id/resolve
- * assegna SKU manuale
+ * salva mapping globale + aggiorna pending simili
  */
 router.patch("/:id/resolve", async (req, res) => {
   try {
+    const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
     const { id } = req.params;
     const resolvedSku = String(req.body?.resolvedSku || "")
       .trim()
       .toUpperCase();
-
-    console.log("PATCH /pending/:id/resolve", {
-      id,
-      body: req.body,
-      resolvedSku,
-    });
 
     if (!resolvedSku) {
       return res.status(400).json({
@@ -125,10 +119,37 @@ router.patch("/:id/resolve", async (req, res) => {
       });
     }
 
+    const productId = String(row.productId || "").trim() || null;
+    const variantId = String(row.variantId || "").trim() || null;
+
+    if (!productId && !variantId) {
+      return res.status(400).json({
+        ok: false,
+        error: "Pending row has no productId or variantId",
+      });
+    }
+
+    const mapping = await upsertCicProductMapping({
+      tenantId,
+      productId,
+      variantId,
+      sku: resolvedSku,
+      mode: "RECIPE",
+    });
+
+    const updatedCount = await bulkResolvePendingRowsByProductVariant({
+      tenantId,
+      productId,
+      variantId,
+      resolvedSku,
+    });
+
     await setResolvedSku(id, resolvedSku);
 
     return res.json({
       ok: true,
+      mapping,
+      updatedPendingRows: updatedCount,
       row: {
         ...row,
         resolvedSku,
@@ -152,29 +173,17 @@ router.post("/:id/reprocess", async (req, res) => {
     const row = rows.find((r: any) => r.id === req.params.id);
 
     if (!row) {
-      return res.status(404).json({
-        ok: false,
-        error: "Not found",
-      });
+      return res.status(404).json({ ok: false, error: "Not found" });
     }
 
     if (row.status === "PROCESSED") {
-      return res.status(400).json({
-        ok: false,
-        error: "Already processed",
-      });
+      return res.status(400).json({ ok: false, error: "Already processed" });
     }
 
     const resolvedSku = String(row.resolvedSku || "").trim();
-
     if (!resolvedSku) {
-      return res.status(400).json({
-        ok: false,
-        error: "Resolve first",
-      });
+      return res.status(400).json({ ok: false, error: "Resolve first" });
     }
-
-    console.log("Processing pending row:", row.id, resolvedSku);
 
     await processPendingRow({
       ...row,
@@ -183,10 +192,10 @@ router.post("/:id/reprocess", async (req, res) => {
 
     await markPendingRowProcessed(row.id);
 
-    return res.json({ ok: true, processed: 1 });
+    res.json({ ok: true, processed: 1 });
   } catch (err) {
     console.error("POST /pending/:id/reprocess error", err);
-    return res.status(500).json({
+    res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : "Internal error",
     });
@@ -195,27 +204,52 @@ router.post("/:id/reprocess", async (req, res) => {
 
 /**
  * POST /pending/:id/ignore
+ * salva mapping IGNORE + chiude pending simili
  */
 router.post("/:id/ignore", async (req, res) => {
   try {
+    const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
     const { id } = req.params;
 
     const rows = await listPendingRows();
     const row = rows.find((r: any) => r.id === id);
 
     if (!row) {
-      return res.status(404).json({
+      return res.status(404).json({ ok: false, error: "Not found" });
+    }
+
+    const productId = String(row.productId || "").trim() || null;
+    const variantId = String(row.variantId || "").trim() || null;
+
+    if (!productId && !variantId) {
+      return res.status(400).json({
         ok: false,
-        error: "Not found",
+        error: "Pending row has no productId or variantId",
       });
     }
 
-    await markPendingRowProcessed(id);
+    const mapping = await upsertCicProductMapping({
+      tenantId,
+      productId,
+      variantId,
+      sku: null,
+      mode: "IGNORE",
+    });
 
-    return res.json({ ok: true });
+    const updatedCount = await bulkMarkPendingRowsIgnoredByProductVariant({
+      tenantId,
+      productId,
+      variantId,
+    });
+
+    res.json({
+      ok: true,
+      mapping,
+      updatedPendingRows: updatedCount,
+    });
   } catch (err) {
     console.error("POST /pending/:id/ignore error", err);
-    return res.status(500).json({
+    res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : "Internal error",
     });
@@ -250,10 +284,10 @@ router.post("/reprocess-all", async (_req, res) => {
       }
     }
 
-    return res.json({ ok: true, processed });
+    res.json({ ok: true, processed });
   } catch (err) {
     console.error("POST /pending/reprocess-all error", err);
-    return res.status(500).json({
+    res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : "Internal error",
     });
