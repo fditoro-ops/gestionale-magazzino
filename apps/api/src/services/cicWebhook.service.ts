@@ -223,17 +223,20 @@ export async function processCicWebhook(req: any, res: any) {
       })
     );
 
-    await saveSalesDocumentWithLines({
-      tenantId,
-      documentId: docId,
-      receiptNumber,
-      documentDate: orderDate,
-      totalAmount: documentAmount || paymentsTotal,
-      status: operation === "RECEIPT/DELETE" ? "DELETED" : "VALID",
-      payments,
-      lines: salesLines,
-      rawPayload: data,
-    });
+await saveSalesDocumentWithLines(
+  {
+    tenantId,
+    documentId: docId,
+    receiptNumber,
+    source: "CIC",
+    documentDate: orderDate,
+    totalAmount: documentAmount || paymentsTotal,
+    paymentsTotal,
+    status: operation === "RECEIPT/DELETE" ? "VOID" : "VALID",
+    rawPayload: data,
+  },
+  salesLines
+);
 
     // =========================
     // 2️⃣ MOVIMENTI
