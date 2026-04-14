@@ -88,6 +88,8 @@ const movementsQ = await pool.query(
 
   for (const row of itemsQ.rows) {
     const sku = String(row.sku ?? "").toUpperCase().trim();
+    // 🚫 BLOCCA SKU INVALIDI (UUID o vuoti)
+if (!sku || /^[0-9a-f-]{36}$/i.test(sku)) continue;
     const lastCost =
       row.lastCostCents !== null && row.lastCostCents !== undefined
         ? Number(row.lastCostCents)
