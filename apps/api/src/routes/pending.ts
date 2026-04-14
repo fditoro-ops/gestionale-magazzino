@@ -2,10 +2,10 @@ import { Router } from "express";
 import {
   listPendingRows,
   markPendingRowProcessed,
+  setResolvedSku,
 } from "../data/cicPendingRows.store.js";
 import { processPendingRow } from "../services/cicProcessor.service.js";
 import { enrichPendingRows } from "../services/pendingEnricher.service.js";
-import { pool } from "../db.js";
 
 const router = Router();
 
@@ -15,26 +15,61 @@ const router = Router();
 router.get("/", async (req, res) => {
   try {
     const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
+    const status =
+      req.query.status && typeof req.query.status === "string"
+        ? (req.query.status as "PENDING" | "PROCESSED")
+        : undefined;
 
-    const rows = (await listPendingRows()).filter(
+    const reason =
+      req.query.reason && typeof req.query.reason === "string"
+        ? req.query.reason.trim()
+        : "";
+
+    const q =
+      req.query.q && typeof req.query.q === "string"
+        ? req.query.q.trim().toLowerCase()
+        : "";
+
+    let rows = await listPendingRows(status);
+
+    rows = rows.filter(
       (r: any) =>
         r.reason === "UNMAPPED_PRODUCT" ||
         r.reason === "UNCLASSIFIED_SKU" ||
         r.reason === "RECIPE_NOT_FOUND"
     );
 
+    if (reason) {
+      rows = rows.filter((r: any) => r.reason === reason);
+    }
+
     const enriched = await enrichPendingRows(rows, tenantId);
 
-const visibleRows = enriched.filter((r: any) => {
-  const hasCatalogSku = Boolean(String(r.catalogSku || "").trim());
-  const hasRecipeSku = Boolean(String(r.recipeSku || "").trim());
+    let visibleRows = enriched;
 
-  return (
-    r.status === "PENDING" &&   // ✅ QUESTO È IL FIX
-    !hasCatalogSku &&
-    !hasRecipeSku
-  );
-});
+    if (q) {
+      visibleRows = enriched.filter((r: any) => {
+        const haystack = [
+          r.id,
+          r.docId,
+          r.productId,
+          r.variantId,
+          r.description,
+          r.productName,
+          r.cicProductName,
+          r.cicVariantName,
+          r.catalogSku,
+          r.recipeSku,
+          r.rawResolvedSku,
+          r.resolvedSku,
+          r.receiptNumber,
+        ]
+          .map((v) => String(v || "").toLowerCase())
+          .join(" ");
+
+        return haystack.includes(q);
+      });
+    }
 
     const counts = {
       total: visibleRows.length,
@@ -42,10 +77,17 @@ const visibleRows = enriched.filter((r: any) => {
       invalid: visibleRows.filter((r: any) => r.reason === "RECIPE_INVALID").length,
     };
 
-    res.json({ ok: true, rows: visibleRows, counts });
+    res.json({
+      ok: true,
+      rows: visibleRows,
+      counts,
+    });
   } catch (err) {
     console.error("GET /pending error", err);
-    res.status(500).json({ ok: false, error: "Internal error" });
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : "Internal error",
+    });
   }
 });
 
@@ -56,7 +98,15 @@ const visibleRows = enriched.filter((r: any) => {
 router.patch("/:id/resolve", async (req, res) => {
   try {
     const { id } = req.params;
-    const resolvedSku = String(req.body?.resolvedSku || "").trim();
+    const resolvedSku = String(req.body?.resolvedSku || "")
+      .trim()
+      .toUpperCase();
+
+    console.log("PATCH /pending/:id/resolve", {
+      id,
+      body: req.body,
+      resolvedSku,
+    });
 
     if (!resolvedSku) {
       return res.status(400).json({
@@ -75,19 +125,18 @@ router.patch("/:id/resolve", async (req, res) => {
       });
     }
 
-    await pool.query(
-      `
-      UPDATE cic_pending_rows
-      SET raw_resolved_sku = $1
-      WHERE id = $2
-      `,
-      [resolvedSku, id]
-    );
+    await setResolvedSku(id, resolvedSku);
 
-    res.json({ ok: true, row: { ...row, rawResolvedSku: resolvedSku } });
+    return res.json({
+      ok: true,
+      row: {
+        ...row,
+        resolvedSku,
+      },
+    });
   } catch (err) {
     console.error("PATCH /pending/:id/resolve error", err);
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : "Internal error",
     });
@@ -103,7 +152,10 @@ router.post("/:id/reprocess", async (req, res) => {
     const row = rows.find((r: any) => r.id === req.params.id);
 
     if (!row) {
-      return res.status(404).json({ ok: false, error: "Not found" });
+      return res.status(404).json({
+        ok: false,
+        error: "Not found",
+      });
     }
 
     if (row.status === "PROCESSED") {
@@ -113,27 +165,31 @@ router.post("/:id/reprocess", async (req, res) => {
       });
     }
 
-    if (!row.rawResolvedSku) {
+    const resolvedSku = String(row.resolvedSku || "").trim();
+
+    if (!resolvedSku) {
       return res.status(400).json({
         ok: false,
         error: "Resolve first",
       });
     }
 
-    console.log("Processing pending row:", row.id, row.rawResolvedSku);
+    console.log("Processing pending row:", row.id, resolvedSku);
 
     await processPendingRow({
       ...row,
-      resolvedSku: row.rawResolvedSku,
+      resolvedSku,
     });
 
     await markPendingRowProcessed(row.id);
 
-    res.json({ ok: true, processed: 1 });
-
+    return res.json({ ok: true, processed: 1 });
   } catch (err) {
     console.error("POST /pending/:id/reprocess error", err);
-    res.status(500).json({ ok: false, error: "Internal error" });
+    return res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : "Internal error",
+    });
   }
 });
 
@@ -154,20 +210,15 @@ router.post("/:id/ignore", async (req, res) => {
       });
     }
 
-    await pool.query(
-      `
-      UPDATE cic_pending_rows
-      SET status = 'PROCESSED'
-      WHERE id = $1
-      `,
-      [id]
-    );
+    await markPendingRowProcessed(id);
 
-    res.json({ ok: true });
-
+    return res.json({ ok: true });
   } catch (err) {
     console.error("POST /pending/:id/ignore error", err);
-    res.status(500).json({ ok: false, error: "Internal error" });
+    return res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : "Internal error",
+    });
   }
 });
 
@@ -176,17 +227,20 @@ router.post("/:id/ignore", async (req, res) => {
  */
 router.post("/reprocess-all", async (_req, res) => {
   try {
-    const rows = (await listPendingRows()).filter(
-      (r: any) => r.status === "PENDING" && !!r.rawResolvedSku
+    const rows = (await listPendingRows("PENDING")).filter(
+      (r: any) => !!String(r.resolvedSku || "").trim()
     );
 
     let processed = 0;
 
     for (const row of rows) {
       try {
+        const resolvedSku = String(row.resolvedSku || "").trim();
+        if (!resolvedSku) continue;
+
         await processPendingRow({
           ...row,
-          resolvedSku: row.rawResolvedSku,
+          resolvedSku,
         });
 
         await markPendingRowProcessed(row.id);
@@ -196,11 +250,13 @@ router.post("/reprocess-all", async (_req, res) => {
       }
     }
 
-    res.json({ ok: true, processed });
-
+    return res.json({ ok: true, processed });
   } catch (err) {
     console.error("POST /pending/reprocess-all error", err);
-    res.status(500).json({ ok: false, error: "Internal error" });
+    return res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : "Internal error",
+    });
   }
 });
 
