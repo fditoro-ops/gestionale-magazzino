@@ -172,45 +172,46 @@ const filteredRows = useMemo(() => {
     );
   }, [rows]);
 
-  async function postAction(path: string, body?: Record<string, unknown>) {
+async function postAction(path: string, body?: Record<string, unknown>) {
+  try {
+    setSaving(true);
+    setError(null);
+
+    const response = await authFetch(path, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body || {}),
+    });
+
+    let raw;
     try {
-      setSaving(true);
-      setError(null);
-const response = await authFetch(path, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify(body || {}),
-});
-let raw;
-try {
-  raw = await response.text();
-} catch {
-  throw new Error("Errore lettura risposta server");
-}
-
-let json;
-try {
-  json = raw ? JSON.parse(raw) : {};
-} catch {
-  console.error("❌ RESPONSE NON JSON:", raw);
-  throw new Error("Errore server (non JSON)");
-}
-
-// 🔥 QUESTA È LA RIGA CHE TI MANCA
-if (!response.ok || json?.ok === false) {
-  throw new Error(json?.error || "Operazione non riuscita");
-}
-
-await loadPending();
-      setManualSku("");
-    } catch (err: any) {
-      setError(err?.message || "Operazione non riuscita");
-    } finally {
-      setSaving(false);
+      raw = await response.text();
+    } catch {
+      throw new Error("Errore lettura risposta server");
     }
+
+    let json;
+    try {
+      json = raw ? JSON.parse(raw) : {};
+    } catch {
+      console.error("❌ RESPONSE NON JSON:", raw);
+      throw new Error("Errore server (non JSON)");
+    }
+
+    if (!response.ok || json?.ok === false) {
+      throw new Error(json?.error || "Operazione non riuscita");
+    }
+
+    await loadPending();
+    setManualSku("");
+  } catch (err: any) {
+    setError(err?.message || "Operazione non riuscita");
+  } finally {
+    setSaving(false);
   }
+}
 
   async function handleReprocessOne() {
     if (!selected) return;
@@ -246,40 +247,39 @@ async function handleAssignSku() {
     setError(null);
 
     const response = await authFetch(
-  `/pending/${selected.id}/resolve`,
-  {
-    method: "PATCH",
-    body: JSON.stringify({
-      resolvedSku: sku,
-    }),
-  }
-);
+      `/pending/${selected.id}/resolve`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resolvedSku: sku,
+        }),
+      }
+    );
 
-let raw;
-try {
-  raw = await response.text();
-} catch {
-  throw new Error("Errore lettura risposta server");
-}
+    let raw;
+    try {
+      raw = await response.text();
+    } catch {
+      throw new Error("Errore lettura risposta server");
+    }
 
-let json;
-try {
-  json = raw ? JSON.parse(raw) : {};
-} catch {
-  console.error("❌ RESPONSE NON JSON:", raw);
-  throw new Error("Errore server (risposta non valida)");
-}
+    let json;
+    try {
+      json = raw ? JSON.parse(raw) : {};
+    } catch {
+      console.error("❌ RESPONSE NON JSON:", raw);
+      throw new Error("Errore server (risposta non valida)");
+    }
 
     if (!response.ok || json?.ok === false) {
       throw new Error(json?.error || "Errore assegnazione SKU");
     }
 
-    // ✅ refresh lista
     await loadPending();
-
-    // ✅ reset input
     setManualSku("");
-
   } catch (err: any) {
     setError(err?.message || "Errore imprevisto");
   } finally {
