@@ -15,17 +15,18 @@ export type CicPendingRow = {
   orderDate: string;
   tenantId: string;
 
-  productId?: string;
-  variantId?: string;
-  rawResolvedSku?: string;
-  resolvedSku?: string;
+  productId?: string | null;
+  variantId?: string | null;
+
+  rawResolvedSku?: string | null;
+  resolvedSku?: string | null;
 
   qty: number;
   total: number;
-  price?: number;
-  description?: string;
-  productName?: string;
-  receiptNumber?: string;
+  price?: number | null;
+  description?: string | null;
+  productName?: string | null;
+  receiptNumber?: string | null;
 
   reason: CicPendingReason;
   status: CicPendingStatus;
@@ -38,8 +39,8 @@ export type CicPendingRow = {
 
 function buildPendingRowId(row: {
   docId: string;
-  productId?: string;
-  variantId?: string;
+  productId?: string | null;
+  variantId?: string | null;
   reason: CicPendingReason;
 }) {
   return [
@@ -74,7 +75,7 @@ export async function upsertPendingRow(
       product_id,
       variant_id,
       raw_resolved_sku,
-      resolved_sku, -- ✅ NUOVO
+      resolved_sku,
       qty,
       total,
       price,
@@ -98,15 +99,12 @@ export async function upsertPendingRow(
       tenant_id = EXCLUDED.tenant_id,
       product_id = EXCLUDED.product_id,
       variant_id = EXCLUDED.variant_id,
-      raw_resolved_sku = EXCLUDED.raw_resolved_sku,
       qty = EXCLUDED.qty,
       total = EXCLUDED.total,
       price = EXCLUDED.price,
       description = EXCLUDED.description,
       reason = EXCLUDED.reason,
-      raw_row = EXCLUDED.raw_row,
-      status = 'PENDING',
-      processed_at = NULL
+      raw_row = EXCLUDED.raw_row
     `,
     [
       id,
@@ -117,7 +115,7 @@ export async function upsertPendingRow(
       input.productId || null,
       input.variantId || null,
       input.rawResolvedSku || null,
-      null, // ✅ resolved_sku iniziale
+      input.resolvedSku || null,
       input.qty,
       input.total,
       input.price ?? null,
@@ -132,7 +130,8 @@ export async function upsertPendingRow(
   return {
     ...input,
     id,
-    resolvedSku: input.rawResolvedSku ?? null,
+    rawResolvedSku: input.rawResolvedSku ?? null,
+    resolvedSku: input.resolvedSku ?? input.rawResolvedSku ?? null,
     productName: input.description ?? null,
     receiptNumber:
       input.rawRow?.receiptNumber ||
@@ -159,7 +158,8 @@ export async function listPendingRows(status?: CicPendingStatus) {
       product_id as "productId",
       variant_id as "variantId",
       raw_resolved_sku as "rawResolvedSku",
-      COALESCE(resolved_sku, raw_resolved_sku) as "resolvedSku", -- 🔥 FIX
+      resolved_sku as "resolvedSku",
+      COALESCE(resolved_sku, raw_resolved_sku) as "effectiveResolvedSku",
       qty,
       total,
       price,
@@ -194,7 +194,10 @@ export async function listPendingRows(status?: CicPendingStatus) {
     ? await pool.query(sql, [status])
     : await pool.query(sql);
 
-  return res.rows;
+  return res.rows.map((row) => ({
+    ...row,
+    resolvedSku: row.effectiveResolvedSku ?? null,
+  }));
 }
 
 // =========================
@@ -215,15 +218,21 @@ export async function markPendingRowProcessed(id: string) {
 }
 
 // =========================
-// SET MANUAL SKU 🔥
+// SET MANUAL SKU
 // =========================
 export async function setResolvedSku(id: string, sku: string) {
+  const normalizedSku = String(sku || "").trim().toUpperCase();
+
+  if (!normalizedSku) {
+    throw new Error("resolvedSku required");
+  }
+
   await pool.query(
     `
     UPDATE cic_pending_rows
     SET resolved_sku = $1
     WHERE id = $2
     `,
-    [sku, id]
+    [normalizedSku, id]
   );
 }
