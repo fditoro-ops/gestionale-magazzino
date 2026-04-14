@@ -757,6 +757,10 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
 app.use("/webhooks/cic", webhooksCicRouter);
+
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: true, limit: "5mb" }));
+
 app.use("/pending", pendingRouter);
 
 function buildCicWebhookDebugDump(
@@ -948,9 +952,6 @@ app.post("/admin/sales/backfill-descriptions", async (_req, res) => {
     });
   }
 });
-
-app.use(express.json({ limit: "5mb" }));
-app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 
 app.use((err: any, _req: any, res: any, next: any) => {
   if (err?.type === "entity.parse.failed") {
