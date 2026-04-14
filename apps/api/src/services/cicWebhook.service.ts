@@ -1,9 +1,8 @@
 import crypto from "crypto";
-import { upsertUnresolved } from "../data/cicUnresolved.store.js";
 import { upsertPendingRow } from "../data/cicPendingRows.store.js";
 import { saveSalesDocumentWithLines } from "../data/sales.store.js";
 import { applyRecipeStock } from "./recipeStock.service.js";
-import { cicExtractItems } from "./cicMapping.service.js";
+import { cicExtractItemsWithDb } from "./cicMapping.service.js";
 import { pool } from "../db.js";
 import { getRecipeByProductSku } from "../data/recipes.store.js";
 
@@ -139,7 +138,11 @@ export async function processCicWebhook(req: any, res: any) {
 
     const tenantId = process.env.TENANT_ID || "IMP001";
 
-    let items = cicExtractItems(data);
+    let items = await cicExtractItemsWithDb({
+      tenantId,
+      data,
+    });
+
     const cicCatalogMap = getCicCatalogMap();
 
     const rawRows = Array.isArray(data?.document?.rows)
@@ -166,7 +169,11 @@ export async function processCicWebhook(req: any, res: any) {
     if (hasUnresolved && Date.now() - getLastEmergencySyncMs() > 60_000) {
       await syncCicProducts();
       setLastEmergencySyncMs(Date.now());
-      items = cicExtractItems(data);
+
+      items = await cicExtractItemsWithDb({
+        tenantId,
+        data,
+      });
     }
 
     const bom = getActiveBom();
@@ -182,8 +189,8 @@ export async function processCicWebhook(req: any, res: any) {
     const salesLines = await Promise.all(
       items.map(async (it: any, idx: number) => {
         const sku = String(it.sku || "").trim();
-        const rawRow = rawRows[idx];
 
+        const rawRow = rawRows[idx];
         const productId = String(it._idProduct || "").trim();
         const variantId = String(it._idProductVariant || "").trim();
 
@@ -215,18 +222,32 @@ export async function processCicWebhook(req: any, res: any) {
         };
       })
     );
-    
+
+    await saveSalesDocumentWithLines({
+      tenantId,
+      documentId: docId,
+      receiptNumber,
+      documentDate: orderDate,
+      totalAmount: documentAmount || paymentsTotal,
+      status: operation === "RECEIPT/DELETE" ? "DELETED" : "VALID",
+      payments,
+      lines: salesLines,
+      rawPayload: data,
+    });
+
     // =========================
     // 2️⃣ MOVIMENTI
     // =========================
     const finalItems: Array<{ sku: string; qty: number }> = [];
 
-   for (let idx = 0; idx < items.length; idx++) {
-  const it = items[idx];
-     
-      const sku = String(it.sku || "").trim();
+    for (let idx = 0; idx < items.length; idx++) {
+      const it = items[idx];
 
- const rawRow = rawRows[idx];
+      const sku = String(it.sku || "").trim();
+      const resolvedMode = it.mode || null;
+      const resolvedSource = it.source || "NONE";
+
+      const rawRow = rawRows[idx];
 
       const productId = String(it._idProduct || "").trim() || undefined;
       const variantId = String(it._idProductVariant || "").trim() || undefined;
@@ -258,6 +279,11 @@ export async function processCicWebhook(req: any, res: any) {
         });
       }
 
+      // mapping DB esplicito: IGNORE
+      if (resolvedSource === "DB_MAPPING" && resolvedMode === "IGNORE") {
+        continue;
+      }
+
       if (!sku) {
         await upsertPendingRow({
           docId,
@@ -277,7 +303,7 @@ export async function processCicWebhook(req: any, res: any) {
         continue;
       }
 
-      const mode = cicModesBySku[sku];
+      const mode = resolvedMode || cicModesBySku[sku];
       const recipe = await getRecipeByProductSku(tenantId, sku);
 
       if (!recipe) {
@@ -337,7 +363,9 @@ export async function processCicWebhook(req: any, res: any) {
         continue;
       }
 
-      if (mode === "IGNORE") continue;
+      if (mode === "IGNORE") {
+        continue;
+      }
 
       const hasRecipe =
         Array.isArray((bom as any)[sku]) && (bom as any)[sku].length > 0;
