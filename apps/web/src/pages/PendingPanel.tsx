@@ -91,23 +91,28 @@ async function loadPending() {
     if (reasonFilter !== "ALL") params.set("reason", reasonFilter);
     if (query.trim()) params.set("q", query.trim());
 
-const response = await authFetch(
-  `/pending/${selected.id}/resolve`,
-  {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      resolvedSku: sku,
-    }),
-  }
-);
+    const response = await authFetch(`/pending?${params.toString()}`);
 
-    const normalizedRows =
-      json?.data ||
-      json?.rows ||
-      [];
+    let raw: string;
+    try {
+      raw = await response.text();
+    } catch {
+      throw new Error("Errore lettura risposta server");
+    }
+
+    let json: any;
+    try {
+      json = raw ? JSON.parse(raw) : {};
+    } catch {
+      console.error("❌ RESPONSE NON JSON:", raw);
+      throw new Error("Errore server (non JSON)");
+    }
+
+    if (!response.ok || json?.ok === false) {
+      throw new Error(json?.error || "Errore caricamento pending");
+    }
+
+    const normalizedRows = json?.data || json?.rows || [];
 
     setRows(normalizedRows);
 
