@@ -58,9 +58,6 @@ router.patch("/:id/resolve", async (req, res) => {
     const { id } = req.params;
     const resolvedSku = String(req.body?.resolvedSku || "").trim();
 
-    console.log("resolve id =", id);
-    console.log("resolve body =", req.body);
-
     if (!resolvedSku) {
       return res.status(400).json({
         ok: false,
