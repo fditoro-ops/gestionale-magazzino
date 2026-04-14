@@ -56,14 +56,12 @@ const visibleRows = enriched.filter((r: any) => {
 router.patch("/:id/resolve", async (req, res) => {
   try {
     const { id } = req.params;
-    const { resolvedSku } = req.body;
+    const resolvedSku = String(req.body?.resolvedSku || "").trim();
 
-    console.log("=== PATCH /pending/:id/resolve ===");
-    console.log("param id:", id);
-    console.log("body:", req.body);
+    console.log("resolve id =", id);
+    console.log("resolve body =", req.body);
 
     if (!resolvedSku) {
-      console.log("missing resolvedSku");
       return res.status(400).json({
         ok: false,
         error: "resolvedSku required",
@@ -71,39 +69,25 @@ router.patch("/:id/resolve", async (req, res) => {
     }
 
     const rows = await listPendingRows();
-    console.log("rows loaded:", rows.length);
-
     const row = rows.find((r: any) => r.id === id);
-    console.log("row found:", !!row);
-    console.log("matched row:", row || null);
 
     if (!row) {
       return res.status(404).json({
         ok: false,
-        error: `Pending row not found for id ${id}`,
+        error: "Not found",
       });
     }
 
-    const result = await pool.query(
+    await pool.query(
       `
       UPDATE cic_pending_rows
       SET raw_resolved_sku = $1
       WHERE id = $2
-      RETURNING id, raw_resolved_sku
       `,
       [resolvedSku, id]
     );
 
-    console.log("update rowCount:", result.rowCount);
-    console.log("update rows:", result.rows);
-
-    res.json({
-      ok: true,
-      row: {
-        ...row,
-        rawResolvedSku: resolvedSku,
-      },
-    });
+    res.json({ ok: true, row: { ...row, rawResolvedSku: resolvedSku } });
   } catch (err) {
     console.error("PATCH /pending/:id/resolve error", err);
     res.status(500).json({
