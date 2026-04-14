@@ -18,6 +18,7 @@ const router = Router();
 router.get("/", async (req, res) => {
   try {
     const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
+
     const status =
       req.query.status && typeof req.query.status === "string"
         ? (req.query.status as "PENDING" | "PROCESSED")
@@ -39,7 +40,8 @@ router.get("/", async (req, res) => {
       (r: any) =>
         r.reason === "UNMAPPED_PRODUCT" ||
         r.reason === "UNCLASSIFIED_SKU" ||
-        r.reason === "RECIPE_NOT_FOUND"
+        r.reason === "RECIPE_NOT_FOUND" ||
+        r.reason === "RECIPE_INVALID"
     );
 
     if (reason) {
@@ -80,10 +82,14 @@ router.get("/", async (req, res) => {
       invalid: visibleRows.filter((r: any) => r.reason === "RECIPE_INVALID").length,
     };
 
-    res.json({ ok: true, rows: visibleRows, counts });
+    return res.json({
+      ok: true,
+      rows: visibleRows,
+      counts,
+    });
   } catch (err) {
     console.error("GET /pending error", err);
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : "Internal error",
     });
@@ -98,6 +104,7 @@ router.patch("/:id/resolve", async (req, res) => {
   try {
     const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
     const { id } = req.params;
+
     const resolvedSku = String(req.body?.resolvedSku || "")
       .trim()
       .toUpperCase();
@@ -173,16 +180,26 @@ router.post("/:id/reprocess", async (req, res) => {
     const row = rows.find((r: any) => r.id === req.params.id);
 
     if (!row) {
-      return res.status(404).json({ ok: false, error: "Not found" });
+      return res.status(404).json({
+        ok: false,
+        error: "Not found",
+      });
     }
 
     if (row.status === "PROCESSED") {
-      return res.status(400).json({ ok: false, error: "Already processed" });
+      return res.status(400).json({
+        ok: false,
+        error: "Already processed",
+      });
     }
 
     const resolvedSku = String(row.resolvedSku || "").trim();
+
     if (!resolvedSku) {
-      return res.status(400).json({ ok: false, error: "Resolve first" });
+      return res.status(400).json({
+        ok: false,
+        error: "Resolve first",
+      });
     }
 
     await processPendingRow({
@@ -192,10 +209,13 @@ router.post("/:id/reprocess", async (req, res) => {
 
     await markPendingRowProcessed(row.id);
 
-    res.json({ ok: true, processed: 1 });
+    return res.json({
+      ok: true,
+      processed: 1,
+    });
   } catch (err) {
     console.error("POST /pending/:id/reprocess error", err);
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : "Internal error",
     });
@@ -215,7 +235,10 @@ router.post("/:id/ignore", async (req, res) => {
     const row = rows.find((r: any) => r.id === id);
 
     if (!row) {
-      return res.status(404).json({ ok: false, error: "Not found" });
+      return res.status(404).json({
+        ok: false,
+        error: "Not found",
+      });
     }
 
     const productId = String(row.productId || "").trim() || null;
@@ -242,14 +265,14 @@ router.post("/:id/ignore", async (req, res) => {
       variantId,
     });
 
-    res.json({
+    return res.json({
       ok: true,
       mapping,
       updatedPendingRows: updatedCount,
     });
   } catch (err) {
     console.error("POST /pending/:id/ignore error", err);
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : "Internal error",
     });
@@ -284,10 +307,13 @@ router.post("/reprocess-all", async (_req, res) => {
       }
     }
 
-    res.json({ ok: true, processed });
+    return res.json({
+      ok: true,
+      processed,
+    });
   } catch (err) {
     console.error("POST /pending/reprocess-all error", err);
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : "Internal error",
     });
