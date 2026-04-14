@@ -15,6 +15,16 @@ export type CicResolvedSkuResult = {
   source: "DB_MAPPING" | "CACHE" | "NONE";
 };
 
+export type CicExtractedItemWithDb = {
+  sku: string | null;
+  mode: "RECIPE" | "IGNORE" | null;
+  source: "DB_MAPPING" | "CACHE" | "NONE";
+  qty: number;
+  total: number;
+  _idProduct: string;
+  _idProductVariant: string;
+};
+
 function normalize(value: unknown): string {
   return String(value ?? "").trim();
 }
@@ -34,7 +44,7 @@ export function cicResolveSku(value: string): string | null {
 }
 
 /**
- * Nuovo resolver con priorità DB:
+ * Resolver con priorità DB:
  * 1) variantId
  * 2) productId
  * 3) fallback cache/map esistenti
@@ -55,10 +65,11 @@ export async function cicResolveSkuWithDb(input: {
   }
 
   // 0. Se arriva già uno SKU vero, usalo subito
+  // Il mode NON va forzato qui: lo decide dopo il webhook
   if (internalId.startsWith("SKU")) {
     return {
       sku: internalId,
-      mode: "RECIPE",
+      mode: null,
       source: "CACHE",
     };
   }
@@ -131,7 +142,7 @@ export function cicResolveSkuFromRow(input: {
 }
 
 /**
- * Versione sync attuale, utile dove non vuoi ancora toccare il flusso
+ * Versione sync legacy
  */
 export function cicExtractItems(data: any): CicExtractedItem[] {
   const rows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
@@ -170,21 +181,22 @@ export function cicExtractItems(data: any): CicExtractedItem[] {
 }
 
 /**
- * Nuova versione async che usa anche il mapping DB
+ * Versione async che usa anche il mapping DB
  */
 export async function cicExtractItemsWithDb(params: {
   tenantId: string;
   data: any;
-}) {
+}): Promise<CicExtractedItemWithDb[]> {
   const { tenantId, data } = params;
   const rows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
   if (!rows.length) return [];
 
-  const out = [];
+  const out: CicExtractedItemWithDb[] = [];
 
   for (const r of rows) {
     const qty = Number(r?.quantity ?? 0) || 0;
     const price = Number(r?.price ?? 0) || 0;
+
     if (qty <= 0) continue;
 
     const idProduct = normalize(r?.idProduct);
