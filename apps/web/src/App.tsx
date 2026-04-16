@@ -112,7 +112,7 @@ function CoreApp() {
       .then((data) => setMovements(Array.isArray(data) ? data : []))
       .catch(console.error);
 
-    authFetch(`/stock-v2`)
+    authFetch(`/stock-v2?showInactive=${showInactive}`)
       .then((r) => r.json())
       .then((data) => {
         const rows = Array.isArray(data)
@@ -142,9 +142,9 @@ function CoreApp() {
       .catch(console.error);
   };
 
-  useEffect(() => {
-    reload();
-  }, []);
+useEffect(() => {
+  reload();
+}, [showInactive]);
 
   return (
     <div className="app-bg">
@@ -182,15 +182,27 @@ function CoreApp() {
             </div>
           )}
 
-          {tab === "warehouse" && (
-            <WarehouseTable
-              rows={warehouseRowsEnriched}
-              onPickSku={(sku) => {
-                setDraftSku(sku);
-                setTab("movements");
-              }}
-            />
-          )}
+{tab === "warehouse" && (
+  <div style={{ display: "grid", gap: 12 }}>
+    
+    <label style={{ display: "flex", gap: 8 }}>
+      <input
+        type="checkbox"
+        checked={showInactive}
+        onChange={(e) => setShowInactive(e.target.checked)}
+      />
+      Mostra prodotti disattivi
+    </label>
+
+    <WarehouseTable
+      rows={warehouseRowsEnriched}
+      onPickSku={(sku) => {
+        setDraftSku(sku);
+        setTab("movements");
+      }}
+    />
+  </div>
+)}
 
           {tab === "items" && <ItemsAdmin />}
 
