@@ -1,11 +1,14 @@
 import { Router } from "express";
-import { buildWarehouseView } from "../services/stock.v2.js";
+import { buildStockView } from "../services/stock.service.js";
 
 const router = Router();
 
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const rows = await buildWarehouseView();
+    const showInactive = req.query.showInactive === "true";
+
+    const rows = await buildStockView(showInactive);
+
     return res.json({ rows });
   } catch (err) {
     console.error("GET /stock-v2 error:", err);
