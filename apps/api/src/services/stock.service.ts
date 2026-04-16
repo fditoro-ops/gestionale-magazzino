@@ -109,7 +109,7 @@ export async function buildStockView(showInactive = false) {
 
     return {
       ...item,
-      quantity: round1(quantity),
+      stockBt: round1(quantity),
     };
   });
 }
