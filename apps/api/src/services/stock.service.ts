@@ -58,34 +58,38 @@ export async function getStockBtForSku(sku: string): Promise<number> {
   return round1(quantity);
 }
 
-export async function buildStockView() {
-  const itemsRes = await pool.query(`
-    SELECT
-      id,
-      sku,
-      name,
-      supplier,
-      active,
-      "categoryId",
-      category,
-      brand,
-      "packSize",
-      um,
-      "baseQty",
-      "costEur",
-      "lastCostCents",
-      "costCurrency",
-      "imageUrl",
-      "stockKind",
-      "unitToCl",
-      "containerSizeCl",
-      "containerLabel",
-      "minStockCl",
-      "createdAt",
-      "updatedAt"
-    FROM "Item"
-    ORDER BY sku ASC
-  `);
+export async function buildStockView(showInactive = false) {
+ const itemsRes = await pool.query(
+  `
+  SELECT
+    id,
+    sku,
+    name,
+    supplier,
+    active,
+    "categoryId",
+    category,
+    brand,
+    "packSize",
+    um,
+    "baseQty",
+    "costEur",
+    "lastCostCents",
+    "costCurrency",
+    "imageUrl",
+    "stockKind",
+    "unitToCl",
+    "containerSizeCl",
+    "containerLabel",
+    "minStockCl",
+    "createdAt",
+    "updatedAt"
+  FROM "Item"
+  WHERE ($1::boolean = true OR active = true)
+  ORDER BY sku ASC
+  `,
+  [showInactive]
+);
 
   const items = itemsRes.rows.map(mapItemRow);
   const movements = await loadMovements([]);
