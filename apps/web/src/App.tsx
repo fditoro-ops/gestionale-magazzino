@@ -42,8 +42,10 @@ function CoreApp() {
   const [mode, setMode] = useState<"live" | "historical">("live");
 
   const [movements, setMovements] = useState<Movement[]>([]);
-  const [warehouse, setWarehouse] = useState<WarehouseRow[]>([]);
-  const [draftSku, setDraftSku] = useState<string>("");
+const [warehouse, setWarehouse] = useState<WarehouseRow[]>([]);
+const [draftSku, setDraftSku] = useState<string>("");
+
+const [showInactive, setShowInactive] = useState(false);
 
   const [items, setItems] = useState<any[]>([]);
   const [salesDocuments, setSalesDocuments] = useState<any[]>([]);
