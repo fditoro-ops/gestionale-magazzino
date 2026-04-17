@@ -1,6 +1,24 @@
 import { randomUUID } from "crypto";
 import { pool } from "../db.js";
 
+export async function getRecipeIngredientBySku(
+  recipeId: string,
+  ingredientSku: string
+): Promise<RecipeIngredient | null> {
+  const res = await pool.query(
+    `
+    SELECT *
+    FROM recipe_ingredients
+    WHERE recipe_id = $1
+      AND UPPER(ingredient_sku) = UPPER($2)
+    LIMIT 1
+    `,
+    [recipeId, ingredientSku]
+  );
+
+  return res.rows[0] ?? null;
+}
+
 export type RecipeIngredient = {
   id: string;
   recipe_id: string;
