@@ -12,7 +12,7 @@ export async function getItemBySku(tenantId: string, sku: string) {
       name,
       active,
       tenant_id
-    FROM "item"
+    FROM items
     WHERE tenant_id = $1
       AND UPPER(sku) = $2
     LIMIT 1
