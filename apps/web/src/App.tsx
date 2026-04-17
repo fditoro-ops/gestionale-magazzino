@@ -37,6 +37,19 @@ type WarehouseRow = {
   minStockUnits?: number | null;
 };
 
+const WAREHOUSE_CATEGORIES = [
+  { id: "bevande", label: "Bevande" },
+  { id: "vino", label: "Vino" },
+  { id: "birra", label: "Birra" },
+  { id: "amari", label: "Amari" },
+  { id: "distillati_altri", label: "Altri distillati" },
+  { id: "gin", label: "Gin" },
+  { id: "vodka", label: "Vodka" },
+  { id: "whiskey", label: "Whiskey" },
+  { id: "rhum", label: "Rhum" },
+  { id: "tequila", label: "Tequila" },
+] as const;
+
 function CoreApp() {
   const [tab, setTab] = useState<TabKey>("movements");
   const [mode, setMode] = useState<"live" | "historical">("live");
@@ -46,6 +59,9 @@ const [warehouse, setWarehouse] = useState<WarehouseRow[]>([]);
 const [draftSku, setDraftSku] = useState<string>("");
 
 const [showInactive, setShowInactive] = useState(false);
+const [warehouseCategory, setWarehouseCategory] = useState<string>("ALL");
+const [warehouseSupplier, setWarehouseSupplier] = useState<string>("ALL");
+const [warehouseUnderMinOnly, setWarehouseUnderMinOnly] = useState(false);
 
   const [items, setItems] = useState<any[]>([]);
   const [salesDocuments, setSalesDocuments] = useState<any[]>([]);
@@ -108,6 +124,46 @@ const [showInactive, setShowInactive] = useState(false);
     });
   }, [warehouse, items]);
 
+const warehouseSupplierOptions = useMemo(() => {
+  const arr = Array.isArray(items) ? items : [];
+  return Array.from(
+    new Set(arr.map((it) => String(it.supplier ?? "VARI")))
+  ).sort((a, b) => a.localeCompare(b));
+}, [items]);
+
+  const warehouseRowsFiltered = useMemo(() => {
+  const itemsArr = Array.isArray(items) ? items : [];
+
+  const itemBySku = new Map(
+    itemsArr.map((it) => [String(it.sku || "").toUpperCase(), it])
+  );
+
+  return warehouseRowsEnriched.filter((row) => {
+    const sku = String(row.sku || "").toUpperCase();
+    const item = itemBySku.get(sku);
+
+    const categoryId = String(item?.categoryId ?? item?.category ?? "");
+    const supplier = String(item?.supplier ?? "VARI");
+
+    const matchesCategory =
+      warehouseCategory === "ALL" || categoryId === warehouseCategory;
+
+    const matchesSupplier =
+      warehouseSupplier === "ALL" || supplier === warehouseSupplier;
+
+    const matchesUnderMin =
+      !warehouseUnderMinOnly || Boolean(row.underMin);
+
+    return matchesCategory && matchesSupplier && matchesUnderMin;
+  });
+}, [
+  warehouseRowsEnriched,
+  items,
+  warehouseCategory,
+  warehouseSupplier,
+  warehouseUnderMinOnly,
+]);
+  
   const reload = () => {
     authFetch(`/movements`)
       .then((r) => r.json())
@@ -186,18 +242,81 @@ useEffect(() => {
 
 {tab === "warehouse" && (
   <div style={{ display: "grid", gap: 12 }}>
-    
-    <label style={{ display: "flex", gap: 8 }}>
-      <input
-        type="checkbox"
-        checked={showInactive}
-        onChange={(e) => setShowInactive(e.target.checked)}
-      />
-      Mostra prodotti disattivi
-    </label>
+    <div
+      style={{
+        display: "grid",
+        gap: 12,
+        alignItems: "end",
+        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+      }}
+    >
+      <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input
+          type="checkbox"
+          checked={showInactive}
+          onChange={(e) => setShowInactive(e.target.checked)}
+        />
+        Mostra prodotti disattivi
+      </label>
+
+      <div style={{ display: "grid", gap: 6 }}>
+        <label style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+          Categoria
+        </label>
+        <select
+          value={warehouseCategory}
+          onChange={(e) => setWarehouseCategory(e.target.value)}
+          style={{
+            padding: "10px 12px",
+            borderRadius: 10,
+            border: "1px solid #d6dbe6",
+            background: "white",
+          }}
+        >
+          <option value="ALL">Tutte</option>
+          {WAREHOUSE_CATEGORIES.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ display: "grid", gap: 6 }}>
+        <label style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+          Fornitore
+        </label>
+        <select
+          value={warehouseSupplier}
+          onChange={(e) => setWarehouseSupplier(e.target.value)}
+          style={{
+            padding: "10px 12px",
+            borderRadius: 10,
+            border: "1px solid #d6dbe6",
+            background: "white",
+          }}
+        >
+          <option value="ALL">Tutti</option>
+          {warehouseSupplierOptions.map((supplier) => (
+            <option key={supplier} value={supplier}>
+              {supplier}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input
+          type="checkbox"
+          checked={warehouseUnderMinOnly}
+          onChange={(e) => setWarehouseUnderMinOnly(e.target.checked)}
+        />
+        Solo sotto scorta
+      </label>
+    </div>
 
     <WarehouseTable
-      rows={warehouseRowsEnriched}
+      rows={warehouseRowsFiltered}
       onPickSku={(sku) => {
         setDraftSku(sku);
         setTab("movements");
