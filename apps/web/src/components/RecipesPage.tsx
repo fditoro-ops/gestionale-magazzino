@@ -357,7 +357,7 @@ async function loadRecipes(params?: { q?: string; ingredient?: string }) {
     setLoadingRecipes(false);
   }
 }
-  }
+
 
   async function loadIngredients(recipeId: string) {
     if (!recipeId) {
