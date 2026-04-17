@@ -104,7 +104,17 @@ router.post("/:id/ingredients", async (req, res) => {
         error: "Ingredient SKU is inactive",
       });
     }
+    const existingIngredient = await getRecipeIngredientBySku(
+      id,
+      normalizedIngredientSku
+    );
 
+    if (existingIngredient) {
+      return res.status(400).json({
+        ok: false,
+        error: "Ingredient already exists in this recipe",
+      });
+    }
     const ingredient = await addRecipeIngredient({
       recipe_id: id,
       ingredient_sku: normalizedIngredientSku,
