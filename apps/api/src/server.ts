@@ -38,6 +38,7 @@ import { cicResolveSku, cicExtractItems } from "./services/cicMapping.service.js
 import dashboardRouter from "./routes/dashboard.router.js";
 import pendingRouter from "./routes/pending.js";
 import { syncCicCatalogToDb } from "./services/cicCatalogSync.service.js";
+import passiveInvoicesRouter from "./routes/passiveInvoices.routes.js";
 
 /* =========================
    BOM (Google Sheet) Reader
@@ -1686,6 +1687,7 @@ app.use("/recipes", recipesRouter);
 app.use("/cash-closures", cashClosuresRouter);
 app.use("/dashboard", dashboardRouter);
 app.use("/api", pendingRouter);
+app.use("/api/passive-invoices", passiveInvoicesRouter);
 
 app.get("/dashboard/sales", async (req, res) => {
   try {
