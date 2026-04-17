@@ -120,16 +120,25 @@ router.post("/:id/ingredients", async (req, res) => {
   } catch (err: any) {
     console.error("🔥 POST /recipes/:id/ingredients FULL ERROR:", err);
     console.error("🔥 MESSAGE:", err?.message);
+    console.error("🔥 CODE:", err?.code);
+    console.error("🔥 DETAIL:", err?.detail);
+    console.error("🔥 CONSTRAINT:", err?.constraint);
     console.error("🔥 STACK:", err?.stack);
     console.error("🔥 BODY:", req.body);
     console.error("🔥 RECIPE ID:", req.params.id);
+
+    if (err?.code === "23505") {
+      return res.status(400).json({
+        ok: false,
+        error: "Ingredient already exists in this recipe",
+      });
+    }
 
     res.status(500).json({
       ok: false,
       error: err?.message || "Internal error",
     });
   }
-});
 
 // =========================
 // UPDATE INGREDIENT
