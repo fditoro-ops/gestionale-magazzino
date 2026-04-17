@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import {
   listRecipes,
+  listRecipesFiltered,
   getRecipeById,
   createRecipe,
   updateRecipe,
@@ -26,7 +27,20 @@ const router = Router();
 router.get("/", async (req, res) => {
   try {
     const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
-    const recipes = await listRecipes(tenantId);
+
+    const q =
+      typeof req.query.q === "string" ? req.query.q.trim() : "";
+
+    const ingredient =
+      typeof req.query.ingredient === "string"
+        ? req.query.ingredient.trim()
+        : "";
+
+    const recipes =
+      q || ingredient
+        ? await listRecipesFiltered({ tenantId, q, ingredient })
+        : await listRecipes(tenantId);
+
     res.json({ ok: true, data: recipes });
   } catch (err) {
     console.error("GET /recipes error", err);
