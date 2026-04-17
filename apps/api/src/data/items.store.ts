@@ -27,7 +27,22 @@ export function loadItems(defaultItems: any[] = []) {
   }
 }
 
-export function getItemBySku(sku: string) {
+export function getItemBySku(tenantId: string, sku: string) {
   const items = loadItems([]);
-  return items.find((i: any) => String(i.sku) === String(sku)) || null;
+
+  const normalizedSku = String(sku || "").trim().toUpperCase();
+
+  return (
+    items.find((i: any) => {
+      const itemSku = String(i.sku || "").trim().toUpperCase();
+
+      // se hai tenant nel JSON
+      if (i.tenant_id) {
+        return i.tenant_id === tenantId && itemSku === normalizedSku;
+      }
+
+      // fallback se non hai tenant salvato
+      return itemSku === normalizedSku;
+    }) || null
+  );
 }
