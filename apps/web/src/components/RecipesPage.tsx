@@ -262,6 +262,8 @@ export default function RecipesPage() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loadingRecipes, setLoadingRecipes] = useState(false);
   const [recipesError, setRecipesError] = useState("");
+  const [recipeSearch, setRecipeSearch] = useState("");
+  const [ingredientSearch, setIngredientSearch] = useState("");
 
   const [items, setItems] = useState<Item[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
@@ -305,6 +307,33 @@ export default function RecipesPage() {
     [recipes, selectedRecipeId]
   );
 
+const filteredRecipes = useMemo(() => {
+  const recipeQ = recipeSearch.trim().toLowerCase();
+  const ingredientQ = ingredientSearch.trim().toLowerCase();
+
+  return recipes.filter((recipe) => {
+    const matchesRecipe =
+      !recipeQ ||
+      String(recipe.name || "").toLowerCase().includes(recipeQ) ||
+      String(recipe.product_sku || "").toLowerCase().includes(recipeQ);
+
+    const matchesIngredient =
+      !ingredientQ ||
+      ingredients.some(
+        (ing) =>
+          ing.recipe_id === recipe.id &&
+          (
+            String(ing.ingredient_sku || "").toLowerCase().includes(ingredientQ) ||
+            String(ing.ingredient_name_snapshot || "")
+              .toLowerCase()
+              .includes(ingredientQ)
+          )
+      );
+
+    return matchesRecipe && matchesIngredient;
+  });
+}, [recipes, ingredients, recipeSearch, ingredientSearch]);
+  
   async function loadItems() {
     setLoadingItems(true);
     try {
@@ -832,17 +861,40 @@ async function handleCreateRecipe() {
                 {loadingRecipes ? "Aggiorno..." : "Ricarica"}
               </button>
             </div>
+<div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
+  <input
+    style={inputStyle}
+    value={recipeSearch}
+    onChange={(e) => setRecipeSearch(e.target.value)}
+    placeholder="Cerca ricetta per nome o SKU..."
+  />
 
+  <input
+    style={inputStyle}
+    value={ingredientSearch}
+    onChange={(e) => setIngredientSearch(e.target.value)}
+    placeholder="Cerca ricetta per ingrediente..."
+  />
+</div>
+            
             {recipesError ? (
               <div style={{ color: colors.dangerText }}>{recipesError}</div>
             ) : null}
 
-            {!loadingRecipes && recipes.length === 0 ? (
-              <div style={{ color: colors.textSoft }}>Nessuna ricetta presente.</div>
-            ) : null}
+{!loadingRecipes && filteredRecipes.length === 0 ? (
+  <div style={{ color: colors.textSoft }}>Nessuna ricetta trovata.</div>
+) : null}
 
-            <div style={{ display: "grid", gap: 10 }}>
-              {recipes.map((recipe) => {
+           <div
+  style={{
+    display: "grid",
+    gap: 10,
+    maxHeight: 420,
+    overflowY: "auto",
+    paddingRight: 4,
+  }}
+>
+              {filteredRecipes.map((recipe) => {
                 const selected = recipe.id === selectedRecipeId;
 
                 return (
