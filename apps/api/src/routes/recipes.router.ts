@@ -117,9 +117,17 @@ router.post("/:id/ingredients", async (req, res) => {
     });
 
     res.json({ ok: true, data: ingredient });
-  } catch (err) {
-    console.error("POST /recipes/:id/ingredients error", err);
-    res.status(500).json({ ok: false, error: "Internal error" });
+  } catch (err: any) {
+    console.error("🔥 POST /recipes/:id/ingredients FULL ERROR:", err);
+    console.error("🔥 MESSAGE:", err?.message);
+    console.error("🔥 STACK:", err?.stack);
+    console.error("🔥 BODY:", req.body);
+    console.error("🔥 RECIPE ID:", req.params.id);
+
+    res.status(500).json({
+      ok: false,
+      error: err?.message || "Internal error",
+    });
   }
 });
 
