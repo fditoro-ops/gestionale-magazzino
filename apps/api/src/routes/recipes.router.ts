@@ -58,6 +58,7 @@ router.get("/:id/ingredients", async (req, res) => {
 // =========================
 router.post("/:id/ingredients", async (req, res) => {
   try {
+    const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
     const { id } = req.params;
 
     const recipe = await getRecipeById(id);
@@ -76,16 +77,19 @@ router.post("/:id/ingredients", async (req, res) => {
       notes,
     } = req.body;
 
-    const qty = Number(quantity);
+        const qty = Number(quantity);
+    const normalizedIngredientSku = String(ingredient_sku || "")
+      .trim()
+      .toUpperCase();
 
-    if (!ingredient_sku || !um || !Number.isFinite(qty) || qty <= 0) {
+    if (!normalizedIngredientSku || !um || !Number.isFinite(qty) || qty <= 0) {
       return res.status(400).json({
         ok: false,
         error: "ingredient_sku, quantity > 0 and um are required",
       });
     }
 
-    const item = await getItemBySku(String(ingredient_sku));
+    const item = await getItemBySku(tenantId, normalizedIngredientSku);
     if (!item) {
       return res.status(400).json({
         ok: false,
@@ -102,7 +106,7 @@ router.post("/:id/ingredients", async (req, res) => {
 
     const ingredient = await addRecipeIngredient({
       recipe_id: id,
-      ingredient_sku: String(ingredient_sku),
+      ingredient_sku: normalizedIngredientSku,
       ingredient_name_snapshot,
       quantity: qty,
       um,
@@ -124,6 +128,7 @@ router.post("/:id/ingredients", async (req, res) => {
 // =========================
 router.put("/:id/ingredients/:ingredientId", async (req, res) => {
   try {
+    const tenantId = String(req.headers["x-tenant-id"] || "IMP001");
     const { id, ingredientId } = req.params;
 
     const recipe = await getRecipeById(id);
@@ -143,7 +148,11 @@ router.put("/:id/ingredients/:ingredientId", async (req, res) => {
     } = req.body;
 
     if (ingredient_sku != null) {
-      const item = await getItemBySku(String(ingredient_sku));
+      const normalizedIngredientSku = String(ingredient_sku)
+        .trim()
+        .toUpperCase();
+
+      const item = await getItemBySku(tenantId, normalizedIngredientSku);
       if (!item) {
         return res.status(400).json({
           ok: false,
@@ -160,7 +169,10 @@ router.put("/:id/ingredients/:ingredientId", async (req, res) => {
     }
 
     const ingredient = await updateRecipeIngredient(ingredientId, {
-      ingredient_sku: ingredient_sku != null ? String(ingredient_sku) : undefined,
+            ingredient_sku:
+        ingredient_sku != null
+          ? String(ingredient_sku).trim().toUpperCase()
+          : undefined,
       ingredient_name_snapshot,
       quantity: quantity != null ? Number(quantity) : undefined,
       um,
