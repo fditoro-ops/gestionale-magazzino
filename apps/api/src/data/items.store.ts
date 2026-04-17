@@ -1,7 +1,7 @@
 // src/data/items.store.ts
 import { pool } from "../db.js";
 
-export async function getItemBySku(tenantId: string, sku: string) {
+export async function getItemBySku(_tenantId: string, sku: string) {
   const normalizedSku = String(sku || "").trim().toUpperCase();
 
   const result = await pool.query(
@@ -10,14 +10,12 @@ export async function getItemBySku(tenantId: string, sku: string) {
       id,
       sku,
       name,
-      active,
-      tenant_id
+      active
     FROM items
-    WHERE tenant_id = $1
-      AND UPPER(sku) = $2
+    WHERE UPPER(sku) = $1
     LIMIT 1
     `,
-    [tenantId, normalizedSku]
+    [normalizedSku]
   );
 
   return result.rows[0] || null;
