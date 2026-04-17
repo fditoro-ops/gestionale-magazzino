@@ -848,13 +848,18 @@ async function handleCreateRecipe() {
               }}
             >
               <div style={{ fontSize: 18, fontWeight: 700 }}>Ricette</div>
-              <button
-                style={secondaryButtonStyle}
-                onClick={loadRecipes}
-                disabled={loadingRecipes}
-              >
-                {loadingRecipes ? "Aggiorno..." : "Ricarica"}
-              </button>
+             <button
+  style={secondaryButtonStyle}
+  onClick={() =>
+    loadRecipes({
+      q: recipeSearch,
+      ingredient: ingredientSearch,
+    })
+  }
+  disabled={loadingRecipes}
+>
+  {loadingRecipes ? "Aggiorno..." : "Ricarica"}
+</button>
             </div>
 <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
   <input
