@@ -59,6 +59,48 @@ function extractCicRowDescription(
   );
 }
 
+function isIgnorableCicRow(rawRow: any, it: any) {
+  const productId = String(it?._idProduct || rawRow?.idProduct || "").trim();
+  const variantId = String(
+    it?._idProductVariant || rawRow?.idVariant || rawRow?.idProductVariant || ""
+  ).trim();
+
+  const description = String(
+    rawRow?.description ||
+      rawRow?.descriptionReceipt ||
+      rawRow?.name ||
+      rawRow?.raw?.description ||
+      rawRow?.raw?.descriptionReceipt ||
+      rawRow?.raw?.name ||
+      ""
+  )
+    .trim()
+    .toUpperCase();
+
+  const qty = Number(rawRow?.quantity ?? it?.qty ?? 0) || 0;
+  const price = Number(rawRow?.price ?? 0) || 0;
+
+  // subtotal / righe contabili / righe vuote
+  if (rawRow?.subtotal === true) return true;
+
+  // righe senza riferimenti prodotto e con solo importo/quota
+  if (!productId && !variantId) {
+    if (
+      !description ||
+      description.includes("CONTO SEPARATO") ||
+      description.includes("QUOTA") ||
+      description.includes("DIVISIONE") ||
+      description.includes("SPLIT")
+    ) {
+      return true;
+    }
+
+
+  }
+
+  return false;
+}
+
 // =========================
 // MAIN WEBHOOK
 // =========================
@@ -266,6 +308,19 @@ await saveSalesDocumentWithLines(
       const total =
         Number(it.total || 0) || qty * (Number(rawRow?.price ?? 0) || 0);
       const price = Number(rawRow?.price ?? 0) || undefined;
+
+            if (isIgnorableCicRow(rawRow, it)) {
+        console.log("↪️ CIC row ignored (split/import/non-stock)", {
+          docId,
+          idx,
+          productId,
+          variantId,
+          description,
+          qty,
+          price,
+        });
+        continue;
+      }
 
       if (!description) {
         console.log("CIC PENDING DEBUG", {
