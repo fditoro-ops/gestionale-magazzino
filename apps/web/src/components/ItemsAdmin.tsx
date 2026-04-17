@@ -82,7 +82,7 @@ export default function ItemsAdmin() {
   const [err, setErr] = useState<string | null>(null);
 const [q, setQ] = useState("");
 const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
-const [selectedSupplier, setSelectedSupplier] = useState<string>("ALL");
+const [selectedSupplier] = useState<string>("ALL");
 const [newMinStockUnits, setNewMinStockUnits] = useState("");
   const [showInactiveOnly, setShowInactiveOnly] = useState(false);
   
