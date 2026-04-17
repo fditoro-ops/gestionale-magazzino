@@ -84,6 +84,7 @@ const [q, setQ] = useState("");
 const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
 const [selectedSupplier, setSelectedSupplier] = useState<string>("ALL");
 const [newMinStockUnits, setNewMinStockUnits] = useState("");
+  const [showInactiveOnly, setShowInactiveOnly] = useState(false);
   
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -111,19 +112,22 @@ const [newMinStockUnits, setNewMinStockUnits] = useState("");
     "w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none focus:border-gray-300 focus:ring-2 focus:ring-gray-100";
   const helpCls = "text-xs text-gray-500";
 
-  async function reload() {
-    setLoading(true);
-    setErr(null);
-    try {
-      const res = await fetch(`${API_BASE}/items`);
-      const data = await res.json();
-      setItems(Array.isArray(data) ? data : []);
-    } catch {
-      setErr("Errore caricamento articoli");
-    } finally {
-      setLoading(false);
-    }
+async function reload() {
+  setLoading(true);
+  setErr(null);
+  try {
+    const activeParam = showInactiveOnly ? "false" : "true";
+
+    const res = await fetch(`${API_BASE}/items?active=${activeParam}`);
+    const data = await res.json();
+
+    setItems(Array.isArray(data) ? data : []);
+  } catch {
+    setErr("Errore caricamento articoli");
+  } finally {
+    setLoading(false);
   }
+}
 
   async function loadSuppliers() {
     try {
@@ -144,6 +148,9 @@ const [newMinStockUnits, setNewMinStockUnits] = useState("");
 
 useEffect(() => {
   reload();
+}, [showInactiveOnly]);
+
+useEffect(() => {
   loadSuppliers();
 }, []);
 
@@ -308,7 +315,7 @@ const filtered = useMemo(() => {
       </div>
 
 <div className="card">
-  <div className="card-body grid gap-y-3 gap-x-8 md:grid-cols-[1.5fr_1fr_1fr] max-w-5xl">
+  <div className="card-body grid gap-y-3 gap-x-8 md:grid-cols-[1.5fr_1fr_1fr_auto] max-w-6xl">
     <div className="grid gap-1">
       <label className={labelCls}>Cerca</label>
       <input
@@ -336,21 +343,15 @@ const filtered = useMemo(() => {
     </div>
 
     <div className="grid gap-1">
-      <label className={labelCls}>Fornitore</label>
-      <select
-        className={inputCls}
-        value={selectedSupplier}
-        onChange={(e) => setSelectedSupplier(e.target.value)}
-      >
-        <option value="ALL">Tutti</option>
-        <option value="VARI">Vari</option>
-        {suppliers.map((s) => (
-          <option key={s.id} value={s.code}>
-            {s.code}
-            {s.name ? ` · ${s.name}` : ""}
-          </option>
-        ))}
-      </select>
+      <label className={labelCls}>Stato</label>
+      <label className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm">
+        <input
+          type="checkbox"
+          checked={showInactiveOnly}
+          onChange={(e) => setShowInactiveOnly(e.target.checked)}
+        />
+        <span>Mostra prodotti disattivati</span>
+      </label>
     </div>
   </div>
 </div>
