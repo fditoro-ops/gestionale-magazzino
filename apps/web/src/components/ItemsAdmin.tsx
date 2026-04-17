@@ -80,8 +80,11 @@ export default function ItemsAdmin() {
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [q, setQ] = useState("");
-  const [newMinStockUnits, setNewMinStockUnits] = useState("");
+const [q, setQ] = useState("");
+const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
+const [selectedSupplier, setSelectedSupplier] = useState<string>("ALL");
+const [newMinStockUnits, setNewMinStockUnits] = useState("");
+  
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
@@ -147,26 +150,30 @@ useEffect(() => {
 const filtered = useMemo(() => {
   const qq = q.trim().toUpperCase();
 
-  const rawOnly = items.filter((i: any) => {
+  return items.filter((i: any) => {
     const sku = String(i.sku ?? "").toUpperCase();
+    const name = String(i.name ?? "").toUpperCase();
+    const brand = String(i.brand ?? "").toUpperCase();
+    const categoryId = String(i.categoryId ?? i.category ?? "");
+    const supplier = String(i.supplier ?? "VARI");
 
     // nasconde i prodotti CIC / finiti tipo SKU000xxx
     if (sku.startsWith("SKU000")) return false;
 
-    return true;
+    const matchesText =
+      !qq || sku.includes(qq) || name.includes(qq) || brand.includes(qq);
+
+    const matchesCategory =
+      selectedCategory === "ALL" || categoryId === selectedCategory;
+
+    const matchesSupplier =
+      selectedSupplier === "ALL" || supplier === selectedSupplier;
+
+    return matchesText && matchesCategory && matchesSupplier;
   });
-
-  if (!qq) return rawOnly;
-
-  return rawOnly.filter((i: any) => {
-    const sku = String(i.sku ?? "").toUpperCase();
-    const name = String(i.name ?? "").toUpperCase();
-    const brand = String(i.brand ?? "").toUpperCase();
-    return sku.includes(qq) || name.includes(qq) || brand.includes(qq);
-  });
-}, [items, q]);
-
-function resetCreateForm() {
+}, [items, q, selectedCategory, selectedSupplier]);
+  
+  function resetCreateForm() {
     setNewSku("");
     setNewName("");
     setNewBrand("");
@@ -300,17 +307,53 @@ function resetCreateForm() {
         </button>
       </div>
 
-      <div className="card">
-        <div className="card-body grid gap-2">
-          <label className={labelCls}>Cerca</label>
-          <input
-            className={inputCls}
-            placeholder="Cerca per SKU, nome o brand…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </div>
-      </div>
+<div className="card">
+  <div className="card-body grid gap-3 md:grid-cols-3">
+    <div className="grid gap-1">
+      <label className={labelCls}>Cerca</label>
+      <input
+        className={inputCls}
+        placeholder="Cerca per SKU, nome o brand…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
+    </div>
+
+    <div className="grid gap-1">
+      <label className={labelCls}>Categoria</label>
+      <select
+        className={inputCls}
+        value={selectedCategory}
+        onChange={(e) => setSelectedCategory(e.target.value)}
+      >
+        <option value="ALL">Tutte</option>
+        {CATEGORIES.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+    </div>
+
+    <div className="grid gap-1">
+      <label className={labelCls}>Fornitore</label>
+      <select
+        className={inputCls}
+        value={selectedSupplier}
+        onChange={(e) => setSelectedSupplier(e.target.value)}
+      >
+        <option value="ALL">Tutti</option>
+        <option value="VARI">Vari</option>
+        {suppliers.map((s) => (
+          <option key={s.id} value={s.code}>
+            {s.code}
+            {s.name ? ` · ${s.name}` : ""}
+          </option>
+        ))}
+      </select>
+    </div>
+  </div>
+</div>
 
       {err && <div className="text-sm text-red-600">{err}</div>}
 
