@@ -306,34 +306,7 @@ export default function RecipesPage() {
     () => recipes.find((r) => r.id === selectedRecipeId) ?? null,
     [recipes, selectedRecipeId]
   );
-
-const filteredRecipes = useMemo(() => {
-  const recipeQ = recipeSearch.trim().toLowerCase();
-  const ingredientQ = ingredientSearch.trim().toLowerCase();
-
-  return recipes.filter((recipe) => {
-    const matchesRecipe =
-      !recipeQ ||
-      String(recipe.name || "").toLowerCase().includes(recipeQ) ||
-      String(recipe.product_sku || "").toLowerCase().includes(recipeQ);
-
-    const matchesIngredient =
-      !ingredientQ ||
-      ingredients.some(
-        (ing) =>
-          ing.recipe_id === recipe.id &&
-          (
-            String(ing.ingredient_sku || "").toLowerCase().includes(ingredientQ) ||
-            String(ing.ingredient_name_snapshot || "")
-              .toLowerCase()
-              .includes(ingredientQ)
-          )
-      );
-
-    return matchesRecipe && matchesIngredient;
-  });
-}, [recipes, ingredients, recipeSearch, ingredientSearch]);
-  
+ 
   async function loadItems() {
     setLoadingItems(true);
     try {
@@ -348,30 +321,42 @@ const filteredRecipes = useMemo(() => {
     }
   }
 
-  async function loadRecipes() {
-    setLoadingRecipes(true);
-    setRecipesError("");
+async function loadRecipes(params?: { q?: string; ingredient?: string }) {
+  setLoadingRecipes(true);
+  setRecipesError("");
 
-    try {
-      const res = await authFetch("/recipes");
-      const json: ApiResponse<Recipe[]> = await res.json();
+  try {
+    const searchParams = new URLSearchParams();
 
-      if (!res.ok || json.ok === false) {
-        throw new Error(json.error || "Errore caricamento ricette");
-      }
-
-      const rows = Array.isArray(json.data) ? json.data : [];
-      setRecipes(rows);
-
-      setSelectedRecipeId((prev) => {
-        if (prev && rows.some((r) => r.id === prev)) return prev;
-        return rows[0]?.id || "";
-      });
-    } catch (err: any) {
-      setRecipesError(String(err?.message || err));
-    } finally {
-      setLoadingRecipes(false);
+    if (params?.q?.trim()) {
+      searchParams.set("q", params.q.trim());
     }
+
+    if (params?.ingredient?.trim()) {
+      searchParams.set("ingredient", params.ingredient.trim());
+    }
+
+    const qs = searchParams.toString();
+    const res = await authFetch(`/recipes${qs ? `?${qs}` : ""}`);
+    const json: ApiResponse<Recipe[]> = await res.json();
+
+    if (!res.ok || json.ok === false) {
+      throw new Error(json.error || "Errore caricamento ricette");
+    }
+
+    const rows = Array.isArray(json.data) ? json.data : [];
+    setRecipes(rows);
+
+    setSelectedRecipeId((prev) => {
+      if (prev && rows.some((r) => r.id === prev)) return prev;
+      return rows[0]?.id || "";
+    });
+  } catch (err: any) {
+    setRecipesError(String(err?.message || err));
+  } finally {
+    setLoadingRecipes(false);
+  }
+}
   }
 
   async function loadIngredients(recipeId: string) {
@@ -414,10 +399,20 @@ const filteredRecipes = useMemo(() => {
     }
   }
 
-  useEffect(() => {
-    loadItems();
-    loadRecipes();
-  }, []);
+useEffect(() => {
+  loadItems();
+}, []);
+
+useEffect(() => {
+  const t = setTimeout(() => {
+    loadRecipes({
+      q: recipeSearch,
+      ingredient: ingredientSearch,
+    });
+  }, 250);
+
+  return () => clearTimeout(t);
+}, [recipeSearch, ingredientSearch]);
 
   useEffect(() => {
     if (selectedRecipeId) loadIngredients(selectedRecipeId);
@@ -881,7 +876,7 @@ async function handleCreateRecipe() {
               <div style={{ color: colors.dangerText }}>{recipesError}</div>
             ) : null}
 
-{!loadingRecipes && filteredRecipes.length === 0 ? (
+{!loadingRecipes && recipes.length === 0 ? (
   <div style={{ color: colors.textSoft }}>Nessuna ricetta trovata.</div>
 ) : null}
 
@@ -894,7 +889,7 @@ async function handleCreateRecipe() {
     paddingRight: 4,
   }}
 >
-              {filteredRecipes.map((recipe) => {
+              {recipes.map((recipe) => {
                 const selected = recipe.id === selectedRecipeId;
 
                 return (
