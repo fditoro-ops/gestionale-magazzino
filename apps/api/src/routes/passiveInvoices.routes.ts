@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
+// @ts-ignore
 import { XMLParser } from "fast-xml-parser";
 import { pool } from "../db.js";
 
