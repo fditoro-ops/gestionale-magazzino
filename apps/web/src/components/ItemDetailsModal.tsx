@@ -33,6 +33,19 @@ type SupplierOption = {
 
 type ItemUm = "CL" | "PZ";
 
+const CATEGORIES = [
+  { id: "bevande", label: "Bevande" },
+  { id: "vino", label: "Vino" },
+  { id: "birra", label: "Birra" },
+  { id: "amari", label: "Amari" },
+  { id: "distillati_altri", label: "Altri distillati" },
+  { id: "gin", label: "Gin" },
+  { id: "vodka", label: "Vodka" },
+  { id: "whiskey", label: "Whiskey" },
+  { id: "rhum", label: "Rhum" },
+  { id: "tequila", label: "Tequila" },
+] as const;
+
 function centsToEuroString(cents: number | null | undefined) {
   if (typeof cents !== "number" || !Number.isFinite(cents)) return "";
   const v = cents / 100;
@@ -112,7 +125,7 @@ export default function ItemDetailsModal({
     setName(item.name ?? "");
     setBrand(item.brand ?? "");
     setSupplier((item.supplier ?? "VARI") as string);
-    setCategoryId((item.categoryId ?? item.category ?? "") as string);
+    setCategoryId(String(item.categoryId ?? item.category ?? "bevande"));
 
     const parsedPackSize = Number(item.packSize);
     setPackSize(
@@ -335,17 +348,24 @@ export default function ItemDetailsModal({
                 </div>
               </div>
 
-              <div className="col-span-12 md:col-span-6 min-w-0 grid gap-1">
-                <label className={labelCls}>Categoria</label>
-                <input
-                  className={inputCls}
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                />
-                <div className={helpCls}>
-                  Per ora testo libero, poi lo colleghiamo alla select.
-                </div>
-              </div>
+<div className="col-span-12 md:col-span-6 min-w-0 grid gap-1">
+  <label className={labelCls}>Categoria</label>
+  <div className="relative">
+    <select
+      className={selectCls}
+      value={categoryId}
+      onChange={(e) => setCategoryId(e.target.value)}
+    >
+      {CATEGORIES.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.label}
+        </option>
+      ))}
+    </select>
+
+    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+  </div>
+</div>
 
               <div className="col-span-12 md:col-span-2 min-w-0 grid gap-1">
                 <label className={labelCls}>Pezzi per cassa</label>
