@@ -11,7 +11,7 @@ export async function getItemBySku(_tenantId: string, sku: string) {
       sku,
       name,
       active
-    FROM items
+    FROM "Item"
     WHERE UPPER(sku) = $1
     LIMIT 1
     `,
