@@ -150,6 +150,7 @@ router.post("/:id/ingredients", async (req, res) => {
       error: err?.message || "Internal error",
     });
   }
+});
 
 // =========================
 // UPDATE INGREDIENT
