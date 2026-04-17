@@ -10,6 +10,24 @@ import { processPendingRow } from "../services/cicProcessor.service.js";
 import { enrichPendingRows } from "../services/pendingEnricher.service.js";
 import { upsertCicProductMapping } from "../data/cicProductMappings.store.js";
 
+function isIgnorableSplitPendingRow(row: any) {
+  const productId = String(row.productId || "").trim();
+  const variantId = String(row.variantId || "").trim();
+  const description = String(row.description || "").trim().toUpperCase();
+
+  if (!productId && !variantId) return true;
+
+  if (
+    description.includes("CONTO SEPARATO") ||
+    description.includes("QUOTA") ||
+    description.includes("DIVISIONE")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 const router = Router();
 
 /**
@@ -36,13 +54,16 @@ router.get("/", async (req, res) => {
 
     let rows = await listPendingRows(status);
 
-    rows = rows.filter(
-      (r: any) =>
-        r.reason === "UNMAPPED_PRODUCT" ||
-        r.reason === "UNCLASSIFIED_SKU" ||
-        r.reason === "RECIPE_NOT_FOUND" ||
-        r.reason === "RECIPE_INVALID"
-    );
+rows = rows.filter((r: any) => {
+  if (isIgnorableSplitPendingRow(r)) return false;
+
+  return (
+    r.reason === "UNMAPPED_PRODUCT" ||
+    r.reason === "UNCLASSIFIED_SKU" ||
+    r.reason === "RECIPE_NOT_FOUND" ||
+    r.reason === "RECIPE_INVALID"
+  );
+});
 
     if (reason) {
       rows = rows.filter((r: any) => r.reason === reason);
@@ -186,6 +207,13 @@ router.post("/:id/reprocess", async (req, res) => {
       });
     }
 
+    if (isIgnorableSplitPendingRow(row)) {
+  return res.status(400).json({
+    ok: false,
+    error: "Ignorable split/import row: do not reprocess",
+  });
+}
+    
     if (row.status === "PROCESSED") {
       return res.status(400).json({
         ok: false,
@@ -244,12 +272,12 @@ router.post("/:id/ignore", async (req, res) => {
     const productId = String(row.productId || "").trim() || null;
     const variantId = String(row.variantId || "").trim() || null;
 
-    if (!productId && !variantId) {
-      return res.status(400).json({
-        ok: false,
-        error: "Pending row has no productId or variantId",
-      });
-    }
+if (!productId && !variantId) {
+  return res.status(400).json({
+    ok: false,
+    error: "Split/import row without productId or variantId: must be filtered at ingestion, not ignored by mapping",
+  });
+}
 
     const mapping = await upsertCicProductMapping({
       tenantId,
@@ -284,10 +312,10 @@ router.post("/:id/ignore", async (req, res) => {
  */
 router.post("/reprocess-all", async (_req, res) => {
   try {
-    const rows = (await listPendingRows("PENDING")).filter(
-      (r: any) => !!String(r.resolvedSku || "").trim()
-    );
-
+const rows = (await listPendingRows("PENDING")).filter((r: any) => {
+  if (isIgnorableSplitPendingRow(r)) return false;
+  return !!String(r.resolvedSku || "").trim();
+});
     let processed = 0;
 
     for (const row of rows) {
