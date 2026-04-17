@@ -308,7 +308,7 @@ const filtered = useMemo(() => {
       </div>
 
 <div className="card">
-  <div className="card-body grid gap-3 md:grid-cols-3">
+  <div className="card-body grid gap-3 md:grid-cols-[1.5fr_1fr_1fr]">
     <div className="grid gap-1">
       <label className={labelCls}>Cerca</label>
       <input
