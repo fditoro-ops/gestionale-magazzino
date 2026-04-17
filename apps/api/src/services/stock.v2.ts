@@ -1,23 +1,49 @@
-import { loadItems } from "../data/items.store.js";
-import { loadMovements } from "../data/movements.store.js";
-import type { Movement } from "../types/movement.js";
+// src/data/items.store.ts
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { pool } from "../db.js";
 
-type StockKind = "UNIT" | "VOLUME_CONTAINER";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-type ItemStock = {
-  itemId: string;
-  sku: string;
-  name: string;
-  active?: boolean;
+// da dist/src/data -> ../../../data/items.json
+const FILE = path.resolve(__dirname, "../../../data/items.json");
 
-  stockKind: StockKind;
+export function loadItems(defaultItems: any[] = []) {
+  try {
+    if (!fs.existsSync(FILE)) return defaultItems;
 
-  unitToCl?: number | null;
-  containerSizeCl?: number | null;
+    const raw = fs.readFileSync(FILE, "utf-8");
+    const data = JSON.parse(raw);
 
-  minStockBt?: number | null;
-};
+    if (!Array.isArray(data)) return defaultItems;
 
-function round1(n: number) {
-  return Math.round(n * 10) / 10;
+    return data;
+  } catch (err) {
+    console.error("loadItems error:", err);
+    return defaultItems;
+  }
+}
+
+export async function getItemBySku(tenantId: string, sku: string) {
+  const normalizedSku = String(sku || "").trim().toUpperCase();
+
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      sku,
+      name,
+      active,
+      tenant_id
+    FROM "Item"
+    WHERE tenant_id = $1
+      AND UPPER(sku) = $2
+    LIMIT 1
+    `,
+    [tenantId, normalizedSku]
+  );
+
+  return result.rows[0] || null;
 }
