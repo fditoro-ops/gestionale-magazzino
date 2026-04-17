@@ -117,17 +117,37 @@ function validateMeasure(um: ItemUm, baseQty: number) {
   }
 }
 
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const r = await pool.query(`
-      SELECT *
-      FROM "Item"
+    const activeParam =
+      typeof req.query.active === "string" ? req.query.active.trim() : "";
+
+    let activeFilter: boolean | null = null;
+    if (activeParam === "true") activeFilter = true;
+    if (activeParam === "false") activeFilter = false;
+
+    const values: any[] = [];
+    let where = `
       WHERE sku IS NOT NULL
         AND BTRIM(sku) <> ''
         AND sku !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
         AND sku NOT LIKE 'SKU000%'
+    `;
+
+    if (activeFilter !== null) {
+      values.push(activeFilter);
+      where += ` AND active = $${values.length}`;
+    }
+
+    const r = await pool.query(
+      `
+      SELECT *
+      FROM "Item"
+      ${where}
       ORDER BY sku
-    `);
+      `,
+      values
+    );
 
     return res.json(r.rows.map(mapRowToItem));
   } catch (err) {
