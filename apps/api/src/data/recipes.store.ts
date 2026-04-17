@@ -29,6 +29,54 @@ export async function listRecipes(tenantId: string): Promise<Recipe[]> {
   return res.rows;
 }
 
+export async function listRecipesFiltered(params: {
+  tenantId: string;
+  q?: string;
+  ingredient?: string;
+}): Promise<Recipe[]> {
+  const { tenantId, q, ingredient } = params;
+
+  const values: any[] = [tenantId];
+  let where = `WHERE r.tenant_id = $1`;
+
+  if (q && q.trim()) {
+    values.push(`%${q.trim().toLowerCase()}%`);
+    where += `
+      AND (
+        LOWER(r.name) LIKE $${values.length}
+        OR LOWER(r.product_sku) LIKE $${values.length}
+      )
+    `;
+  }
+
+  if (ingredient && ingredient.trim()) {
+    values.push(`%${ingredient.trim().toLowerCase()}%`);
+    where += `
+      AND EXISTS (
+        SELECT 1
+        FROM recipe_ingredients ri
+        WHERE ri.recipe_id = r.id
+          AND (
+            LOWER(ri.ingredient_sku) LIKE $${values.length}
+            OR LOWER(COALESCE(ri.ingredient_name_snapshot, '')) LIKE $${values.length}
+          )
+      )
+    `;
+  }
+
+  const res = await pool.query(
+    `
+    SELECT r.*
+    FROM recipes r
+    ${where}
+    ORDER BY r.created_at DESC
+    `,
+    values
+  );
+
+  return res.rows;
+}
+
 // =========================
 // GET BY ID
 // =========================
