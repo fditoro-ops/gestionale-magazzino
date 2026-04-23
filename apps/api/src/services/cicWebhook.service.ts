@@ -228,88 +228,36 @@ export async function processCicWebhook(req: any, res: any) {
     // =========================
     // 1️⃣ SALVA SALES
     // =========================
-    const salesLines = await Promise.all(
-      items.map(async (it: any, idx: number) => {
-        const sku = String(it.sku || "").trim();
-
-        const rawRow = rawRows[idx];
-        const productId = String(it._idProduct || "").trim();
-        const variantId = String(it._idProductVariant || "").trim();
-
-        const cicProduct = cicCatalogMap[variantId] || cicCatalogMap[productId];
-
-        let description = String(
-          extractCicRowDescription(rawRow, cicProduct) || ""
-        ).trim();
-
-        if (!description && sku) {
-          description = await getItemNameBySku(sku);
-        }
-
-        const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
-        const unitPrice = Number(rawRow?.price ?? 0) || 0;
-
-        return {
-          lineNo: idx + 1,
-          sku,
-          description,
-          qty,
-          unitPrice,
-          lineTotal: qty * unitPrice,
-          productId,
-          variantId,
-          tenantId,
-          hasRecipe: false,
-          resolvedOk: Boolean(sku),
-        };
-      })
-    );
-
-await saveSalesDocumentWithLines(
-  {
-    tenantId,
-    documentId: docId,
-    receiptNumber,
-    source: "CIC",
-    documentDate: orderDate,
-    totalAmount: documentAmount || paymentsTotal,
-    paymentsTotal,
-    status: operation === "RECEIPT/DELETE" ? "VOID" : "VALID",
-    rawPayload: data,
-  },
-  salesLines
-);
-
-    // =========================
-    // 2️⃣ MOVIMENTI
-    // =========================
     const finalItems: Array<{ sku: string; qty: number }> = [];
+    const salesLines: any[] = [];
 
     for (let idx = 0; idx < items.length; idx++) {
       const it = items[idx];
 
-      const sku = String(it.sku || "").trim();
-      const resolvedMode = it.mode || null;
-      const resolvedSource = it.source || "NONE";
-
       const rawRow = rawRows[idx];
-
       const productId = String(it._idProduct || "").trim() || undefined;
       const variantId = String(it._idProductVariant || "").trim() || undefined;
 
       const cicProduct =
         cicCatalogMap[variantId || ""] || cicCatalogMap[productId || ""];
 
-      const description =
-        String(extractCicRowDescription(rawRow, cicProduct) || "").trim() ||
-        undefined;
+      let sku = String(it.sku || "").trim();
+      const resolvedMode = String(it.mode || "").trim() || "";
+      const resolvedSource = it.source || "NONE";
+
+      let description =
+        String(extractCicRowDescription(rawRow, cicProduct) || "").trim() || "";
+
+      if (!description && sku) {
+        description = await getItemNameBySku(sku);
+      }
 
       const qty = Number(rawRow?.quantity ?? it.qty ?? 0) || 0;
-      const total =
-        Number(it.total || 0) || qty * (Number(rawRow?.price ?? 0) || 0);
-      const price = Number(rawRow?.price ?? 0) || undefined;
+      const unitPrice = Number(rawRow?.price ?? 0) || 0;
+      const lineTotal =
+        Number(it.total || 0) || qty * unitPrice;
 
-            if (isIgnorableCicRow(rawRow, it)) {
+      if (isIgnorableCicRow(rawRow, it)) {
         console.log("↪️ CIC row ignored (split/import/non-stock)", {
           docId,
           idx,
@@ -317,8 +265,24 @@ await saveSalesDocumentWithLines(
           variantId,
           description,
           qty,
-          price,
+          unitPrice,
         });
+
+        salesLines.push({
+          lineNo: idx + 1,
+          sku,
+          description,
+          qty,
+          unitPrice,
+          lineTotal,
+          productId,
+          variantId,
+          mode: resolvedMode,
+          tenantId,
+          hasRecipe: false,
+          resolvedOk: Boolean(sku),
+        });
+
         continue;
       }
 
@@ -337,12 +301,16 @@ await saveSalesDocumentWithLines(
         });
       }
 
-      // mapping DB esplicito: IGNORE
-      if (resolvedSource === "DB_MAPPING" && resolvedMode === "IGNORE") {
-        continue;
-      }
+      let mode = resolvedMode || cicModesBySku[sku] || "";
+      let hasRecipe = false;
+      let resolvedOk = false;
 
-      if (!sku) {
+      if (resolvedSource === "DB_MAPPING" && resolvedMode === "IGNORE") {
+        resolvedOk = true;
+        mode = "IGNORE";
+      } else if (!sku) {
+        resolvedOk = false;
+
         await upsertPendingRow({
           docId,
           operation,
@@ -352,106 +320,131 @@ await saveSalesDocumentWithLines(
           variantId,
           rawResolvedSku: "",
           qty,
-          total,
-          price,
+          total: lineTotal,
+          price: unitPrice || undefined,
           description,
           reason: "UNMAPPED_PRODUCT",
           rawRow: rawRow || null,
         });
-        continue;
+      } else {
+        const recipe = await getRecipeByProductSku(tenantId, sku);
+        hasRecipe =
+          Array.isArray((bom as any)[sku]) && (bom as any)[sku].length > 0;
+
+        if (!recipe) {
+          resolvedOk = false;
+
+          await upsertPendingRow({
+            docId,
+            operation,
+            orderDate: orderDate.toISOString(),
+            tenantId,
+            productId,
+            variantId,
+            rawResolvedSku: sku,
+            qty,
+            total: lineTotal,
+            price: unitPrice || undefined,
+            description,
+            reason: "UNCLASSIFIED_SKU",
+            rawRow: rawRow || null,
+          });
+        } else if (recipe.status !== "ACTIVE") {
+          resolvedOk = false;
+
+          await upsertPendingRow({
+            docId,
+            operation,
+            orderDate: orderDate.toISOString(),
+            tenantId,
+            productId,
+            variantId,
+            rawResolvedSku: sku,
+            qty,
+            total: lineTotal,
+            price: unitPrice || undefined,
+            description,
+            reason: "UNCLASSIFIED_SKU",
+            rawRow: rawRow || null,
+          });
+        } else if (!mode) {
+          resolvedOk = false;
+
+          await upsertPendingRow({
+            docId,
+            operation,
+            orderDate: orderDate.toISOString(),
+            tenantId,
+            productId,
+            variantId,
+            rawResolvedSku: sku,
+            qty,
+            total: lineTotal,
+            price: unitPrice || undefined,
+            description,
+            reason: "UNCLASSIFIED_SKU",
+            rawRow: rawRow || null,
+          });
+        } else if (mode === "IGNORE") {
+          resolvedOk = true;
+        } else if (mode === "RECIPE" && !hasRecipe) {
+          resolvedOk = false;
+
+          await upsertPendingRow({
+            docId,
+            operation,
+            orderDate: orderDate.toISOString(),
+            tenantId,
+            productId,
+            variantId,
+            rawResolvedSku: sku,
+            qty,
+            total: lineTotal,
+            price: unitPrice || undefined,
+            description,
+            reason: "RECIPE_NOT_FOUND",
+            rawRow: rawRow || null,
+          });
+        } else {
+          resolvedOk = true;
+
+          finalItems.push({
+            sku,
+            qty,
+          });
+        }
       }
 
-      const mode = resolvedMode || cicModesBySku[sku];
-      const recipe = await getRecipeByProductSku(tenantId, sku);
-
-      if (!recipe) {
-        await upsertPendingRow({
-          docId,
-          operation,
-          orderDate: orderDate.toISOString(),
-          tenantId,
-          productId,
-          variantId,
-          rawResolvedSku: sku,
-          qty,
-          total,
-          price,
-          description,
-          reason: "UNCLASSIFIED_SKU",
-          rawRow: rawRow || null,
-        });
-        continue;
-      }
-
-      if (recipe.status !== "ACTIVE") {
-        await upsertPendingRow({
-          docId,
-          operation,
-          orderDate: orderDate.toISOString(),
-          tenantId,
-          productId,
-          variantId,
-          rawResolvedSku: sku,
-          qty,
-          total,
-          price,
-          description,
-          reason: "UNCLASSIFIED_SKU",
-          rawRow: rawRow || null,
-        });
-        continue;
-      }
-
-      if (!mode) {
-        await upsertPendingRow({
-          docId,
-          operation,
-          orderDate: orderDate.toISOString(),
-          tenantId,
-          productId,
-          variantId,
-          rawResolvedSku: sku,
-          qty,
-          total,
-          price,
-          description,
-          reason: "UNCLASSIFIED_SKU",
-          rawRow: rawRow || null,
-        });
-        continue;
-      }
-
-      if (mode === "IGNORE") {
-        continue;
-      }
-
-      const hasRecipe =
-        Array.isArray((bom as any)[sku]) && (bom as any)[sku].length > 0;
-
-      if (mode === "RECIPE" && !hasRecipe) {
-        await upsertPendingRow({
-          docId,
-          operation,
-          orderDate: orderDate.toISOString(),
-          tenantId,
-          productId,
-          variantId,
-          rawResolvedSku: sku,
-          qty,
-          total,
-          price,
-          description,
-          reason: "RECIPE_NOT_FOUND",
-          rawRow: rawRow || null,
-        });
-        continue;
-      }
-
-      finalItems.push({
+      salesLines.push({
+        lineNo: idx + 1,
         sku,
+        description,
         qty,
+        unitPrice,
+        lineTotal,
+        productId,
+        variantId,
+        mode,
+        tenantId,
+        hasRecipe,
+        resolvedOk,
       });
     }
+
+    await saveSalesDocumentWithLines(
+      {
+        tenantId,
+        documentId: docId,
+        receiptNumber,
+        source: "CIC",
+        documentDate: orderDate,
+        totalAmount: documentAmount || paymentsTotal,
+        paymentsTotal,
+        status: operation === "RECEIPT/DELETE" ? "VOID" : "VALID",
+        rawPayload: data,
+      },
+      salesLines
+    );
 
     // =========================
     // 3️⃣ SCARICO
