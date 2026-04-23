@@ -15,7 +15,6 @@ export async function reprocessSinglePending({
   try {
     await client.query("BEGIN");
 
-    // 🔒 Lock riga per evitare doppio processamento
     const pendingRes = await client.query(
       `
       SELECT *
@@ -32,7 +31,6 @@ export async function reprocessSinglePending({
 
     const row = pendingRes.rows[0];
 
-    // 🚫 già processata → skip
     if (String(row.status || "") !== "PENDING") {
       await client.query("COMMIT");
       return {
@@ -43,7 +41,13 @@ export async function reprocessSinglePending({
       };
     }
 
-    // 🔍 resolve SKU
+    const tenantId = String(row.tenant_id || "IMP001");
+    const docId = String(row.doc_id || "").trim();
+
+    if (!docId) {
+      throw new Error("DOC_ID mancante nel pending");
+    }
+
     const candidateIds = [
       String(row.variant_id || "").trim(),
       String(row.product_id || "").trim(),
@@ -54,7 +58,7 @@ export async function reprocessSinglePending({
     for (const id of candidateIds) {
       const resolved = cicResolveSku(id);
       if (resolved) {
-        resolvedSku = resolved;
+        resolvedSku = String(resolved).trim();
         break;
       }
     }
@@ -69,26 +73,23 @@ export async function reprocessSinglePending({
       };
     }
 
-    // 📦 cache modalità CIC
     const cicProductModeCache = getCicProductModesCache();
 
     const cicModesBySku = Object.fromEntries(
       Object.entries(cicProductModeCache).map(([_, v]: [string, any]) => [
-        v.sku,
-        v.mode,
+        String(v?.sku || "").trim(),
+        v?.mode,
       ])
     ) as Record<string, "RECIPE" | "IGNORE">;
 
-    const mode = cicModesBySku[resolvedSku];
+    const mode = cicModesBySku[resolvedSku] || "";
 
-    // 📖 BOM attivo
     const activeBom = getActiveBom();
 
     const hasRecipe =
       Array.isArray(activeBom[resolvedSku]) &&
       activeBom[resolvedSku].length > 0;
 
-    // 🚫 SKU non classificato
     if (!mode) {
       await client.query("COMMIT");
       return {
@@ -100,7 +101,49 @@ export async function reprocessSinglePending({
       };
     }
 
-    // 🟡 IGNORE → segno processato senza movimenti
+    // 1) aggiorno sales_lines PRIMA di tutto
+    // provo a matchare la riga specifica per variant_id / product_id
+    const updateRes = await client.query(
+      `
+      UPDATE sales_lines
+      SET
+        sku = $1,
+        mode = $2,
+        has_recipe = $3,
+        resolved_ok = true,
+        updated_at = NOW()
+      WHERE tenant_id = $4
+        AND document_id = $5
+        AND (
+          ($6 <> '' AND variant_id = $6)
+          OR
+          ($7 <> '' AND product_id = $7)
+        )
+      `,
+      [
+        resolvedSku,
+        mode,
+        hasRecipe,
+        tenantId,
+        docId,
+        String(row.variant_id || "").trim(),
+        String(row.product_id || "").trim(),
+      ]
+    );
+
+    // Se non trova nulla, non continuo "alla cieca"
+    if ((updateRes.rowCount ?? 0) === 0) {
+      await client.query("COMMIT");
+      return {
+        ok: true,
+        status: "SKIPPED",
+        reason: "SALES_LINE_NOT_FOUND",
+        pendingId,
+        sku: resolvedSku,
+        docId,
+      };
+    }
+
     if (mode === "IGNORE") {
       await client.query(
         `
@@ -123,10 +166,10 @@ export async function reprocessSinglePending({
         pendingId,
         sku: resolvedSku,
         inserted: 0,
+        updatedSalesLines: updateRes.rowCount ?? 0,
       };
     }
 
-    // 🚫 RECIPE ma senza BOM
     if (mode === "RECIPE" && !hasRecipe) {
       await client.query("COMMIT");
       return {
@@ -138,16 +181,11 @@ export async function reprocessSinglePending({
       };
     }
 
-    // ❗ sicurezza: doc_id obbligatorio
-    if (!row.doc_id) {
-      throw new Error("DOC_ID mancante nel pending");
-    }
-
-    // ⚙️ applico scarico ricetta
+    // 2) applico scarico solo ora
     const inserted = await applyRecipeStock({
-      docId: row.doc_id,
+      docId,
       receiptNumber: "",
-      tenantId: String(row.tenant_id || "IMP001"),
+      tenantId,
       orderDate: row.order_date ? new Date(row.order_date) : new Date(),
       soldItems: [
         {
@@ -161,7 +199,7 @@ export async function reprocessSinglePending({
         String(row.operation || "") === "RECEIPT/DELETE" ? 1 : -1,
     });
 
-    // ✅ segno SEMPRE processato (evita loop infiniti)
+    // 3) segno processed
     await client.query(
       `
       UPDATE cic_pending_rows
@@ -183,12 +221,11 @@ export async function reprocessSinglePending({
       pendingId,
       sku: resolvedSku,
       inserted,
+      updatedSalesLines: updateRes.rowCount ?? 0,
     };
   } catch (err: any) {
     await client.query("ROLLBACK");
-
     console.error("❌ reprocessSinglePending error:", err);
-
     throw err;
   } finally {
     client.release();
