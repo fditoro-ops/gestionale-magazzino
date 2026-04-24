@@ -19,33 +19,41 @@ export default function OrderDrawer({
   onClose: () => void;
   onReceiveSelected: (
     order: Order,
-    payload: {
-      lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
-      note?: string;
+payload: {
+  receivedAt?: string;
+  lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
+  note?: string;
+}
     }
   ) => void;
   onReceiveAll: (
     order: Order,
-    payload: {
-      lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
-      note?: string;
+payload: {
+  receivedAt?: string;
+  lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
+  note?: string;
+}
     }
   ) => void;
 }) {
   const [note, setNote] = useState("");
   const [draft, setDraft] = useState<Record<string, number>>({});
+  const today = new Date().toISOString().slice(0, 10);
+const [receivedAt, setReceivedAt] = useState(today);
 
-  useEffect(() => {
-    if (!open) {
-      setNote("");
-      setDraft({});
-    }
-  }, [open]);
-
-  useEffect(() => {
+useEffect(() => {
+  if (!open) {
     setNote("");
     setDraft({});
-  }, [order?.orderId]);
+    setReceivedAt(today);
+  }
+}, [open, today]);
+
+  useEffect(() => {
+  setNote("");
+  setDraft({});
+  setReceivedAt(today);
+}, [order?.orderId, today]);
 
   const itemsBySku = useMemo(() => {
     const arr = Array.isArray(items) ? items : [];
@@ -79,9 +87,11 @@ export default function OrderDrawer({
 
     if (!lines.length) return null;
 
-    const payload: {
-      lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
-      note?: string;
+payload: {
+  receivedAt?: string;
+  lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
+  note?: string;
+}
     } = { lines };
 
     const n = note.trim();
@@ -102,9 +112,11 @@ export default function OrderDrawer({
 
     if (!lines.length) return null;
 
-    const payload: {
-      lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
-      note?: string;
+payload: {
+  receivedAt?: string;
+  lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
+  note?: string;
+}
     } = { lines };
 
     const n = note.trim();
@@ -145,14 +157,29 @@ export default function OrderDrawer({
               </div>
             )}
 
-            {canReceive && (
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Note ricezione (opzionali, finiscono nei movimenti)"
-                style={inp}
-              />
-            )}
+{canReceive && (
+  <div style={{ display: "grid", gap: 10 }}>
+    <div style={{ display: "grid", gap: 4 }}>
+      <label style={{ fontSize: 12, fontWeight: 800, color: "#667" }}>
+        Data ricezione
+      </label>
+
+      <input
+        type="date"
+        value={receivedAt}
+        onChange={(e) => setReceivedAt(e.target.value)}
+        style={inp}
+      />
+    </div>
+
+    <input
+      value={note}
+      onChange={(e) => setNote(e.target.value)}
+      placeholder="Note ricezione (opzionali, finiscono nei movimenti)"
+      style={inp}
+    />
+  </div>
+)}
 
             <div
               style={{
