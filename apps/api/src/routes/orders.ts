@@ -358,6 +358,19 @@ router.post("/:id/receive", async (req, res) => {
     }
 
     const note = parsed.data.note ?? null;
+    const receivedAtRaw = parsed.data.receivedAt ?? null;
+
+const receivedAt = receivedAtRaw
+  ? new Date(`${receivedAtRaw}T12:00:00.000Z`)
+  : new Date();
+
+if (Number.isNaN(receivedAt.getTime())) {
+  return res.status(400).json({
+    error: "Data ricezione non valida",
+  });
+}
+
+const receivedAtIso = receivedAt.toISOString();
     const bySku = new Map(ord.lines.map((l) => [l.sku, l]));
     const newMovements: Movement[] = [];
 
@@ -391,7 +404,7 @@ router.post("/:id/receive", async (req, res) => {
   quantity: qtyBt,
   type: "IN",
   reason: "RICEZIONE_ORDINE",
-  date: new Date().toISOString(),
+date: receivedAtIso,
   note: note ? `ORD:${req.params.id} | ${note}` : `ORD:${req.params.id}`,
   documento: `ORD:${req.params.id}`,
   tenant_id: "IMP001",
@@ -405,8 +418,7 @@ router.post("/:id/receive", async (req, res) => {
     );
 
     ord.status = allReceived ? "RECEIVED" : "PARTIAL";
-    ord.receivedAt = allReceived ? new Date().toISOString() : ord.receivedAt ?? null;
-
+ord.receivedAt = allReceived ? receivedAtIso : ord.receivedAt ?? null;
     const updated = await updateOrderDb(await normalizeOrder(ord));
     await insertManyMovements(newMovements);
 
