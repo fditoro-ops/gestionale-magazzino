@@ -3,6 +3,12 @@ import type { Order } from "./OrdersTable";
 
 type DrawerOrderLine = Order["lines"][number];
 
+type ReceivePayload = {
+  receivedAt?: string;
+  lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
+  note?: string;
+};
+
 export default function OrderDrawer({
   open,
   order,
@@ -17,43 +23,28 @@ export default function OrderDrawer({
   items: any[];
   loading: boolean;
   onClose: () => void;
-  onReceiveSelected: (
-    order: Order,
-payload: {
-  receivedAt?: string;
-  lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
-  note?: string;
-}
-    }
-  ) => void;
-  onReceiveAll: (
-    order: Order,
-payload: {
-  receivedAt?: string;
-  lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
-  note?: string;
-}
-    }
-  ) => void;
+  onReceiveSelected: (order: Order, payload: ReceivePayload) => void;
+  onReceiveAll: (order: Order, payload: ReceivePayload) => void;
 }) {
+  const today = new Date().toISOString().slice(0, 10);
+
   const [note, setNote] = useState("");
   const [draft, setDraft] = useState<Record<string, number>>({});
-  const today = new Date().toISOString().slice(0, 10);
-const [receivedAt, setReceivedAt] = useState(today);
+  const [receivedAt, setReceivedAt] = useState(today);
 
-useEffect(() => {
-  if (!open) {
+  useEffect(() => {
+    if (!open) {
+      setNote("");
+      setDraft({});
+      setReceivedAt(today);
+    }
+  }, [open, today]);
+
+  useEffect(() => {
     setNote("");
     setDraft({});
     setReceivedAt(today);
-  }
-}, [open, today]);
-
-  useEffect(() => {
-  setNote("");
-  setDraft({});
-  setReceivedAt(today);
-}, [order?.orderId, today]);
+  }, [order?.orderId, today]);
 
   const itemsBySku = useMemo(() => {
     const arr = Array.isArray(items) ? items : [];
@@ -73,7 +64,7 @@ useEffect(() => {
     return r > 0 ? r : 0;
   }
 
-  function buildSelectedPayload() {
+  function buildSelectedPayload(): ReceivePayload | null {
     if (!o) return null;
 
     const lines = (o.lines || [])
@@ -81,18 +72,17 @@ useEffect(() => {
         const rem = remaining(l);
         const wanted = Number(draft[l.sku] ?? 0);
         const qty = Math.max(0, Math.min(wanted, rem));
+
         return qty > 0 ? { sku: l.sku, qtyReceivedNowConf: qty } : null;
       })
       .filter(Boolean) as Array<{ sku: string; qtyReceivedNowConf: number }>;
 
     if (!lines.length) return null;
 
-payload: {
-  receivedAt?: string;
-  lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
-  note?: string;
-}
-    } = { lines };
+    const payload: ReceivePayload = {
+      receivedAt,
+      lines,
+    };
 
     const n = note.trim();
     if (n) payload.note = n;
@@ -100,7 +90,7 @@ payload: {
     return payload;
   }
 
-  function buildAllPayload() {
+  function buildAllPayload(): ReceivePayload | null {
     if (!o) return null;
 
     const lines = (o.lines || [])
@@ -112,12 +102,10 @@ payload: {
 
     if (!lines.length) return null;
 
-payload: {
-  receivedAt?: string;
-  lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
-  note?: string;
-}
-    } = { lines };
+    const payload: ReceivePayload = {
+      receivedAt,
+      lines,
+    };
 
     const n = note.trim();
     if (n) payload.note = n;
@@ -130,12 +118,15 @@ payload: {
       <div style={panel} onMouseDown={(e) => e.stopPropagation()}>
         <div style={panelHeader}>
           <div style={{ display: "grid", gap: 2 }}>
-<div style={{ fontWeight: 1000, fontSize: 16 }}>
-  {o?.orderId ?? "Ordine"}
-</div>
+            <div style={{ fontWeight: 1000, fontSize: 16 }}>
+              {o?.orderId ?? "Ordine"}
+            </div>
+
             <div style={{ fontSize: 12, color: "#667" }}>
               {o
-                ? `${o.supplier} • ${new Date(o.createdAt).toLocaleString()} • ${o.status}`
+                ? `${o.supplier} • ${new Date(
+                    o.createdAt
+                  ).toLocaleString()} • ${o.status}`
                 : ""}
             </div>
           </div>
@@ -157,29 +148,31 @@ payload: {
               </div>
             )}
 
-{canReceive && (
-  <div style={{ display: "grid", gap: 10 }}>
-    <div style={{ display: "grid", gap: 4 }}>
-      <label style={{ fontSize: 12, fontWeight: 800, color: "#667" }}>
-        Data ricezione
-      </label>
+            {canReceive && (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div style={{ display: "grid", gap: 4 }}>
+                  <label
+                    style={{ fontSize: 12, fontWeight: 800, color: "#667" }}
+                  >
+                    Data ricezione
+                  </label>
 
-      <input
-        type="date"
-        value={receivedAt}
-        onChange={(e) => setReceivedAt(e.target.value)}
-        style={inp}
-      />
-    </div>
+                  <input
+                    type="date"
+                    value={receivedAt}
+                    onChange={(e) => setReceivedAt(e.target.value)}
+                    style={inp}
+                  />
+                </div>
 
-    <input
-      value={note}
-      onChange={(e) => setNote(e.target.value)}
-      placeholder="Note ricezione (opzionali, finiscono nei movimenti)"
-      style={inp}
-    />
-  </div>
-)}
+                <input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Note ricezione (opzionali, finiscono nei movimenti)"
+                  style={inp}
+                />
+              </div>
+            )}
 
             <div
               style={{
@@ -212,24 +205,39 @@ payload: {
                 <tbody>
                   {o.lines.map((l) => {
                     const rem = remaining(l);
-                    const it = itemsBySku[String(l.sku || "").toUpperCase().trim()];
+                    const it =
+                      itemsBySku[String(l.sku || "").toUpperCase().trim()];
                     const label = it?.name ? String(it.name) : "";
                     const current = Number(draft[l.sku] ?? 0);
 
                     return (
-                      <tr key={l.sku} style={{ borderTop: "1px solid #eef2f7" }}>
+                      <tr
+                        key={l.sku}
+                        style={{ borderTop: "1px solid #eef2f7" }}
+                      >
                         <Td>
                           <span style={{ fontWeight: 900 }}>{l.sku}</span>
                         </Td>
+
                         <Td style={{ color: "#334" }}>{label}</Td>
-                        <Td style={{ textAlign: "right" }}>{l.qtyOrderedConf}</Td>
-                        <Td style={{ textAlign: "right" }}>{l.qtyReceivedConf}</Td>
+
+                        <Td style={{ textAlign: "right" }}>
+                          {l.qtyOrderedConf}
+                        </Td>
+
+                        <Td style={{ textAlign: "right" }}>
+                          {l.qtyReceivedConf}
+                        </Td>
+
                         <Td style={{ textAlign: "right", fontWeight: 900 }}>
                           {rem}
                         </Td>
+
                         <Td style={{ textAlign: "right" }}>
                           {!canReceive || isClosed ? (
-                            <span style={{ color: "#667", fontSize: 12 }}>—</span>
+                            <span style={{ color: "#667", fontSize: 12 }}>
+                              —
+                            </span>
                           ) : (
                             <input
                               type="number"
@@ -242,7 +250,11 @@ payload: {
                                   [l.sku]: Number(e.target.value),
                                 }))
                               }
-                              style={{ ...inp, width: 110, textAlign: "right" }}
+                              style={{
+                                ...inp,
+                                width: 110,
+                                textAlign: "right",
+                              }}
                               disabled={loading || rem === 0}
                               title="Quantità da ricevere ora in confezioni/casse"
                             />
@@ -255,12 +267,12 @@ payload: {
               </table>
             </div>
 
-                      {canReceive && !isClosed && (
+            {canReceive && !isClosed && (
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <button
                   onClick={() => {
                     const payload = buildSelectedPayload();
-                    if (!payload) return;
+                    if (!payload || !o) return;
                     onReceiveSelected(o, payload);
                   }}
                   disabled={loading}
@@ -272,7 +284,7 @@ payload: {
                 <button
                   onClick={() => {
                     const payload = buildAllPayload();
-                    if (!payload) return;
+                    if (!payload || !o) return;
                     onReceiveAll(o, payload);
                   }}
                   disabled={loading}
