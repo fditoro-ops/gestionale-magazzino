@@ -1,5 +1,6 @@
 import { getCicIdToSkuMap, getCicProductModesCache } from "../server.js";
 import { findCicProductMapping } from "../data/cicProductMappings.store.js";
+import { pool } from "../db.js";
 
 export type CicExtractedItem = {
   sku: string | null;
@@ -15,23 +16,19 @@ export type CicResolvedSkuResult = {
   source: "DB_MAPPING" | "CACHE" | "NONE";
 };
 
-export type CicExtractedItemWithDb = {
-  sku: string | null;
+export type CicExtractedItemWithDb = CicExtractedItem & {
   mode: "RECIPE" | "IGNORE" | null;
   source: "DB_MAPPING" | "CACHE" | "NONE";
-  qty: number;
-  total: number;
-  _idProduct: string;
-  _idProductVariant: string;
 };
 
 function normalize(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-/**
- * Fallback sync: cache in memoria / mapping esistenti
- */
+function extractVariantId(r: any): string {
+  return normalize(r?.idProductVariant || r?.idVariant);
+}
+
 export function cicResolveSku(value: string): string | null {
   const id = normalize(value);
   if (!id) return null;
@@ -43,12 +40,6 @@ export function cicResolveSku(value: string): string | null {
   return modes[id]?.sku?.trim() || map[id]?.trim() || null;
 }
 
-/**
- * Resolver con priorità DB:
- * 1) variantId
- * 2) productId
- * 3) fallback cache/map esistenti
- */
 export async function cicResolveSkuWithDb(input: {
   tenantId: string;
   idProduct?: string;
@@ -60,73 +51,82 @@ export async function cicResolveSkuWithDb(input: {
   const idProductVariant = normalize(input.idProductVariant);
   const internalId = normalize(input.internalId);
 
-  if (!tenantId) {
-    throw new Error("tenantId required");
-  }
+  if (!tenantId) throw new Error("tenantId required");
 
-  // 0. Se arriva già uno SKU vero, usalo subito
-  // Il mode NON va forzato qui: lo decide dopo il webhook
   if (internalId.startsWith("SKU")) {
-    return {
-      sku: internalId,
-      mode: null,
-      source: "CACHE",
-    };
+    return { sku: internalId, mode: null, source: "CACHE" };
   }
 
-  // 1. Priorità a mapping DB per variantId
+  if (idProduct || idProductVariant) {
+    const exact = await findCicProductMapping({
+      tenantId,
+      productId: idProduct || null,
+      variantId: idProductVariant || null,
+    });
+
+    if (exact) {
+      return {
+        sku: exact.sku || null,
+        mode: exact.mode,
+        source: "DB_MAPPING",
+      };
+    }
+  }
+
   if (idProductVariant) {
-    const byVariant = await findCicProductMapping({
-      tenantId,
-      productId: null,
-      variantId: idProductVariant,
-    });
+    const byVariant = await pool.query(
+      `
+      SELECT sku, mode
+      FROM cic_product_mappings
+      WHERE tenant_id = $1
+        AND variant_id = $2
+      ORDER BY updated_at DESC
+      LIMIT 1
+      `,
+      [tenantId, idProductVariant]
+    );
 
-    if (byVariant) {
+    if (byVariant.rows.length) {
       return {
-        sku: byVariant.sku || null,
-        mode: byVariant.mode,
+        sku: String(byVariant.rows[0].sku || "").trim() || null,
+        mode: byVariant.rows[0].mode,
         source: "DB_MAPPING",
       };
     }
   }
 
-  // 2. Poi mapping DB per productId
   if (idProduct) {
-    const byProduct = await findCicProductMapping({
-      tenantId,
-      productId: idProduct,
-      variantId: null,
-    });
+    const byProduct = await pool.query(
+      `
+      SELECT sku, mode
+      FROM cic_product_mappings
+      WHERE tenant_id = $1
+        AND product_id = $2
+      ORDER BY updated_at DESC
+      LIMIT 1
+      `,
+      [tenantId, idProduct]
+    );
 
-    if (byProduct) {
+    if (byProduct.rows.length) {
       return {
-        sku: byProduct.sku || null,
-        mode: byProduct.mode,
+        sku: String(byProduct.rows[0].sku || "").trim() || null,
+        mode: byProduct.rows[0].mode,
         source: "DB_MAPPING",
       };
     }
   }
 
-  // 3. Fallback alla logica attuale
   const fallbackSku =
     cicResolveSku(internalId) ||
     cicResolveSku(idProductVariant) ||
     cicResolveSku(idProduct);
 
   if (fallbackSku) {
-    return {
-      sku: fallbackSku,
-      mode: null,
-      source: "CACHE",
-    };
+    return { sku: fallbackSku, mode: null, source: "CACHE" };
   }
 
-  return {
-    sku: null,
-    mode: null,
-    source: "NONE",
-  };
+  return { sku: null, mode: null, source: "NONE" };
 }
 
 export function cicResolveSkuFromRow(input: {
@@ -141,9 +141,6 @@ export function cicResolveSkuFromRow(input: {
   );
 }
 
-/**
- * Versione sync legacy
- */
 export function cicExtractItems(data: any): CicExtractedItem[] {
   const rows = Array.isArray(data?.document?.rows) ? data.document.rows : [];
   if (!rows.length) return [];
@@ -154,7 +151,7 @@ export function cicExtractItems(data: any): CicExtractedItem[] {
       const price = Number(r?.price ?? 0) || 0;
 
       const idProduct = normalize(r?.idProduct);
-      const idProductVariant = normalize(r?.idProductVariant);
+      const idProductVariant = extractVariantId(r);
 
       const internalId = normalize(
         r?.internalId ||
@@ -177,12 +174,9 @@ export function cicExtractItems(data: any): CicExtractedItem[] {
         _idProductVariant: idProductVariant,
       };
     })
-    .filter((row: CicExtractedItem) => row.qty > 0);
+    .filter((row) => row.qty > 0);
 }
 
-/**
- * Versione async che usa anche il mapping DB
- */
 export async function cicExtractItemsWithDb(params: {
   tenantId: string;
   data: any;
@@ -200,7 +194,7 @@ export async function cicExtractItemsWithDb(params: {
     if (qty <= 0) continue;
 
     const idProduct = normalize(r?.idProduct);
-    const idProductVariant = normalize(r?.idProductVariant);
+    const idProductVariant = extractVariantId(r);
 
     const internalId = normalize(
       r?.internalId ||
