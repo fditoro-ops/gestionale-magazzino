@@ -174,7 +174,7 @@ export function cicExtractItems(data: any): CicExtractedItem[] {
         _idProductVariant: idProductVariant,
       };
     })
-    .filter((row) => row.qty > 0);
+   .filter((row: CicExtractedItem) => row.qty > 0);
 }
 
 export async function cicExtractItemsWithDb(params: {
