@@ -76,6 +76,11 @@ export const UpdateOrderSchema = z
   });
 
 export const ReceiveOrderSchema = z.object({
+  receivedAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+
   note: z.preprocess(
     (v) => {
       if (typeof v !== "string") return v;
