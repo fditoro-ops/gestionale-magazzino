@@ -482,12 +482,13 @@ async function editOrder(order: Order) {
   }
 }
   
-  async function postReceive(
-    order: Order,
-    payload: {
-      lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
-      note?: string;
-    }
+async function postReceive(
+  order: Order,
+  payload: {
+    receivedAt?: string;
+    lines: Array<{ sku: string; qtyReceivedNowConf: number }>;
+    note?: string;
+  }
   ) {
     setErr(null);
     setLoading(true);
